@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+const peer=readFileSync(new URL('../docs/peer-client.mjs',import.meta.url),'utf8');
+const workflow=readFileSync(new URL('../.github/workflows/pages.yml',import.meta.url),'utf8');
+test('PeerJS Startseite: Hostraum und Beitritt ohne Cloud-Konfiguration',()=>{const part=app.slice(app.indexOf('function landing(){'),app.indexOf('function hostPage(){'));for(const p of ['Online-Raum erstellen','Am Quiz teilnehmen','Einladung annehmen','PeerJS / WebRTC'])assert.ok(part.includes(p));assert.doesNotMatch(part,/Firebase/)});
+test('Gäste treten über Link bei; Host-Wiederherstellung braucht lokalen Spielstand',()=>{assert.match(app,/new URLSearchParams\(location\.search\)\.get\('room'\)/);assert.match(app,/await game\.connect\(code,name/);assert.match(app,/await game\.resumeHost\(code\)/);assert.match(app,/role='guest';view='play'/);assert.match(app,/bq-p2p-session-/)});
+test('Host-Quiz wird nur lokal gesichert, nie an Gast-Snapshots geschickt',()=>{assert.match(peer,/async saveHostQuiz\(room,quiz\)/);assert.match(peer,/localStorage\.setItem\('bq-quiz-'/);assert.match(peer,/_snapshotFor\(ctx\)/);assert.doesNotMatch(peer.slice(peer.indexOf('_snapshotFor(ctx){'),peer.indexOf('_sendSnapshot(ctx){')),/hostQuiz|secret:/)});
+test('Host ist der alleinige Autor von Freigaben und Punkten',()=>{assert.match(peer,/_assertHost\(room\)/);assert.match(peer,/async hostAssign\(room/);assert.match(peer,/async scorePerson\(room/);assert.match(peer,/default:throw Error\('Aktion nicht erlaubt/);});
+test('Pages-Workflow nutzt nur statische Dateien und keine Firebase-Variablen',()=>{assert.match(workflow,/needs: check/);assert.match(workflow,/deploy-pages@v4/);assert.match(workflow,/npm run build:pages/);assert.doesNotMatch(workflow,/FIREBASE_/)});

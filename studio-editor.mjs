@@ -1,0 +1,136 @@
+/* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
+import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,validateScene,escape} from './studio-model.mjs';
+export function createStudioEditor(api){
+ let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null;
+ const q=()=>api.getQuestion();
+ const quiz=()=>api.getQuiz();
+ const current=()=>{const item=q();if(item)ensureScene(item);return item;};
+ const find=()=>current()?.scene?.elements.find(x=>x.id===sel)||null;
+ const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();if(refresh)draw();};
+ const snapshot=()=>api.snapshot();
+ const flushDraft=()=>{if(draftTimer){clearTimeout(draftTimer);draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();}};
+ if(typeof window!=='undefined')window.addEventListener('pagehide',flushDraft);
+ if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushDraft();});
+ const deferDraft=()=>{clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();},450)};
+ const letterList='ABCDEFGHIJ'.split('');
+ // Find a low-overlap position within the 1000x560 canvas; never spawn outside it.
+ function findInsertion(elements,w,h){
+  let best={x:40,y:40,score:Infinity};
+  for(let y=20;y<=560-h;y+=20)for(let x=20;x<=1000-w;x+=20){
+   let overlap=0;
+   for(const e of elements){const width=Math.max(0,Math.min(x+w,e.x+e.w)-Math.max(x,e.x));const height=Math.max(0,Math.min(y+h,e.y+e.h)-Math.max(y,e.y));overlap+=width*height;}
+   const score=overlap+Math.abs(x-160)*0.05+Math.abs(y-310)*0.06;
+   if(score<best.score)best={x,y,score};
+  }
+  return {x:best.x,y:best.y};
+ }
+
+ function setType(name){flushDraft();const item=current();if(!item)return; if(item.scene?.elements?.length&&!confirm('Vorlage wechseln? Die bisherigen Elemente dieser Frage werden durch die Vorlage ersetzt.')){draw();return;}
+  snapshot();item.scene=templateScene(name,item);item.type=name==='multiple'?'multiple':name==='order'?'order':name==='imposter'?'imposter':name==='quote'?'quote':name==='emoji'?'emoji':name==='audio'?'audio':name==='estimate'?'estimate':'text';sel='';reveal=0;preview=false;persist(true);
+ }
+ const input=(name,label,value,{kind='text',min,max,step,rows=0,options}={})=>{
+  const id=`se-in-${name}`;
+  let ctl;if(options)ctl=`<select id="${id}" data-se-field="${name}">${options.map(([val,label])=>`<option value="${escape(val)}" ${String(val)===String(value)?'selected':''}>${escape(label)}</option>`).join('')}</select>`;
+  else if(rows)ctl=`<textarea id="${id}" data-se-field="${name}" rows="${rows}">${escape(value)}</textarea>`;
+  else ctl=`<input id="${id}" data-se-field="${name}" type="${kind}" value="${escape(value)}" ${min!==undefined?`min="${min}"`:''} ${max!==undefined?`max="${max}"`:''} ${step!==undefined?`step="${step}"`:''}>`;
+  return `<label class="se-field"><span>${escape(label)}</span>${ctl}</label>`;
+ };
+ function propsPanel(item){const el=find(),scene=item.scene;
+  const base=`<section class="se-properties"><h3>Frage</h3><div class="se-two">${input('category','Kategorie',item.category)}${input('points','Punkte',item.points,{kind:'number',min:0,max:10000,step:50})}</div>${input('title','Interner Fragetitel',item.title)}
+  <label class="se-field"><span>Vorlage</span><select data-se-template>${Object.entries(TEMPLATE_NAMES).map(([key,label])=>`<option value="${key}" ${scene.template===key?'selected':''}>${escape(label)}</option>`).join('')}</select></label>
+  ${scene.template==='multiple'?`<div class="se-subpanel"><h4>Richtige Antwort</h4>${input('correct','Musterlösung',letterList[item.correct||0]||'A',{options:'ABCD'.split('').map(k=>[k,k])})}</div>`:''}
+  ${scene.template==='order'?`<div class="se-subpanel"><h4>Richtige Reihenfolge</h4><div class="se-sort-sequence">${scene.sortCorrect.map((key,i)=>`<div class="se-sort-entry"><strong>${i+1}.</strong><b>${key}</b><span>${escape(scene.elements.find(v=>v.kind==='order'&&v.letter===key)?.text||'')}</span><button type="button" data-se-action="sort-up" data-pos="${i}" ${i===0?'disabled':''} title="Nach oben">↑</button><button type="button" data-se-action="sort-down" data-pos="${i}" ${i===scene.sortCorrect.length-1?'disabled':''} title="Nach unten">↓</button></div>`).join('')}</div><div class="se-inline"><button type="button" data-se-action="sort-add" ${scene.sortCorrect.length>=10?'disabled':''}>+ Eintrag</button><button type="button" data-se-action="sort-remove" ${scene.sortCorrect.length<=3?'disabled':''}>− Letzten entfernen</button></div></div>`:''}
+  ${scene.template==='estimate'?`${input('estimateTarget','Schätzwert',item.estimateTarget||0,{kind:'number',step:'any'})}${input('estimateUnit','Einheit',item.estimateUnit||'')}`:''}
+  ${scene.template==='imposter'?`${input('imposterIndex','Falsches Fähigkeitssymbol',item.imposterIndex||0,{options:[['0','Passiv'],['1','Q'],['2','W'],['3','E'],['4','R']]})}<label class="se-field"><span>Richtiges Ersatzsymbol</span><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="correct-icon"></label>`:''}
+  ${scene.template==='audio'?`${input('audioStart','Audio-Start (s)',item.audioStart||0,{kind:'number',min:0,step:0.5})}${input('audioDuration','Dauer (s)',item.audioDuration||8,{kind:'number',min:1,max:12})}<label class="se-field"><span>Audiodatei</span><input type="file" accept="audio/*" data-se-upload="audio"></label>${item.audio?`<audio controls src="${item.audio}"></audio>`:''}`:''}
+  ${!['multiple','order'].includes(scene.template)?input('answer','Musterlösung (nur Host)',item.answer||'',{rows:2}):''}
+  <details class="se-extras"><summary>Weitere Angaben</summary>${input('explanation','Erklärung bei Auflösung',item.explanation||'',{rows:3})}${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:600})}</details></section>`;
+  if(!el)return `${base}<section class="se-properties"><h3>Element</h3><p class="se-muted">Ein Element auf der Fragenfläche anklicken.</p></section>`;
+  return `${base}<section class="se-properties"><div class="se-sectionhead"><h3>Ausgewähltes Element</h3><div class="se-inline"><button type="button" data-se-action="duplicate" title="Duplizieren">⧉</button><button type="button" data-se-action="remove" title="Entfernen">✕</button></div></div><div class="se-chip">${escape(el.kind.toUpperCase())} ${el.letter?`· ${escape(el.letter)}`:''}</div>
+  ${el.kind!=='image'?input('text','Inhalt',el.text,{rows:3}):`<label class="se-field"><span>Bilddatei (PNG/JPG/WebP)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="image"></label>${input('alt','Bildbeschreibung',el.alt||'')}`}
+  <div class="se-two">${input('x','X',Math.round(el.x),{kind:'number',min:0,max:950})}${input('y','Y',Math.round(el.y),{kind:'number',min:0,max:530})}${input('w','Breite',Math.round(el.w),{kind:'number',min:50,max:1000})}${input('h','Höhe',Math.round(el.h),{kind:'number',min:30,max:560})}</div>
+  <div class="se-two">${input('font','Schriftgröße',el.font,{kind:'number',min:13,max:78})}${input('step','Aufdecken',el.step,{options:[[0,'Sofort'],[1,'Hinweis 1'],[2,'Hinweis 2'],[3,'Hinweis 3'],[4,'Hinweis 4'],[5,'Hinweis 5'],[6,'Erst bei Lösung']]})}</div>
+  ${el.kind==='shape'?input('shape','Form',el.shape,{options:[['rect','Rechteck'],['pill','Abgerundet'],['circle','Kreis'],['line','Linie']]}):''}
+  <div class="se-two">${input('fill','Textfarbe',el.fill,{kind:'color'})}${input('bg','Hintergrundfarbe',el.bg,{kind:'color'})}</div>
+  ${el.kind==='text'?input('role','Verwendung',el.role,{options:[['content','Text / Hinweis'],['question','Hauptfrage'],['clue','Zitat / Emoji-Hinweis']]}) :''}
+  ${input('align','Ausrichtung',el.align,{options:[['left','Links'],['center','Mitte'],['right','Rechts']]})}
+  <div class="se-inline"><button type="button" data-se-action="layer-back">Nach hinten</button><button type="button" data-se-action="layer-front">Nach vorn</button></div>
+  <p class="se-muted">Mit der Maus ziehen oder die X-/Y-Felder verwenden. Pfeiltasten verschieben das gewählte Element.</p></section>`;
+ }
+ function html(){const item=current(),all=quiz().questions||[];return `<div class="se-studio" id="se-root">
+  <div class="se-toolbar"><label class="se-field se-title"><span>Quizname</span><input data-se-quiztitle value="${escape(quiz().title)}"></label><div class="se-inline"><button type="button" data-action="import">Importieren</button><button type="button" data-action="export">Exportieren</button><button type="button" data-se-action="backup">Backup</button><button type="button" data-se-action="undo" title="Rückgängig (Strg+Z)">↶ Rückgängig</button><button type="button" data-se-action="redo" title="Wiederholen (Strg+Umschalt+Z)">↷ Wiederholen</button><button type="button" data-action="view" data-view="live">Quizbrett</button>${!api.isOffline()?'<button type="button" class="se-primary" data-action="publish">Live veröffentlichen</button>':api.onlineReady()?'<button type="button" class="se-primary" data-action="promote-online">Live-Raum starten</button>':''}</div></div>
+  <div class="se-workgrid"><aside class="se-list"><div class="se-sectionhead"><h3>Fragen <span>${all.length}</span></h3><button type="button" data-se-action="new">+ Frage</button></div><input class="se-search" data-se-search placeholder="Fragen suchen" value="${escape(search)}"><button type="button" class="se-quick" data-se-action="quickset">5 × 5 Schnellset erstellen</button>
+  <div class="se-questions">${all.filter(x=>[x.title,x.prompt,x.category].join(' ').toLowerCase().includes(search.toLowerCase())).map(x=>`<button type="button" class="se-qrow ${x.id===item?.id?'is-active':''}" data-se-action="select" data-id="${escape(x.id)}"><span><strong>${escape(x.category)} · ${escape(x.points)}</strong><small>${escape(x.title)}</small></span><span>${x.scene?'●':'○'}</span></button>`).join('')}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div></aside>
+  <main class="se-main">${item?`<div class="se-canvas-top"><div><h2>${escape(item.category)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview">${preview?'Bearbeiten':'Vorschau'}</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
+  <div class="se-canvas-wrap">${renderScene(preview?publicScene(item.scene,reveal,reveal===6):item.scene,{editing:!preview,selected:sel,revealed:preview&&reveal===6,correctIndex:item.correct||0})}</div>
+  <div class="se-tools"><span>Element hinzufügen:</span>${[['text','Text'],['image','Bild'],['shape','Form'],['choice','Antwort'],['order','Sortierfeld']].map(([kind,label])=>`<button type="button" data-se-action="add-element" data-kind="${kind}">+ ${label}</button>`).join('')}</div>
+  <div class="se-mini"><span>Aufdeckungsreihenfolge: 0 = sofort · 1–5 = nacheinander · 6 = bei Lösung.</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div>`:`<div class="se-noquestion">Noch keine Frage. <button type="button" data-se-action="new">Frage erstellen</button></div>`}</main>
+  <aside class="se-inspector">${item?propsPanel(item):'<div class="se-properties">Frage auswählen</div>'}</aside></div>
+  <input type="file" id="import-quiz" accept=".json,.brainquiz" hidden></div>`;}
+ function draw(){if(redrawPending)return;redrawPending=true;requestAnimationFrame(()=>{redrawPending=false;const root=document.getElementById('se-root');if(!root)return;const parent=root.parentElement;const scrollTop=root.querySelector('.se-questions')?.scrollTop||0;const inspectorTop=root.querySelector('.se-inspector')?.scrollTop||0;const extrasOpen=!!root.querySelector('.se-extras[open]');parent.innerHTML=html();const next=parent.querySelector('.se-questions');if(next)next.scrollTop=scrollTop;const inspector=parent.querySelector('.se-inspector');if(inspector)inspector.scrollTop=inspectorTop;if(extrasOpen)parent.querySelector('.se-extras')?.setAttribute('open','');mount(parent.querySelector('#se-root'));});}
+ function choose(id){flushDraft();api.setSelected(id);sel='';preview=false;reveal=0;draw();}
+ function updateField(field,value){const item=current(),el=find();if(!item)return;
+  if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='correct'){
+   if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex'].includes(field)?Number(value):value;
+  }else if(el){if(['x','y','w','h','font','step'].includes(field))el[field]=Number(value);else if(['text','alt','fill','bg','align','shape','role'].includes(field)){el[field]=value;if(field==='role'&&(value==='question'||value==='clue')){for(const other of item.scene.elements){if(other.id!==el.id&&other.role===value)other.role='content';}}}
+   if(field==='x')el.x=Math.min(1000-el.w,Math.max(0,el.x));if(field==='y')el.y=Math.min(560-el.h,Math.max(0,el.y));if(field==='w'){el.w=Math.max(50,Math.min(1000-el.x,el.w));}if(field==='h')el.h=Math.max(30,Math.min(560-el.y,el.h));
+   if(['x','y','w','h','font','step'].includes(field)){Object.assign(el,normalizeElement(el));}
+  }
+  deferDraft();
+  const target=document.querySelector(`.se-element[data-se-element="${sel}"]`);
+  if(target&&el){if(field==='text'){const dest=target.querySelector('.se-content,.se-shape');if(dest)dest.textContent=el.text;}if(['x','y','w','h'].includes(field)){target.style.left=el.x/10+'%';target.style.top=el.y/5.6+'%';target.style.width=el.w/10+'%';target.style.height=el.h/5.6+'%';}if(field==='fill')target.style.color=el.fill;if(field==='bg')target.style.background=el.bg;if(field==='align')target.style.textAlign=el.align;if(field==='font')target.style.fontSize=`clamp(10px,${el.font/10}cqw,${el.font}px)`;}
+ }
+ function onAction(action,button){const item=current(),scene=item?.scene;if(!item&& !['new','quickset'].includes(action))return;
+ switch(action){
+  case 'undo':flushDraft();api.undo?.();sel='';draw();return;
+  case 'redo':flushDraft();api.redo?.();sel='';draw();return;
+  case 'select':choose(button.dataset.id);return;
+  case 'new':{const name=prompt('Kategorie', 'Champions')?.trim()||'Champions';api.makeQuestion(name);sel='';draw();return;}
+  case 'quickset':{const raw=prompt('Kategorien (durch Kommas getrennt)', 'Trivia, Imposter, Lore, Splash Art, Ability Sounds');if(raw===null)return;const cats=[...new Set(raw.split(',').map(s=>s.trim()).filter(Boolean))].slice(0,10);if(!cats.length)return;api.quickset(cats);sel='';draw();return;}
+  case 'copy-q':api.copyQuestion();sel='';draw();return;
+  case 'delete-q':if(!confirm(`Frage „${item.title}“ löschen?`))return;api.deleteQuestion();sel='';draw();return;
+  case 'backup':api.backup();return;
+  case 'preview':flushDraft();preview=!preview;sel='';draw();return;
+  case 'add-element':{if(scene.elements.length>=40)throw Error('Maximal 40 Layoutelemente.');const kind=button.dataset.kind;if(scene.template==='multiple'&&kind==='choice'&&scene.elements.filter(x=>x.kind==='choice').length>=4)throw Error('Die A/B/C/D-Vorlage hat vier Antwortfelder.');snapshot();const n=scene.elements.filter(x=>x.kind===kind).length;const w=kind==='image'?350:kind==='shape'?230:kind==='choice'?350:kind==='order'?350:490,h=kind==='image'?195:kind==='shape'?90:85;const spot=findInsertion(scene.elements,w,h);const itemEl=element(kind,{...spot,w,h,text:kind==='choice'?`Antwort ${'ABCD'[n%4]}`:kind==='order'?`Eintrag ${letterList[n]||'A'}`:kind==='text'?'Neuer Text':'',letter:kind==='choice'?'ABCD'[n%4]:kind==='order'?letterList[n]:''});scene.elements.push(itemEl);if(kind==='order'&&!scene.sortCorrect.includes(itemEl.letter))scene.sortCorrect.push(itemEl.letter);sel=itemEl.id;persist(true);return;}
+  case 'remove':{const el=find();if(!el)return;snapshot();scene.elements=scene.elements.filter(x=>x.id!==sel);if(el.kind==='order')scene.sortCorrect=scene.sortCorrect.filter(k=>k!==el.letter);sel='';persist(true);return;}
+  case 'duplicate':{const el=find();if(!el)return;if(['choice','order'].includes(el.kind))throw Error('Antwort- und Sortierfelder bitte über die Vorlage verwalten.');snapshot();const copy=element(el.kind,{...el,role:'content',id:undefined,x:Math.min(el.x+25,1000-el.w),y:Math.min(el.y+25,560-el.h)});scene.elements.push(copy);sel=copy.id;persist(true);return;}
+  case 'layer-front':{const idx=scene.elements.findIndex(x=>x.id===sel);if(idx<0)return;snapshot();scene.elements.push(scene.elements.splice(idx,1)[0]);persist(true);return;}
+  case 'layer-back':{const idx=scene.elements.findIndex(x=>x.id===sel);if(idx<0)return;snapshot();scene.elements.unshift(scene.elements.splice(idx,1)[0]);persist(true);return;}
+  case 'sort-up':case 'sort-down':{const i=Number(button.dataset.pos),j=i+(action==='sort-up'?-1:1);if(i<0||j<0||j>=scene.sortCorrect.length)return;snapshot();[scene.sortCorrect[i],scene.sortCorrect[j]]=[scene.sortCorrect[j],scene.sortCorrect[i]];persist(true);return;}
+  case 'sort-add':{const known=new Set(scene.elements.filter(v=>v.kind==='order').map(v=>v.letter));const k=letterList.find(l=>!known.has(l));if(!k)return;snapshot();const spot=findInsertion(scene.elements,416,70);scene.elements.push(element('order',{letter:k,text:`Eintrag ${k}`,...spot,w:416,h:70,font:21,bg:'#343644'}));scene.sortCorrect.push(k);persist(true);return;}
+  case 'sort-remove':{if(scene.sortCorrect.length<=3)return;snapshot();const last=scene.elements.filter(v=>v.kind==='order').map(v=>v.letter).sort().at(-1);scene.sortCorrect=scene.sortCorrect.filter(key=>key!==last);scene.elements=scene.elements.filter(v=>v.kind!=='order'||v.letter!==last);sel='';persist(true);return;}
+ }
+ }
+ async function onUpload(input){
+  const item=current(),el=find(),file=input.files?.[0];if(!file||!item)return;
+  const questionId=item.id,elementId=el?.id,uploadKind=input.dataset.seUpload;
+  // Compress/decode first, then apply only if the same question and element still exist.
+  // This prevents delayed uploads from changing an unrelated question after navigation.
+  let converted;
+  if(uploadKind==='image'){
+   if(!el||el.kind!=='image')throw Error('Bitte zuerst ein Bildelement auswählen.');
+   converted=await api.optimizeImage(file,1150,125000);
+  }else if(uploadKind==='correct-icon')converted=await api.optimizeImage(file,500,65000);
+  else if(uploadKind==='audio')converted=await api.optimizeAudio(file,item.audioStart||0,item.audioDuration||8);
+  else return;
+  if(current()?.id!==questionId)throw Error('Die Frage wurde während des Uploads gewechselt. Bitte die Datei erneut auswählen.');
+  const target=uploadKind==='image'?current().scene.elements.find(x=>x.id===elementId):null;
+  if(uploadKind==='image'&&(!target||target.kind!=='image'))throw Error('Das Bildelement ist nicht mehr vorhanden.');
+  snapshot();
+  if(uploadKind==='image'){target.src=converted;target.alt=file.name.slice(0,100);}
+  else if(uploadKind==='correct-icon')current().correctIcon=converted;
+  else current().audio=converted;
+  persist(true);
+ }
+ function mount(root){if(!root||root.dataset.bound)return;root.dataset.bound='yes';
+  root.addEventListener('click',event=>{const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});
+  root.addEventListener('focusout',event=>{if(event.target===trackedInput)trackedInput=null;});
+  root.addEventListener('change',async event=>{const t=event.target;try{if(t.matches('[data-se-template]')){setType(t.value);return;}if(t.matches('[data-se-reveal]')){reveal=Number(t.value);draw();return;}if(t.matches('[data-se-snap]')){snap=t.checked;return;}if(t.matches('[data-se-upload]')){await onUpload(t);return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);flushDraft();draw();}}catch(err){api.error(err)}});
+  root.addEventListener('input',event=>{const t=event.target;if(t.matches('[data-se-search]')){search=t.value;const active=document.activeElement;const pos=active.selectionStart;draw();requestAnimationFrame(()=>{const next=document.querySelector('[data-se-search]');next?.focus();next?.setSelectionRange(pos,pos);});return;}if(t.matches('[data-se-quiztitle]')){quiz().title=t.value.slice(0,100);api.save();return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);}});
+  root.addEventListener('pointerdown',event=>{if(preview||event.button!==0)return;const node=event.target.closest('[data-se-element]');if(!node)return;event.preventDefault();sel=node.dataset.seElement;const el=find();if(!el)return;const rect=root.querySelector('.se-scene').getBoundingClientRect();snapshot();drag={node,el,rect,startX:event.clientX,startY:event.clientY,x:el.x,y:el.y,w:el.w,h:el.h,resizing:!!event.target.closest('[data-se-resize]')};node.setPointerCapture(event.pointerId);node.classList.add('is-selected');});
+  root.addEventListener('pointermove',event=>{if(!drag)return;const {node,el,rect,startX,startY}=drag;let dx=(event.clientX-startX)/rect.width*1000,dy=(event.clientY-startY)/rect.height*560;if(snap){dx=Math.round(dx/10)*10;dy=Math.round(dy/10)*10;}if(drag.resizing){el.w=Math.max(50,Math.min(1000-el.x,drag.w+dx));el.h=Math.max(30,Math.min(560-el.y,drag.h+dy));node.style.width=el.w/10+'%';node.style.height=el.h/5.6+'%';}else{el.x=Math.max(0,Math.min(1000-el.w,drag.x+dx));el.y=Math.max(0,Math.min(560-el.h,drag.y+dy));node.style.left=el.x/10+'%';node.style.top=el.y/5.6+'%';}});
+  const finish=(cancelled=false)=>{if(!drag)return;const old=drag;drag=null;if(cancelled){old.el.x=old.x;old.el.y=old.y;old.el.w=old.w;old.el.h=old.h;}if(cancelled||(old.el.x===old.x&&old.el.y===old.y&&old.el.w===old.w&&old.el.h===old.h)){api.discardSnapshot?.();draw();return;}persist(true);};root.addEventListener('pointerup',()=>finish(false));root.addEventListener('pointercancel',()=>finish(true));
+  root.addEventListener('keydown',event=>{const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!editable&&['Enter',' '].includes(event.key)&&event.target.matches?.('[data-se-element]')){event.preventDefault();sel=event.target.dataset.seElement;draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='d'&&sel){event.preventDefault();onAction('duplicate');return;}if((event.key==='Delete'||event.key==='Backspace')&&!editable&&sel){event.preventDefault();onAction('remove');return;}if(event.key==='Escape'&&!editable&&sel){sel='';draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='z'){event.preventDefault();onAction(event.shiftKey?'redo':'undo');return;}if(!sel||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)||editable)return;event.preventDefault();const el=find();if(!el)return;snapshot();const n=event.shiftKey?20:5;if(event.key==='ArrowLeft')el.x=Math.max(0,el.x-n);if(event.key==='ArrowRight')el.x=Math.min(1000-el.w,el.x+n);if(event.key==='ArrowUp')el.y=Math.max(0,el.y-n);if(event.key==='ArrowDown')el.y=Math.min(560-el.h,el.y+n);persist(true);});
+ }
+ return {html,render:()=>html(),mount,reset:()=>{sel='';reveal=0;preview=false;},getSelected:()=>sel};
+}

@@ -1,0 +1,397 @@
+/* BrainQuiz Studio 2.3 — Mauve & Moss Pixel Glass
+ * Modern, legible frosted glass with an original, tiny pixel detail system.
+ * This stylesheet deliberately DOES NOT pixelate text, player images or custom
+ * quiz media. No gameplay / Firebase / data-model changes are made here.
+ * Study basis: Lospec palettes, Godot nine-slice UI, indie game UI theme makers,
+ * Unity/MDN pixel scaling, WCAG contrast and focus guidelines.
+ */
+:root {
+  --pixel-cloak:#ab8098; --pixel-cloak-mid:#765469; --pixel-cloak-dark:#543849;
+  --pixel-leaf:#a2b3a5; --pixel-leaf-deep:#718d80;
+  --pixel-spark:#eadbbd; --pixel-steel:#8898a0;
+  --pixel-etch:rgba(194,157,177,.28); --pixel-highlight:rgba(206,218,204,.17);
+  --accent:#b2c9bc; --accent2:#b5a0b5; --gold:#dfc5a2;
+  --edge:rgba(225,219,227,.17); --line:rgba(209,220,217,.125);
+  --good:#b5dbbe; --danger:#f0afb9; --soft:#cbd0d3; --muted:#a8b1ba;
+  --shadow:0 17px 42px rgba(0,0,0,.34),inset 0 1px rgba(242,233,244,.055);
+}
+body{
+ background:radial-gradient(ellipse 35% 52% at -5% 75%,rgba(116,66,102,.16),transparent 74%),
+ radial-gradient(ellipse 45% 30% at 99% -10%,rgba(127,145,131,.13),transparent 76%),
+ linear-gradient(155deg,#17191e 0%,#101215 58%,#0c0e11 100%);
+}
+/* Only the background carries the sparse crisp-pixel constellations. Never put
+ * pixel texture behind text inside question or answer cards. */
+body::before{
+ content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+ background-image:url('./pixel-constellation.png');background-repeat:repeat;
+ background-size:256px 256px;opacity:.32;image-rendering:pixelated;
+}
+.ambient.one{background:var(--pixel-cloak-dark);opacity:.16}
+.ambient.two{background:var(--pixel-leaf-deep);opacity:.15}
+/* Glass depth comes from lighting and tone; pixel detail is reserved for edge
+ * geometry. This uses ordinary borders to retain sensible focus outlines. */
+.glass{
+ border-color:rgba(213,205,215,.18);
+ box-shadow:inset 0 1px 0 rgba(244,237,246,.06),0 19px 50px rgba(0,0,0,.31);
+ background:linear-gradient(145deg,rgba(57,56,66,.70) 0%,rgba(32,35,40,.90) 46%,rgba(23,28,31,.93) 100%);
+}
+.topbar{border-color:rgba(194,164,182,.25);background:linear-gradient(155deg,rgba(52,48,59,.90),rgba(25,29,34,.94));}
+/* Small procedural 9-slice-like corner brackets; don't stretch the individual
+ * pixels, and don't replace text borders or clickable hitboxes. */
+.topbar,.panel{position:relative}
+.topbar::after,.panel:not(.review-main)::after{
+ content:"";position:absolute;pointer-events:none;inset:8px;
+ background-image:url('./pixel-corner.png'),url('./pixel-corner.png');
+ background-repeat:no-repeat;background-size:14px 14px;
+ background-position:top left,bottom right;opacity:.64;z-index:0;
+}
+.topbar>*,.panel>*{position:relative}
+.brand .logo,.logo{
+ border-radius:9px;border-color:rgba(229,217,210,.33);
+ background:linear-gradient(145deg,#60616b,#292b34 58%,#1d2327);
+ box-shadow:inset 0 1px 0 rgba(254,248,239,.21),inset 2px 0 rgba(168,131,153,.16),0 7px 18px rgba(0,0,0,.36);
+}
+.logo::after{background:var(--pixel-spark);box-shadow:-5px 0 var(--pixel-cloak),0 -5px var(--pixel-leaf);}
+.brand small{color:#bcc3bd}
+/* Keyboard focus remains pronounced, even where pixel corners decorate a UI. */
+:is(.btn,.nav,.tile,.guest-choice,.review-clickable,.history-entry summary,
+     .se-studio button,.se-studio .se-qrow,.field input,.field textarea,
+     .field select,.se-field input,.se-field select,.se-field textarea):focus-visible{
+ outline:2px solid #e4d4b7;outline-offset:3px;
+}
+/* Controls: deliberately slight step-shaped bevel and tactile shade, while
+ * maintaining the same dimensions, tab order and pointer targets. */
+.btn,.se-studio button{
+ border-radius:8px;border-color:rgba(195,185,198,.30);
+ box-shadow:inset 0 1px rgba(245,231,240,.10),inset 0 -2px rgba(0,0,0,.15),0 3px 8px rgba(0,0,0,.09);
+ background:linear-gradient(180deg,rgba(123,111,128,.18),rgba(51,59,63,.24));
+}
+.btn:hover:not(:disabled),.se-studio button:hover:not(:disabled){
+ background:linear-gradient(180deg,rgba(143,122,143,.27),rgba(68,79,75,.30));border-color:rgba(199,183,201,.50)
+}
+.btn:active:not(:disabled),.se-studio button:active:not(:disabled){transform:translateY(1px);box-shadow:inset 0 2px 5px rgba(0,0,0,.25)}
+.btn.primary,.se-studio .se-primary{
+ background:linear-gradient(155deg,#c1d7c5,#a7c4b5)!important;color:#1d2925!important;
+ border-color:#dce8d3!important;box-shadow:inset 0 1px #f2eee8,inset 0 -2px #789789,0 4px 10px #0003;
+}
+.btn.primary:hover:not(:disabled),.se-studio .se-primary:hover:not(:disabled){background:linear-gradient(145deg,#d9e8d4,#b9d6c7)!important}
+.btn.danger{background:rgba(136,61,82,.16);border-color:rgba(234,165,184,.50)}
+/* Navigation: a jewel-like 3-pixel sigil signals selection, without a pixel font. */
+.top-nav .nav{border-radius:8px;transition:background .15s,border-color .15s;color:#d5d9d7}
+.top-nav .nav.active{border-color:rgba(194,166,185,.49);background:linear-gradient(110deg,rgba(131,91,119,.29),rgba(116,144,127,.14));box-shadow:inset 0 1px rgba(236,209,221,.10)}
+.top-nav .nav.active::before{width:4px;height:4px;background:#d5b2c4;box-shadow:4px 0 #aabfae,0 4px #896878,4px 4px rgba(218,206,183,.59);margin-right:4px}
+.roomchip,.pill,.status-tag,.chip,.se-chip{
+ border-radius:7px;border-color:rgba(193,178,192,.28);
+ background:linear-gradient(155deg,rgba(104,88,103,.20),rgba(74,83,80,.13));
+}
+.dot.live{background:var(--pixel-leaf);box-shadow:0 0 0 3px rgba(162,179,165,.16)}
+.status .dot{border-radius:2px}
+/* Design details used throughout the actual workflow, not as extra copy. */
+.panelhead h2,.panelhead h3,.se-sectionhead h3{display:flex;align-items:center;gap:9px;min-width:0}
+.panelhead h2::before,.panelhead h3::before,.se-sectionhead h3::before{
+ content:"";width:6px;height:6px;flex:none;background:#c2a4b8;
+ box-shadow:4px 0 rgba(191,211,191,.8),0 4px rgba(214,193,174,.55),4px 4px rgba(126,89,111,.65);
+ margin:0 7px 5px 1px;
+}
+/* Jeopardy board: pixel beveling and category header micro-steps. Avoid fuzzy
+ * scaling on point values, which remain system text for legibility. */
+.coltitle{position:relative;border-radius:8px;letter-spacing:.10em;
+ background:linear-gradient(160deg,rgba(112,87,105,.26),rgba(77,94,84,.18));
+ border-color:rgba(195,170,189,.37);box-shadow:inset 0 2px rgba(212,186,200,.10)}
+.coltitle::before{content:"";width:15px;height:3px;background:#a8b7aa;
+ box-shadow:5px 4px rgba(184,138,164,.65);margin:0 auto 3px;}
+.tile{border-radius:8px;border-color:rgba(180,165,177,.35);
+ background:linear-gradient(157deg,rgba(64,62,72,.92),rgba(32,39,42,.97));
+ box-shadow:inset 0 2px rgba(235,221,226,.085),inset 0 -3px rgba(8,12,15,.21),0 4px 12px rgba(0,0,0,.13);
+ color:#d9e5dc;transition:border-color .14s,background .14s,transform .14s;}
+.tile::after{width:4px;height:4px;right:10px;top:10px;background:rgba(215,166,193,.49);
+ box-shadow:5px 0 rgba(215,166,193,.20),0 5px rgba(177,201,179,.46),5px 5px rgba(221,201,167,.21)}
+.tile:hover:not(:disabled){border-color:rgba(195,178,194,.68);background:linear-gradient(150deg,#5b5360,#38493f)}
+.tile.current{border-color:#b8d7c4;box-shadow:inset 0 0 0 1px #95b19e,0 0 0 2px rgba(167,192,171,.11)}
+.tile.used{background:rgba(26,31,33,.68);box-shadow:none}
+/* Stage, answer input, media and clue views share the same sober palette. */
+.stage,.guest-question,.guest-answer,.current-question{border-color:rgba(200,177,193,.21);
+ background:linear-gradient(160deg,rgba(51,48,58,.91),rgba(24,30,32,.95));}
+.stage .eyebrow{color:#d3b3c5}
+.choice,.guest-choice,.orderitem,.ability,.hint,.cluebox{
+ border-radius:8px;border-color:rgba(197,183,193,.24);
+ background:linear-gradient(145deg,rgba(106,93,111,.15),rgba(46,59,52,.20));
+}
+.choice b,.guest-choice b{color:#e2c7d2}
+.guest-choice b,.se-studio .se-letter{border-radius:5px;border:1px solid rgba(196,169,187,.32);
+ box-shadow:inset 1px 1px rgba(255,255,255,.07),inset -2px -2px rgba(0,0,0,.18);background:rgba(99,79,101,.28)}
+.guest-choice.selected{border:2px solid #c8dabc;background:rgba(115,144,123,.24);box-shadow:0 0 0 2px rgba(170,205,174,.08)}
+.guest-choice:hover:not(:disabled){border-color:#aa9baf;background:rgba(150,118,143,.23)}
+.answer,.history-solution{border-color:rgba(168,204,173,.45);background:rgba(59,89,70,.24)}
+/* Shared 8-player reveal: keep the whole anthracite glass card frosted while
+ * secret answer bytes remain absent from the public view until host reveal. */
+.review-main{background:linear-gradient(165deg,rgba(44,42,49,.91),rgba(23,29,30,.94));}
+.review-card{border-radius:12px;border-color:rgba(196,182,192,.30);
+ background:linear-gradient(160deg,rgba(66,59,69,.93),rgba(31,40,39,.95));}
+.review-card.is-hidden{border-color:rgba(208,189,204,.36);
+ background:linear-gradient(145deg,rgba(109,99,112,.52),rgba(52,57,61,.79) 52%,rgba(34,41,42,.93));}
+.review-card.is-hidden::before{background:linear-gradient(115deg,rgba(255,242,252,.105),transparent 35%,rgba(206,218,208,.04) 67%,transparent 86%)}
+.review-card::after{content:"";pointer-events:none;position:absolute;right:11px;top:10px;width:4px;height:4px;
+ background:rgba(208,165,189,.57);box-shadow:-5px 0 rgba(162,194,168,.32),0 5px rgba(218,197,167,.23);z-index:2}
+.review-card.is-hidden .frosted-symbol{background:rgba(165,139,160,.11);border:1px solid rgba(224,210,223,.46);
+ border-radius:3px;box-shadow:inset -2px -2px rgba(12,16,16,.15)}
+.review-card.is-hidden .review-value{color:#e7e5e4}
+.review-card.is-revealed{background:linear-gradient(155deg,#33443f,#26352f);border-color:rgba(170,205,180,.73)}
+.review-clickable:hover{border-color:rgba(219,192,214,.72);background:linear-gradient(155deg,#595362,#35443f)}
+.review-footer{color:#cbd5d2}
+.review-points,.review-solution{border-color:rgba(186,169,189,.28)}
+/* Host archive: pixel-edged round counters; avoid ornamental rows behind data. */
+.history-entry{border-color:rgba(203,186,200,.29);border-radius:10px;
+ background:linear-gradient(145deg,rgba(92,76,89,.20),rgba(38,49,43,.31))}
+.history-entry[open]{border-color:rgba(195,171,192,.53)}
+.history-round{border-radius:5px;background:rgba(115,87,111,.31);border-color:rgba(214,181,197,.40);
+ box-shadow:inset 0 1px rgba(255,230,239,.14),inset -2px -2px rgba(9,13,13,.24)}
+.history-count{border-radius:5px;background:rgba(133,122,139,.18)}
+.history-person{border-radius:8px;border-color:rgba(204,185,199,.24)}
+/* Editor: dark sage/mauve panels + a very faint pixel alignment grid only
+ * while editing. Individual user-provided images remain unchanged. */
+.se-studio .se-toolbar{border-color:rgba(210,185,204,.35);border-radius:12px;
+ background:linear-gradient(155deg,rgba(60,53,63,.94),rgba(32,41,39,.95))}
+.se-studio .se-list,.se-studio .se-main,.se-studio .se-inspector{
+ background:linear-gradient(160deg,rgba(59,55,63,.87),rgba(27,34,35,.98));
+ border-color:rgba(192,179,195,.29);border-radius:12px;}
+.se-studio .se-qrow.is-active{border-color:rgba(213,171,203,.65);
+ background:linear-gradient(120deg,rgba(121,82,111,.35),rgba(102,136,111,.13));}
+.se-studio .se-subpanel{border-color:rgba(197,180,196,.25);background:rgba(36,41,42,.8)}
+.se-studio .se-scene.se-editing{
+ background-image:linear-gradient(rgba(181,159,171,.035) 1px,transparent 1px),
+ linear-gradient(90deg,rgba(181,159,171,.035) 1px,transparent 1px),
+ radial-gradient(circle at 80% 20%,rgba(129,92,116,.17),transparent 46%),
+ linear-gradient(140deg,#262b2e,#1a2020);
+ background-size:16px 16px,16px 16px,auto,auto;
+}
+.se-studio .se-element.is-selected{outline:2px solid #d0b3c7;outline-offset:2px;
+ border-color:#dce4d1;box-shadow:0 0 0 4px rgba(174,140,163,.19)}
+.se-studio .se-element.se-kind-order.se-picked{border-color:#c3dbba;
+ box-shadow:0 0 0 2px rgba(168,204,175,.30)}
+.se-studio .se-resize{border-radius:2px;background:#c3a0b5;border:2px solid #343c35}
+.se-studio .se-reveal-mark,.se-studio .se-chip{border-radius:4px;background:rgba(102,79,96,.64)}
+.se-studio .se-order-rank{border-radius:4px;background:#b7d0bc}
+.se-studio .se-field input[type=color]{border-color:rgba(204,181,196,.44)}
+.se-studio .se-search:focus{border-color:#dbc1ce}
+/* Decorative work stays visually optional for high-contrast or reduced
+ * transparency preferences. Never blur text or input content. */
+@media(prefers-reduced-transparency:reduce){
+ .glass,.review-card.is-hidden{backdrop-filter:none;-webkit-backdrop-filter:none}
+ .glass{background:#292b30}.review-card.is-hidden{background:#45444a}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;transition-duration:0s!important;animation-duration:0s!important}
+}
+@media(forced-colors:active){
+ body::before,.topbar::after,.panel::after,.review-card::after{display:none}
+ .btn,.tile,.guest-choice,.review-card{border:1px solid ButtonText}
+}
+@media print{body::before,.topbar::after,.panel::after,.review-card::after{display:none}}
+/* Legacy Jeopardy selectors are more specific than the generic .tile rules.
+ * Apply the final pixel-glass state here too, not just to the review grid. */
+.jeopardy-board .coltitle{background:linear-gradient(155deg,rgba(108,79,102,.34),rgba(72,91,81,.29));
+ border-color:rgba(197,170,191,.50);border-radius:8px;box-shadow:inset 0 2px rgba(224,193,213,.13);}
+.jeopardy-board .tile{border:1px solid rgba(184,163,178,.44);border-radius:8px;
+ background:linear-gradient(155deg,#38323d,#293531 88%);
+ box-shadow:inset 0 2px rgba(237,216,229,.13),inset 0 -3px rgba(9,12,14,.25),0 4px 13px rgba(0,0,0,.16);}
+.jeopardy-board .tile:hover:not(:disabled){background:linear-gradient(150deg,#554354,#35463d);border-color:rgba(211,188,203,.75)}
+.jeopardy-board .tile.current{background:linear-gradient(145deg,#43544a,#2e453e);border:2px solid #b5d4bb;
+ box-shadow:inset 0 1px rgba(222,247,219,.17),0 0 0 2px rgba(162,193,167,.17)}
+.jeopardy-board .tile.used{background:#202529;border-color:rgba(137,147,143,.24);box-shadow:none}
+/* On longer editor/board/history pages the mascot belongs to the end of the
+ * page, not above active questions or clickable widgets at viewport bottom.
+ * Review-gallery pages already have a reserved, visible mascot corner. */
+@media(min-width:681px){
+ body:not(:has(.review-main)){position:relative;padding-bottom:126px}
+ body:not(:has(.review-main)) .bq-pixel-mascot{position:absolute;bottom:4px;left:8px}
+}
+
+
+/* BrainQuiz Studio 2.4 — expanded mascot family and broader pixel-glass language
+ * More of the RPG mood appears around the shell chrome and empty margins, while
+ * question text, answer cards and custom quiz media stay unobstructed. */
+#app,.shell,.start-shell{position:relative;z-index:1}
+body{overflow-x:hidden}
+body::after{
+ content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.22;
+ background:
+  radial-gradient(circle at 15% 18%,rgba(234,219,189,.17) 0 2px,transparent 2px),
+  radial-gradient(circle at 84% 22%,rgba(162,179,165,.16) 0 2px,transparent 2px),
+  radial-gradient(circle at 12% 72%,rgba(171,128,152,.14) 0 2px,transparent 2px),
+  radial-gradient(circle at 90% 78%,rgba(234,219,189,.12) 0 1px,transparent 1px);
+}
+.bq-pixel-scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bq-pixel-mascot{
+ position:fixed;z-index:0;pointer-events:none;user-select:none;-webkit-user-select:none;
+ opacity:.92;filter:drop-shadow(0 6px 14px rgba(0,0,0,.42));
+ transform-origin:center bottom;transition:opacity .15s ease,transform .2s ease;
+}
+.bq-pixel-mascot img{display:block;width:100%;height:auto;image-rendering:pixelated;object-fit:contain}
+.bq-mascot-main{left:clamp(4px,.9vw,18px);bottom:clamp(0px,.8vw,10px);width:clamp(72px,8.2vw,118px)}
+.bq-mascot-ranger{right:clamp(-12px,.3vw,10px);top:clamp(108px,14vh,152px);width:clamp(92px,10vw,148px);opacity:.76;transform:rotate(2deg)}
+.bq-mascot-lantern{right:clamp(4px,.9vw,20px);bottom:clamp(4px,1.2vw,16px);width:clamp(94px,10.8vw,154px);opacity:.86;transform:rotate(-3deg)}
+.bq-mascot-alchemist{left:clamp(-6px,.3vw,8px);top:clamp(112px,14vh,164px);width:clamp(92px,10.2vw,144px);opacity:.74;transform:rotate(-2deg)}
+/* Keep the answer reveal layout unobstructed: mascots only occupy shell margins. */
+body:has(.review-main) .bq-pixel-mascot{display:none}
+body:has(.board) .bq-pixel-mascot{display:none}
+@media(max-width:1240px){.bq-mascot-ranger,.bq-mascot-alchemist{display:none}}
+@media(max-width:860px){.bq-mascot-lantern{display:none}}
+@media(max-width:680px){
+ body{position:relative;padding-bottom:76px}
+ body::after{opacity:.14}
+ .bq-pixel-scene{position:absolute;inset:0;overflow:visible}
+ .bq-pixel-mascot{position:absolute;filter:drop-shadow(0 4px 8px rgba(0,0,0,.34))}
+ .bq-mascot-main{left:8px;bottom:3px;width:58px;opacity:.9}
+ .bq-mascot-lantern{right:8px;bottom:6px;width:56px;opacity:.72;display:block}
+ .bq-mascot-ranger,.bq-mascot-alchemist{display:none}
+}
+@media(max-width:390px){.bq-mascot-main{width:51px}.bq-mascot-lantern{width:48px}}
+@media print{.bq-pixel-scene{display:none}}
+/* Broader pixel language: tiny step motifs and leaf sigils on shell chrome, not
+ * in the playable question fields. */
+.topbar::before{
+ content:"";position:absolute;right:18px;top:14px;width:6px;height:6px;pointer-events:none;z-index:0;
+ background:var(--pixel-spark);
+ box-shadow:14px 3px rgba(171,128,152,.75),24px 12px rgba(162,179,165,.72),10px 17px rgba(234,219,189,.36),-18px 10px rgba(162,179,165,.35);
+ opacity:.55;
+}
+.header-secondary h1::after{content:"";display:inline-block;width:4px;height:4px;margin-left:10px;margin-bottom:8px;vertical-align:middle;background:var(--pixel-spark);box-shadow:5px 0 rgba(171,128,152,.65),0 5px rgba(162,179,165,.58),5px 5px rgba(234,219,189,.4)}
+.roomchip::before,.pill::before,.status-tag::before,.chip::before,.se-chip::before{content:"";display:inline-block;width:4px;height:4px;margin-right:7px;background:var(--pixel-spark);box-shadow:4px 0 rgba(171,128,152,.55),0 4px rgba(162,179,165,.45)}
+.panel{overflow:clip}
+.panel:not(.review-main)::before{content:"";position:absolute;left:16px;bottom:14px;width:18px;height:3px;background:rgba(162,179,165,.38);box-shadow:6px 4px rgba(171,128,152,.34),12px 8px rgba(234,219,189,.26);pointer-events:none;opacity:.62}
+.review-main::before{content:"";position:absolute;left:18px;bottom:22px;width:24px;height:3px;background:rgba(162,179,165,.34);box-shadow:6px 4px rgba(171,128,152,.30),12px 8px rgba(234,219,189,.24);pointer-events:none;opacity:.56}
+.top-nav .nav,.btn,.roomchip,.pill,.status-tag,.chip,.guest-choice,.choice,.ability,.history-person{position:relative;overflow:hidden}
+.top-nav .nav::after,.btn::after,.roomchip::after,.pill::after,.status-tag::after,.chip::after,.guest-choice::after,.choice::after,.ability::after,.history-person::after{
+ content:"";position:absolute;right:8px;top:8px;width:3px;height:3px;pointer-events:none;
+ background:rgba(234,219,189,.44);box-shadow:5px 0 rgba(171,128,152,.34),0 5px rgba(162,179,165,.32);opacity:.72
+}
+.header-state,.topright,.panelhead,.history-head{position:relative}
+.header-state::after,.topright::after{content:"";position:absolute;left:-8px;bottom:-6px;width:22px;height:1px;background:linear-gradient(90deg,rgba(162,179,165,.0),rgba(162,179,165,.40),rgba(171,128,152,.0));pointer-events:none}
+.board,.review-layout,.se-studio .se-toolbar,.se-studio .se-main,.se-studio .se-inspector,.se-studio .se-list{position:relative}
+.board::before,.review-layout::before{content:"";position:absolute;inset:0;pointer-events:none;border:1px dashed rgba(171,128,152,.08);border-radius:18px}
+.start-shell .start-head::after{content:"";position:absolute;right:18px;bottom:16px;width:18px;height:4px;background:rgba(171,128,152,.28);box-shadow:7px 5px rgba(162,179,165,.24),14px 10px rgba(234,219,189,.18)}
+/* Keep content-preference modes safe. */
+@media(prefers-reduced-transparency:reduce){.bq-pixel-mascot{opacity:.82;filter:none}}
+@media(forced-colors:active){body::before,body::after,.topbar::before,.header-secondary h1::after,.panel::before,.review-main::before,.top-nav .nav::after,.btn::after,.roomchip::after,.pill::after,.status-tag::after,.chip::after,.guest-choice::after,.choice::after,.ability::after,.history-person::after{display:none}.bq-pixel-mascot{opacity:.65}}
+
+/* BrainQuiz 2.5 · 60% clean glass + 40% distinct pixel-RPG identity.
+ * Strong pixel bevels and ornaments are restricted to host/guest presentation.
+ * Editor remains calm, editable, and true to its WYSIWYG preview. */
+.bq-game-mode .page-live{--game-glass:rgba(36,39,46,.86);--game-edge:#967d90;--game-sage:#8da99a;--game-light:#e8d8b8}
+.bq-game-mode .page-live .glass{
+ border-color:rgba(191,167,184,.43);
+ background:linear-gradient(153deg,rgba(49,45,56,.90),rgba(30,35,39,.94) 52%,rgba(22,27,30,.96));
+ box-shadow:inset 0 2px rgba(238,215,229,.08),inset 0 -3px rgba(5,8,10,.27),0 12px 35px rgba(0,0,0,.27);
+ border-radius:9px;
+}
+.bq-game-mode .page-live .panelhead{border-bottom:1px solid rgba(165,137,156,.15);padding-bottom:13px}
+.bq-game-mode .page-live .panelhead h2,.bq-game-mode .page-live .panelhead h3{letter-spacing:.01em}
+.bq-game-mode .page-live .panelhead h2::before,.bq-game-mode .page-live .panelhead h3::before{
+ width:6px;height:6px;background:var(--pixel-spark);box-shadow:6px 0 var(--pixel-cloak),0 6px var(--pixel-leaf),6px 6px rgba(204,181,166,.4);
+}
+.bq-game-mode .page-live .coltitle{
+ border-radius:4px;min-height:51px;border:2px solid rgba(169,133,158,.58);
+ background:linear-gradient(160deg,#514356 0%,#31343b 64%,#283932 100%);
+ box-shadow:inset 0 2px rgba(232,199,218,.17),inset -3px -3px rgba(8,11,14,.32);
+ clip-path:polygon(0 6px,6px 6px,6px 0,calc(100% - 6px) 0,calc(100% - 6px) 6px,100% 6px,100% calc(100% - 6px),calc(100% - 6px) calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,6px calc(100% - 6px),0 calc(100% - 6px));
+}
+.bq-game-mode .page-live .tile{
+ border-radius:4px;border:2px solid rgba(155,137,152,.53);
+ background:linear-gradient(160deg,#504451,#303e3d 75%,#262e33);
+ box-shadow:inset 0 3px rgba(235,208,226,.13),inset -3px -4px rgba(5,8,10,.31),0 5px 12px rgba(0,0,0,.22);
+ clip-path:polygon(0 5px,5px 5px,5px 0,calc(100% - 5px) 0,calc(100% - 5px) 5px,100% 5px,100% calc(100% - 5px),calc(100% - 5px) calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,5px calc(100% - 5px),0 calc(100% - 5px));
+}
+.bq-game-mode .page-live .tile:hover:not(:disabled){border-color:#d6b5c8;background:linear-gradient(145deg,#694c64,#405b4e)}
+.bq-game-mode .page-live .tile.current{border-color:#b9d0b7;background:linear-gradient(145deg,#4a5e51,#2a453d)}
+.bq-game-mode .page-live .stage,.bq-game-mode .page-live .guest-answer,.bq-game-mode .page-live .current-question{
+ position:relative;overflow:hidden;box-shadow:inset 0 2px rgba(242,223,233,.075),inset 0 -3px rgba(0,0,0,.22);
+}
+.bq-game-mode .page-live .stage{border:2px solid rgba(165,143,158,.48);border-radius:6px;background:linear-gradient(145deg,#302d38,#1b2526)}
+.bq-game-mode .page-live .review-card{
+ border:2px solid rgba(194,164,186,.52);border-radius:6px;min-width:0;
+ box-shadow:inset 0 3px rgba(239,219,234,.12),inset -3px -4px rgba(0,0,0,.24),0 7px 15px rgba(0,0,0,.18);
+ clip-path:polygon(0 7px,7px 7px,7px 0,calc(100% - 7px) 0,calc(100% - 7px) 7px,100% 7px,100% calc(100% - 7px),calc(100% - 7px) calc(100% - 7px),calc(100% - 7px) 100%,7px 100%,7px calc(100% - 7px),0 calc(100% - 7px));
+}
+.bq-game-mode .page-live .review-card.is-hidden{background:linear-gradient(135deg,rgba(99,85,101,.83),rgba(43,56,53,.94));backdrop-filter:blur(25px);-webkit-backdrop-filter:blur(25px)}
+.bq-game-mode .page-live .review-card.is-revealed{background:linear-gradient(155deg,#344c43,#22342f);border-color:rgba(165,203,170,.78)}
+.bq-game-mode .page-live .guest-choice,.bq-game-mode .page-live .choice,.bq-game-mode .page-live .orderitem{
+ border-radius:4px;border:2px solid rgba(166,144,163,.41);box-shadow:inset 0 2px rgba(232,214,227,.07),inset -2px -3px rgba(0,0,0,.19)
+}
+.bq-game-mode .page-live .guest-choice.selected{border-color:#b8d9ba;box-shadow:inset 0 2px rgba(235,245,228,.12),0 0 0 2px rgba(172,198,165,.16)}
+.bq-game-mode .page-live .btn{border-radius:5px;border-width:2px;box-shadow:inset 0 2px rgba(245,225,239,.09),inset 0 -3px rgba(0,0,0,.2),0 3px 7px rgba(0,0,0,.13)}
+.bq-game-mode .page-live .pill{border-radius:4px}
+.bq-game-mode .topbar{border-radius:10px;border:2px solid rgba(191,161,181,.36);box-shadow:inset 0 2px rgba(245,219,235,.11),inset 0 -3px rgba(0,0,0,.19),0 10px 22px rgba(0,0,0,.22)}
+.bq-game-mode .top-nav .nav.active{border:1px solid rgba(187,154,178,.70);border-radius:5px;box-shadow:inset 0 2px rgba(249,221,238,.1),inset -2px -2px rgba(4,9,10,.23)}
+/* Pixel cutout characters sit in a dedicated strip AFTER all game content.
+ * The dock never overlays the board, answer grid, forms or navigation. */
+.bq-game-mode .bq-pixel-scene{display:none!important}
+.bq-character-dock{
+ display:flex;align-items:flex-end;justify-content:space-around;gap:clamp(10px,4vw,68px);
+ min-height:100px;margin:10px auto 6px;padding:4px clamp(10px,4vw,40px) 0;max-width:1100px;
+ border-top:2px solid rgba(159,126,149,.28);position:relative;isolation:isolate;
+ background:linear-gradient(180deg,rgba(91,73,89,.12),rgba(27,35,32,.02) 74%);
+}
+.bq-character-dock::before,.bq-character-dock::after{content:"";position:absolute;top:-5px;width:6px;height:6px;background:var(--pixel-spark);box-shadow:6px 0 rgba(175,134,156,.72),0 6px rgba(149,181,160,.66);pointer-events:none}
+.bq-character-dock::before{left:0}.bq-character-dock::after{right:12px}
+.bq-character-dock img{
+ flex:0 1 auto;display:block;object-fit:contain;object-position:center bottom;
+ width:clamp(53px,7vw,95px);height:clamp(71px,9vw,113px);image-rendering:pixelated;
+ filter:drop-shadow(0 5px 8px rgba(0,0,0,.44));transform:translateY(0);transform-origin:center bottom;
+ transition:transform 210ms steps(4,end),filter 210ms ease;pointer-events:auto;
+}
+.bq-character-dock img:nth-of-type(2){width:clamp(62px,8vw,106px)}
+.bq-character-dock img:nth-of-type(3){width:clamp(48px,6vw,89px)}
+.bq-character-dock img:nth-of-type(4){width:clamp(67px,8vw,112px)}
+.bq-character-dock img:hover{transform:translateY(-9px);filter:drop-shadow(0 9px 10px rgba(0,0,0,.5))}
+.bq-character-dock img.bq-happy-reaction{animation:bq-mascot-pop 900ms steps(6,end) 1}
+@keyframes bq-mascot-pop{0%,100%{transform:translateY(0)}30%{transform:translateY(-15px)}55%{transform:translateY(-4px)}78%{transform:translateY(-10px)}}
+/* One-time question-curtain. DOM inserts it only for a NEW published round.
+ * No secret answer payload is ever embedded in the curtain. */
+.page-live .stage{position:relative;overflow:hidden}
+.bq-question-curtain{
+ position:absolute;inset:0;z-index:7;pointer-events:none;
+ background:linear-gradient(160deg,rgba(73,59,76,.98),rgba(31,39,42,.98) 52%,rgba(20,26,29,.98));
+ border:5px solid rgba(205,178,196,.68);box-shadow:inset 0 5px rgba(236,219,228,.11),inset 0 -8px rgba(0,0,0,.23);
+ will-change:transform;
+}
+.bq-question-curtain::after{content:"";position:absolute;inset:12px;border:1px dashed rgba(192,174,184,.21);pointer-events:none}
+.bq-curtain-actor{position:absolute;z-index:1;bottom:0;left:0;width:clamp(60px,10vw,102px);height:clamp(70px,12vw,114px);object-fit:contain;object-position:center bottom;image-rendering:pixelated;filter:drop-shadow(0 5px 12px rgba(0,0,0,.4));pointer-events:none}
+.bq-question-curtain.bq-swipe-right .bq-curtain-actor{left:auto;right:0}
+.bq-question-curtain.bq-swipe-down .bq-curtain-actor{bottom:auto;top:0}
+.bq-question-curtain.bq-swipe-left{animation:bq-curtain-left 930ms cubic-bezier(.54,0,.32,1) forwards}
+.bq-question-curtain.bq-swipe-right{animation:bq-curtain-right 930ms cubic-bezier(.54,0,.32,1) forwards}
+.bq-question-curtain.bq-swipe-up{animation:bq-curtain-up 930ms cubic-bezier(.54,0,.32,1) forwards}
+.bq-question-curtain.bq-swipe-down{animation:bq-curtain-down 930ms cubic-bezier(.54,0,.32,1) forwards}
+@keyframes bq-curtain-left{to{transform:translateX(-105%)}}
+@keyframes bq-curtain-right{to{transform:translateX(105%)}}
+@keyframes bq-curtain-up{to{transform:translateY(-105%)}}
+@keyframes bq-curtain-down{to{transform:translateY(105%)}}
+@media(max-width:680px){.bq-character-dock{min-height:66px;padding:3px 10px 0;gap:6px}.bq-character-dock img,.bq-character-dock img:nth-of-type(n){width:clamp(45px,16vw,67px);height:77px}.bq-curtain-actor{width:64px;height:76px}}
+@media(prefers-reduced-motion:reduce){.bq-character-dock img,.bq-character-dock img:hover{transition:none;transform:none}.bq-character-dock img.bq-happy-reaction{animation:none}.bq-question-curtain{display:none!important}}
+@media(prefers-reduced-transparency:reduce){.bq-game-mode .page-live .glass{backdrop-filter:none;background:#292d32}.bq-question-curtain{background:#34313a}}
+@media(forced-colors:active){.bq-character-dock,.bq-question-curtain{display:none}.bq-game-mode .page-live .tile,.bq-game-mode .page-live .review-card{clip-path:none;border:2px solid CanvasText}}
+@media print{.bq-character-dock,.bq-question-curtain{display:none}}
+/* Keep the complete four-character dock visible on an ordinary laptop screen
+ * in the compact answer-gallery state; the gallery still expands for content. */
+@media(min-width:1100px){.bq-game-mode .review-main{min-height:calc(100dvh - 276px);padding-bottom:20px}}
+.bq-game-mode .review-layout{min-height:0}
+@media(min-width:1100px) and (min-height:820px){
+ .bq-game-mode .bq-character-dock{min-height:90px;max-height:90px;margin-top:5px}
+ .bq-game-mode .bq-character-dock img:nth-of-type(n){width:clamp(48px,5.6vw,79px);height:88px}
+}
+/* In game view a revealed question spans the presentation width; do not leave
+ * a narrow floating stage in the left corner of a wide participant screen. */
+.bq-game-mode .guest-focus.has-question>.guest-question{width:100%;max-width:none;align-self:stretch}
+.bq-game-mode .guest-focus.has-question>.guest-answer{width:min(100%,760px);align-self:center}
+.bq-game-mode .guest-focus.has-question .guest-question .stage{min-height:clamp(250px,36vh,430px)}
+.bq-game-mode .guest-focus:not(.has-question)>.guest-board{grid-column:1/-1}
+
+/* 2.6 – website-first entry: host and guests use one link, no separate clients. */
+.start-grid:not(.bq-invite-landing){grid-template-columns:repeat(2,minmax(0,1fr))}
+.bq-invite-landing{grid-template-columns:minmax(0,570px);justify-content:center}
+.bq-online-setup{margin-top:18px;max-width:840px;border-color:rgba(225,178,150,.45)}
+.bq-online-setup h2{font-size:18px}
+.start-card .btn.primary{min-width:140px}
+@media(max-width:880px){.start-grid:not(.bq-invite-landing),.bq-invite-landing{grid-template-columns:minmax(0,1fr)}}
