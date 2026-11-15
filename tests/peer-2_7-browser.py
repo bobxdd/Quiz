@@ -91,7 +91,7 @@ async def main():
   await host.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal-answer"]').first.click()
   await guest.locator('.review-grid').get_by_text('Sivir').wait_for(timeout=12000)
-  assert await guest.locator('.bq-character-dock img').count()==4
+  assert await guest.locator('.bq-character-dock img').count()==1
   assert await guest.locator('.bq-character-dock img').evaluate_all('(els)=>els.every(el=>el.complete&&el.naturalWidth>0)'), 'Four character sprites were not loaded'
   assert 'Anivia' not in await guest.locator('.review-grid').inner_text()
   await host.screenshot(path=str(root/'screenshots/Vorschau_2_7_P2P_Host.png'),full_page=True)

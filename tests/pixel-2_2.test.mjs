@@ -9,13 +9,13 @@ const sw=readFileSync(new URL('sw.js',root),'utf8');
 const mascot=readFileSync(new URL('mascot-pixel.png',root));
 test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'2.7.0')});
 test('2.2: Optimiertes transparentes Maskottchen wird als dekoratives PNG eingebunden',()=>{
- assert.match(html,/<div class="bq-pixel-scene" aria-hidden="true">/);
- assert.match(html,/<img src="\.\/mascot-pixel\.png" alt=""/);
+ assert.doesNotMatch(html,/<div class="bq-pixel-scene" aria-hidden="true">/);
+ assert.match(html,/id="toaster"/);
  assert.deepEqual([...mascot.subarray(0,8)],[137,80,78,71,13,10,26,10]);
  assert.ok(statSync(new URL('mascot-pixel.png',root)).size<60000);
- assert.match(html,/\.\/mascot-ranger\.png/);
- assert.match(html,/\.\/mascot-lantern\.png/);
- assert.match(html,/\.\/mascot-alchemist\.png/);
+ assert.doesNotMatch(html,/\.\/mascot-ranger\.png/);
+ assert.doesNotMatch(html,/\.\/mascot-lantern\.png/);
+ assert.doesNotMatch(html,/\.\/mascot-alchemist\.png/);
 });
 test('2.2: Pixelart ist scharf, dekorativ und schnappt keine Klicks ab',()=>{
  assert.match(css,/\.bq-pixel-scene\{position:fixed/);

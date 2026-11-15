@@ -153,10 +153,10 @@ function maybeAnimateQuestion(){
  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
  const direction=questionMotion(publicState.round,current.id);
  const who=Math.abs(Number(publicState.round)||0)%4;
- const assets=['./mascot-pixel.png','./mascot-ranger.png','./mascot-lantern.png','./mascot-alchemist.png'];
+ const assets=['./mascot-pixel.png'];
  const curtain=document.createElement('div');curtain.className='bq-question-curtain bq-swipe-'+direction;
  curtain.setAttribute('aria-hidden','true');
- const sprite=document.createElement('img');sprite.className='bq-curtain-actor';sprite.src=assets[who];sprite.alt='';
+ const sprite=document.createElement('img');sprite.className='bq-curtain-actor';sprite.src=assets[0];sprite.alt='';
  curtain.append(sprite);stage.append(curtain);
  curtain.addEventListener('animationend',event=>{if(event.target===curtain)curtain.remove()},{once:true});
  setTimeout(()=>curtain.remove(),1600);
@@ -168,7 +168,7 @@ function maybeCelebrateReview(){
  lastAnimatedReview=key;
  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
  const dock=document.querySelector('.bq-character-dock');if(!dock)return;
- const image=dock.querySelectorAll('img')[Number(publicState.round||0)%4];
+ const image=dock.querySelector('img');
  if(!image)return;
  image.classList.add('bq-happy-reaction');
  setTimeout(()=>image.classList.remove('bq-happy-reaction'),1000);
@@ -176,7 +176,7 @@ function maybeCelebrateReview(){
 function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){app.innerHTML=landing();return;}
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen'],['live','▦','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Vorschau']]:[['editor','✎','Fragen'],['live','◈','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Präsentation'],['teams','♙','Teilnehmer'],['setup','⚙','Einstellungen']]):[['play','◈','Frage'],['teams','♙','Teilnehmer'],['setup','⚙','Verbindung']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Teilnehmer',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Warteraum'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live':''}">${role==='host'?hostPage():guestPage()}</main>${(view==='play'||view==='live')?`<div class="bq-character-dock" aria-hidden="true"><img src="./mascot-pixel.png" alt=""><img src="./mascot-ranger.png" alt=""><img src="./mascot-lantern.png" alt=""><img src="./mascot-alchemist.png" alt=""></div>`:''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Warteraum'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live':''}">${role==='host'?hostPage():guestPage()}</main>${(view==='play'||view==='live')?`<div class="bq-character-dock" aria-hidden="true"><img src="./mascot-pixel.png" alt="" width="73" height="79"></div>`:''}</section></div>`;
  maybeAnimateQuestion();
  maybeCelebrateReview();
  const pointsPanel=document.getElementById('review-points-panel');if(pointsPanel)pointsPanel.addEventListener('toggle',()=>{reviewPointsOpen=pointsPanel.open});
@@ -192,7 +192,7 @@ function landing(){
  ${!invite?`<section class="glass panel start-card"><h2>Quiz hosten</h2><div class="row">${btn('Online-Raum erstellen','create','primary',configured?'':'disabled')}${hostCode?btn('Raum fortsetzen','resume','',configured?'':'disabled'):''}</div><p class="small muted">Der Host-Browser steuert die Spielrunde. Das vollständige Quiz bleibt nur bei dir gespeichert.</p></section>`:''}
  <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Nach der Freigabe durch den Host spielst du direkt hier.</p></section>
  </div>
- <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section></main></div>`;
+ <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section><figure class="bq-landing-reference" aria-hidden="true"><img src="./mascot-pixel.png" alt="" width="73" height="79"></figure></main></div>`;
 }
 
 function hostPage(){if(!publicState){return `<section class="glass panel"><div class="empty">Verbindung zum Raum wird aufgebaut …</div></section>`;}if(view==='editor')return renderEditor();if(view==='history')return renderHistory();if(view==='present')return renderPresenter();if(isOffline()&&view==='live')return renderHostLive();if(isOffline())return renderEditor();if(view==='teams')return renderTeams();if(view==='setup')return renderSetup();return renderHostLive();}

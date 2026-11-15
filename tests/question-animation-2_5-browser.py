@@ -41,7 +41,7 @@ async def main():
   assert await page.locator('.bq-question-curtain').count()==1
   assert await page.locator('.bq-question-curtain').evaluate('(e)=>getComputedStyle(e).animationName.includes("bq-curtain")')
   assert await page.locator('.bq-curtain-actor').evaluate('(e)=>e.complete&&e.naturalWidth>0')
-  assert await page.locator('.bq-character-dock img').count()==4
+  assert await page.locator('.bq-character-dock img').count()==1
   assert await page.locator('.bq-character-dock img').evaluate_all('(els)=>els.every(e=>e.complete&&e.naturalWidth>0)')
   await page.screenshot(path=str(root/'screenshots/Vorschau_2_5_Frage_Aufdeckung.png'))
   await page.wait_for_timeout(1350)

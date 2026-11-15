@@ -1,6 +1,6 @@
 // Offline-capable static shell only. Quiz data, WebRTC messages, private URLs and
 // unrecognized same-origin assets MUST NOT enter the service-worker Cache Storage.
-const NAME='brainquiz-shell-2.7.0';
+const NAME='brainquiz-shell-2.7.2';
 const ASSETS=['./','./index.html','./style.css','./pixel-theme.css','./pixel-constellation.png','./pixel-corner.png','./app.mjs','./core.mjs','./question-flow.mjs','./layout.mjs','./studio-model.mjs','./studio-editor.mjs','./answer-review.mjs','./history-model.mjs','./peer-client.mjs','./lobby-model.mjs','./icon.svg','./mascot-pixel.png','./mascot-ranger.png','./mascot-lantern.png','./mascot-alchemist.png','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 const ALLOWED_PATHS=new Set(ASSETS.map(path=>new URL(path,SCOPE).pathname));
