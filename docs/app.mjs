@@ -7,7 +7,7 @@ import {renderScene,ensureScene,reconcileQuestion,sceneHasStep,publicScene,escap
 import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks,validateBlocks} from './layout.mjs';
 import {VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
 const $=id=>document.getElementById(id),configured=true; // PeerJS/WebRTC requires no Firebase setup.
-let service=null,game=null,room='',role='landing',view='start',member=null,publicState=null,members={},roster={},presence={},buzzers={},responses={},messages={},myResponse=null,quiz=emptyQuiz(),selected='',chatTeam='ALL',connected=false,guestListeners=[],guestTeam='',responseUnsub=null,watchingRound=-1,renderQueued=false,lastMsgTime=0,loadedSession=false,pickedOrder=[],previewOpen=false,previewRevealed=false,previewSceneStep=0,previewImage='',editingBlock='',editorSearch='',undoStack=[],redoStack=[],lastEditAt=0,saveState='Gespeichert',settingsExpanded=false,inspectorExpanded=false,quizMetaExpanded=false,scoreTarget='',picks={},offlineRound=0,quickSetExpanded=false,reviewStartPending=-1,questionHistory={},historyFilter='',guestChoice='',reviewPointsOpen=false,openingQuestion=false,lastAnimatedQuestion='',lastAnimatedReview='';
+let service=null,game=null,room='',role='landing',view='start',member=null,publicState=null,members={},roster={},presence={},buzzers={},responses={},messages={},myResponse=null,quiz=emptyQuiz(),selected='',chatTeam='ALL',connected=false,guestListeners=[],guestTeam='',responseUnsub=null,watchingRound=-1,renderQueued=false,lastMsgTime=0,loadedSession=false,pickedOrder=[],previewOpen=false,previewRevealed=false,previewSceneStep=0,previewImage='',editingBlock='',editorSearch='',undoStack=[],redoStack=[],lastEditAt=0,saveState='Gespeichert',settingsExpanded=false,inspectorExpanded=false,quizMetaExpanded=false,scoreTarget='',picks={},offlineRound=0,quickSetExpanded=false,reviewStartPending=-1,questionHistory={},historyFilter='',guestChoice='',reviewPointsOpen=false,openingQuestion=false,lastAnimatedQuestion='',lastAnimatedReview='',lastAnimatedReveal='',lastAnimatedAnswerCard='',lastAnimatedBuzzer='',lastAnimatedScore='',lastAnimatedScoreSnapshot='';
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 function serializedCloudWrite(targetRoom,snapshot){
  // A slow autosave must never overwrite a newer published quiz.
@@ -142,6 +142,25 @@ function startGuestListeners(){stopGuestListeners();if(member?.status!=='approve
  game.enterPresence(room).catch(error);
 }
 function watchOwnResponse(){if(!game||!room||!guestTeam)return;if(responseUnsub){responseUnsub();responseUnsub=null;}watchingRound=publicState?.round??-1;myResponse=null;pickedOrder=[];guestChoice='';if(watchingRound<0)return;responseUnsub=game.watchRoom(room,'responses/'+watchingRound+'/'+game.uid,v=>{myResponse=v;schedule();});}
+// The supplied four images are a single, fixed sprite family. Motion never
+// changes their face, outfit or artwork: we animate only the surrounding DOM.
+const CHARACTER_IDS=['rogue','blades','mage','druid'];
+function characterMarkup(index,extra=''){
+ const name=CHARACTER_IDS[((index%4)+4)%4];
+ return `<span class="bq-actor bq-actor--${name} ${extra}" aria-hidden="true"></span>`;
+}
+function reducedCharacterMotion(){return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
+function animateDock(index,action){
+ if(reducedCharacterMotion())return;
+ const actors=document.querySelectorAll('.bq-character-dock .bq-actor');
+ const actor=actors[((index%4)+4)%4];if(!actor)return;
+ actor.classList.remove('bq-actor--question','bq-actor--review','bq-actor--answer','bq-actor--solution','bq-actor--buzzer','bq-actor--points');
+ // Force a reflow so a second, distinct action can replay its own gesture.
+ void actor.offsetWidth;
+ const cls='bq-actor--'+action;
+ actor.classList.add(cls);
+ actor.addEventListener('animationend',()=>actor.classList.remove(cls),{once:true});
+}
 function maybeAnimateQuestion(){
  if(!publicState||!['play','live'].includes(view))return;
  const current=publicState.current;
@@ -150,13 +169,12 @@ function maybeAnimateQuestion(){
  if(key===lastAnimatedQuestion)return;
  const stage=document.querySelector('.page-live .stage');if(!stage)return;
  lastAnimatedQuestion=key;
- if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+ if(reducedCharacterMotion())return;
  const direction=questionMotion(publicState.round,current.id);
- const who=Math.abs(Number(publicState.round)||0)%4;
- const assets=['./mascot-pixel.png'];
+ const who=Math.abs(Number(publicState.round)||0)%CHARACTER_IDS.length;
  const curtain=document.createElement('div');curtain.className='bq-question-curtain bq-swipe-'+direction;
  curtain.setAttribute('aria-hidden','true');
- const sprite=document.createElement('img');sprite.className='bq-curtain-actor';sprite.src=assets[0];sprite.alt='';
+ const sprite=document.createElement('span');sprite.className='bq-actor bq-actor--'+CHARACTER_IDS[who]+' bq-curtain-actor';
  curtain.append(sprite);stage.append(curtain);
  curtain.addEventListener('animationend',event=>{if(event.target===curtain)curtain.remove()},{once:true});
  setTimeout(()=>curtain.remove(),1600);
@@ -166,19 +184,43 @@ function maybeCelebrateReview(){
  const key=room+':'+publicState.round+':review';
  if(key===lastAnimatedReview)return;
  lastAnimatedReview=key;
- if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
- const dock=document.querySelector('.bq-character-dock');if(!dock)return;
- const image=dock.querySelector('img');
- if(!image)return;
- image.classList.add('bq-happy-reaction');
- setTimeout(()=>image.classList.remove('bq-happy-reaction'),1000);
+ animateDock(Number(publicState.round)||0,'review');
+}
+function maybeAnimateGameplay(){
+ if(!publicState||!['play','live'].includes(view))return;
+ const round=Number(publicState.round)||0,phase=publicState.phase;
+ if(phase==='reveal'&&publicState.current){
+  const key=room+':'+round+':'+publicState.current.id+':solution';
+  if(key!==lastAnimatedReveal){lastAnimatedReveal=key;animateDock(round+2,'solution');}
+ }
+ if(phase==='review'&&reviewIsCurrent(publicState)){
+  const shown=Object.values(publicState.answerReview?.entries||{}).filter(x=>x?.revealed).length;
+  if(shown){
+   const key=room+':'+round+':'+shown+':answers';
+   if(key!==lastAnimatedAnswerCard){lastAnimatedAnswerCard=key;animateDock(round+shown,'answer');}
+  }
+ }
+ const buzz=winner();
+ if(buzz&&phase==='question'){
+  const key=room+':'+round+':'+String(buzz.uid||buzz.name||buzz.at||'buzz');
+  if(key!==lastAnimatedBuzzer){lastAnimatedBuzzer=key;animateDock(round+1,'buzzer');}
+ }
+ if(role==='host'&&publicState.scores){
+  const scores=JSON.stringify(publicState.scores);
+  if(lastAnimatedScoreSnapshot&&scores!==lastAnimatedScoreSnapshot){
+   const key=room+':'+round+':'+scores;
+   if(key!==lastAnimatedScore){lastAnimatedScore=key;animateDock(round+3,'points');}
+  }
+  lastAnimatedScoreSnapshot=scores;
+ }
 }
 function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){app.innerHTML=landing();return;}
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen'],['live','▦','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Vorschau']]:[['editor','✎','Fragen'],['live','◈','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Präsentation'],['teams','♙','Teilnehmer'],['setup','⚙','Einstellungen']]):[['play','◈','Frage'],['teams','♙','Teilnehmer'],['setup','⚙','Verbindung']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Teilnehmer',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Warteraum'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live':''}">${role==='host'?hostPage():guestPage()}</main>${(view==='play'||view==='live')?`<div class="bq-character-dock" aria-hidden="true"><img src="./mascot-pixel.png" alt="" width="73" height="79"></div>`:''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Warteraum'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live':''}">${role==='host'?hostPage():guestPage()}</main>${(view==='play'||view==='live')?`<div class="bq-character-dock" aria-hidden="true">${CHARACTER_IDS.map((_,i)=>characterMarkup(i)).join('')}</div>`:''}</section></div>`;
  maybeAnimateQuestion();
  maybeCelebrateReview();
+ maybeAnimateGameplay();
  const pointsPanel=document.getElementById('review-points-panel');if(pointsPanel)pointsPanel.addEventListener('toggle',()=>{reviewPointsOpen=pointsPanel.open});
  if(view==='editor'&&role==='host')studio.mount(document.getElementById('se-root'));
 }
@@ -192,7 +234,7 @@ function landing(){
  ${!invite?`<section class="glass panel start-card"><h2>Quiz hosten</h2><div class="row">${btn('Online-Raum erstellen','create','primary',configured?'':'disabled')}${hostCode?btn('Raum fortsetzen','resume','',configured?'':'disabled'):''}</div><p class="small muted">Der Host-Browser steuert die Spielrunde. Das vollständige Quiz bleibt nur bei dir gespeichert.</p></section>`:''}
  <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Nach der Freigabe durch den Host spielst du direkt hier.</p></section>
  </div>
- <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section><figure class="bq-landing-reference" aria-hidden="true"><img src="./mascot-pixel.png" alt="" width="73" height="79"></figure></main></div>`;
+ <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section><div class="bq-landing-cast" aria-hidden="true">${CHARACTER_IDS.map((_,i)=>characterMarkup(i)).join('')}</div></main></div>`;
 }
 
 function hostPage(){if(!publicState){return `<section class="glass panel"><div class="empty">Verbindung zum Raum wird aufgebaut …</div></section>`;}if(view==='editor')return renderEditor();if(view==='history')return renderHistory();if(view==='present')return renderPresenter();if(isOffline()&&view==='live')return renderHostLive();if(isOffline())return renderEditor();if(view==='teams')return renderTeams();if(view==='setup')return renderSetup();return renderHostLive();}

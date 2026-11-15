@@ -6,16 +6,15 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
 sources={name:(root/'docs'/name).read_text() for name in ['app.mjs','question-flow.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs']}
-for mascot in ('mascot-pixel.png','mascot-ranger.png','mascot-lantern.png','mascot-alchemist.png'):
- data='data:image/png;base64,'+base64.b64encode((root/'docs'/mascot).read_bytes()).decode()
- sources['app.mjs']=sources['app.mjs'].replace('./'+mascot,data)
 css=(root/'docs/pixel-theme.css').read_text()
+characters_css=(root/'docs/characters.css').read_text()
+for character in ('rogue','blades','mage','druid'):
+ src='./characters/'+character+'.webp'
+ characters_css=characters_css.replace(src,'data:image/webp;base64,'+base64.b64encode((root/'docs'/src).read_bytes()).decode())
 for name in ('pixel-constellation.png','pixel-corner.png'):
  css=css.replace("url('./"+name+"')", "url(data:image/png;base64,"+base64.b64encode((root/'docs'/name).read_bytes()).decode()+")")
 html=(root/'docs/index.html').read_text()
-for mascot in ('mascot-pixel.png','mascot-ranger.png','mascot-lantern.png','mascot-alchemist.png'):
- html=html.replace('./'+mascot,'data:image/png;base64,'+base64.b64encode((root/'docs'/mascot).read_bytes()).decode())
-html=html.replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+css+'</style>').replace('<script src="./firebase-config.js"></script>','').replace('<script type="module" src="./app.mjs"></script>','')
+html=html.replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+css+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<script src="./firebase-config.js"></script>','').replace('<script type="module" src="./app.mjs"></script>','')
 
 async def setup(page):
  await page.set_content(html)
@@ -40,11 +39,11 @@ async def main():
   assert await page.locator('.guest-question').evaluate('(e)=>e.getBoundingClientRect().width')>900
   assert await page.locator('.bq-question-curtain').count()==1
   assert await page.locator('.bq-question-curtain').evaluate('(e)=>getComputedStyle(e).animationName.includes("bq-curtain")')
-  assert await page.locator('.bq-curtain-actor').evaluate('(e)=>e.complete&&e.naturalWidth>0')
-  assert await page.locator('.bq-character-dock img').count()==1
-  assert await page.locator('.bq-character-dock img').evaluate_all('(els)=>els.every(e=>e.complete&&e.naturalWidth>0)')
+  assert await page.locator('.bq-curtain-actor').evaluate('(e)=>getComputedStyle(e).backgroundImage.includes("data:image/webp")')
+  assert await page.locator('.bq-character-dock .bq-actor').count()==4
+  assert await page.locator('.bq-character-dock .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))')
   await page.screenshot(path=str(root/'screenshots/Vorschau_2_5_Frage_Aufdeckung.png'))
-  await page.wait_for_timeout(1350)
+  await page.wait_for_timeout(1850)
   assert await page.locator('.bq-question-curtain').count()==0
   await page.evaluate('window.__refresh()')
   await page.wait_for_timeout(160)
@@ -52,7 +51,7 @@ async def main():
   await page.evaluate('window.__setQuestion(2)')
   await page.locator('.bq-question-curtain').wait_for(timeout=10000)
   assert await page.locator('.bq-question-curtain').count()==1
-  await page.wait_for_timeout(1250)
+  await page.wait_for_timeout(1850)
   assert await page.locator('.bq-question-curtain').count()==0
   await page.screenshot(path=str(root/'screenshots/Vorschau_2_5_Frage.png'))
   assert not errors,errors
@@ -62,5 +61,5 @@ async def main():
   await reduce.locator('.guest-question .stage').wait_for(timeout=10000)
   assert await reduce.locator('.bq-question-curtain').count()==0
   await browser.close()
-  print('PASS 2.5: Question curtain runs once per round, clean DOM after animation, four mascots loaded, no repeat on render, next round animates, reduced-motion instant reveal')
+  print('PASS 2.5: Question curtain runs once per round, clean DOM after animation, four original actors loaded, no repeat on render, next round animates, reduced-motion instant reveal')
 if __name__=='__main__':asyncio.run(main())

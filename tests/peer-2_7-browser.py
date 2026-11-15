@@ -7,14 +7,18 @@ from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
 files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','question-flow.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
-html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
-for name in ['mascot-pixel.png','mascot-ranger.png','mascot-lantern.png','mascot-alchemist.png','pixel-constellation.png','pixel-corner.png']:
+characters_css=(root/'docs/characters.css').read_text()
+for character in ('rogue','blades','mage','druid'):
+ src='./characters/'+character+'.webp'
+ characters_css=characters_css.replace(src,'data:image/webp;base64,'+base64.b64encode((root/'docs'/src).read_bytes()).decode())
+html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
+for name in ['characters/rogue.webp','characters/blades.webp','characters/mage.webp','characters/druid.webp','pixel-constellation.png','pixel-corner.png']:
  html=html.replace('./'+name,'data:image/png;base64,'+base64.b64encode((root/'docs'/name).read_bytes()).decode())
 mockpeer=(root/'tests/mock-peerjs-browser.js').read_text()
 # Blob-loaded app scripts otherwise resolve relative PNGs against about:blank.
 # Replace the four dynamic mascot URLs with real image bytes so screenshots and
 # image-loading checks mirror GitHub Pages rather than rendering broken icons.
-for mascot in ['mascot-pixel.png','mascot-ranger.png','mascot-lantern.png','mascot-alchemist.png']:
+for mascot in ['characters/rogue.webp','characters/blades.webp','characters/mage.webp','characters/druid.webp']:
  sources['app.mjs']=sources['app.mjs'].replace('./'+mascot,'data:image/png;base64,'+base64.b64encode((root/'docs'/mascot).read_bytes()).decode())
 
 
@@ -91,8 +95,8 @@ async def main():
   await host.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal-answer"]').first.click()
   await guest.locator('.review-grid').get_by_text('Sivir').wait_for(timeout=12000)
-  assert await guest.locator('.bq-character-dock img').count()==1
-  assert await guest.locator('.bq-character-dock img').evaluate_all('(els)=>els.every(el=>el.complete&&el.naturalWidth>0)'), 'Four character sprites were not loaded'
+  assert await guest.locator('.bq-character-dock .bq-actor').count()==4
+  assert await guest.locator('.bq-character-dock .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))'), 'Original character sprites were not loaded'
   assert 'Anivia' not in await guest.locator('.review-grid').inner_text()
   await host.screenshot(path=str(root/'screenshots/Vorschau_2_7_P2P_Host.png'),full_page=True)
   await guest.screenshot(path=str(root/'screenshots/Vorschau_2_7_P2P_Teilnehmer.png'),full_page=True)

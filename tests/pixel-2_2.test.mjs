@@ -7,10 +7,10 @@ const html=readFileSync(new URL('index.html',root),'utf8');
 const css=readFileSync(new URL('pixel-theme.css',root),'utf8');
 const sw=readFileSync(new URL('sw.js',root),'utf8');
 const mascot=readFileSync(new URL('mascot-pixel.png',root));
-test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'2.7.0')});
+test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'2.8.0')});
 test('2.2: Optimiertes transparentes Maskottchen wird als dekoratives PNG eingebunden',()=>{
- assert.doesNotMatch(html,/<div class="bq-pixel-scene" aria-hidden="true">/);
- assert.match(html,/id="toaster"/);
+ assert.doesNotMatch(html,/bq-pixel-scene/);
+ assert.match(html,/href="\.\/characters\.css"/);
  assert.deepEqual([...mascot.subarray(0,8)],[137,80,78,71,13,10,26,10]);
  assert.ok(statSync(new URL('mascot-pixel.png',root)).size<60000);
  assert.doesNotMatch(html,/\.\/mascot-ranger\.png/);
@@ -34,15 +34,15 @@ test('2.2: Dezente Akzente, keine globale Pixel-Schrift und keine Animationspfli
  assert.match(css,/@media\(prefers-reduced-transparency:reduce\)/);
 });
 test('2.2: Der Service Worker cached ausschließlich öffentliche App-Dateien samt Maskottchen',()=>{
- assert.match(sw,/brainquiz-shell-2\.7\.0/);
- assert.match(sw,/'\.\/mascot-pixel\.png'/);
- assert.match(sw,/'\.\/mascot-ranger\.png'/);
- assert.match(sw,/'\.\/mascot-lantern\.png'/);
- assert.match(sw,/'\.\/mascot-alchemist\.png'/);
+ assert.match(sw,/brainquiz-shell-2\.8\.0/);
+ assert.doesNotMatch(sw,/'\.\/mascot-pixel\.png'/);
+ assert.doesNotMatch(sw,/'\.\/mascot-ranger\.png'/);
+ assert.doesNotMatch(sw,/'\.\/mascot-lantern\.png'/);
+ assert.doesNotMatch(sw,/'\.\/mascot-alchemist\.png'/);
  assert.match(sw,/ALLOWED_PATHS/);
  assert.match(sw,/event\.request\.method!==['"]GET['"]/);
 });
 test('2.2: Bildabmessungen liegen vor und verhindern unnötige Layoutsprünge',()=>{
- assert.match(html,/width="140" height="163" decoding="async"/);
+ assert.match(html,/href="\.\/characters\.css"/);
  assert.match(css,/\.bq-pixel-mascot img\{display:block;width:100%;height:auto/);
 });

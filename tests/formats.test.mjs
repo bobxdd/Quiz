@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import {web
 import {VERSION,MODES,normalizedQuiz,publicQuestion,shuffledItems,splashStageZoom,rankEstimates,validateQuestion,escapeHTML,isAudioData} from '../docs/core.mjs';
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const base={id:'new-01',category:'League',title:'Test',prompt:'Was ist richtig?',points:200,answer:'Geheim',hints:['Kleiner Tipp','Großer Tipp','Letzter Tipp']};
-test('Neue Version, neun Fragetypen',()=>{assert.equal(VERSION,'2.7.0');assert.equal(Object.keys(MODES).length,9)});
+test('Neue Version, neun Fragetypen',()=>{assert.equal(VERSION,'2.8.0');assert.equal(Object.keys(MODES).length,9)});
 test('V1.1 Dateien lassen sich ohne Versionsmigration importieren',()=>{const q=normalizedQuiz({version:1,questions:[{...base,type:'text'}]}).questions[0];assert.equal(q.answer,'Geheim');assert.equal(q.seconds,0);assert.equal(q.hints.length,3)});
 test('Sortier-Geheimnis wird erst bei Reveal übertragen',()=>{const q={...base,type:'order',orderItems:['Ladebildschirm','Spielstart','Spielende']};const pub=publicQuestion(q,false,['Spielstart','Spielende','Ladebildschirm']);assert.equal(pub.orderItems,undefined);assert.deepEqual(pub.displayItems,['Spielstart','Spielende','Ladebildschirm']);assert.equal(pub.answer,undefined);assert.deepEqual(publicQuestion(q,true,pub.displayItems).orderItems,q.orderItems)});
 test('Sortierzufall verändert Original nicht und verliert kein Element',()=>{const original=['Alpha','Beta','Gamma','Delta'];const out=shuffledItems(original,()=>0);assert.deepEqual(original,['Alpha','Beta','Gamma','Delta']);assert.deepEqual([...out].sort(),[...original].sort());assert.notDeepEqual(out,original)});

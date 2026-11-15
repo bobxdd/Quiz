@@ -395,12 +395,3 @@ body:has(.board) .bq-pixel-mascot{display:none}
 .bq-online-setup h2{font-size:18px}
 .start-card .btn.primary{min-width:140px}
 @media(max-width:880px){.start-grid:not(.bq-invite-landing),.bq-invite-landing{grid-template-columns:minmax(0,1fr)}}
-
-/* Restore dark hooded reference: no floating viewport mascots. */
-.bq-pixel-scene,.bq-pixel-mascot{display:none!important}
-body:not(:has(.review-main)){padding-bottom:0!important}
-.bq-landing-reference{display:flex;justify-content:flex-start;margin:14px 0 0;padding:0}
-.bq-landing-reference img{display:block;width:clamp(78px,9vw,108px);height:auto;aspect-ratio:73/79;object-fit:contain;image-rendering:pixelated;border:1px solid rgba(180,161,173,.22);border-radius:10px}
-.bq-game-mode .bq-character-dock{display:flex;justify-content:flex-start;align-items:flex-end;gap:0;max-width:none;min-height:92px;max-height:none;margin:12px 0 0;padding:12px 0 0;background:none;border-top:1px solid rgba(180,161,173,.23);overflow:visible}
-.bq-game-mode .bq-character-dock img,.bq-game-mode .bq-character-dock img:nth-of-type(n){display:block;flex:0 0 auto;width:clamp(73px,8vw,98px);height:auto;max-height:115px;aspect-ratio:73/79;object-fit:contain;object-position:center;image-rendering:pixelated;border:1px solid rgba(180,161,173,.22);border-radius:10px;filter:none}
-@media(max-width:680px){.bq-landing-reference img{width:82px}.bq-game-mode .bq-character-dock{min-height:84px}.bq-game-mode .bq-character-dock img,.bq-game-mode .bq-character-dock img:nth-of-type(n){width:73px;height:79px;max-height:79px}}
