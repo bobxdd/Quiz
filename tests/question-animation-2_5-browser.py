@@ -5,7 +5,7 @@ import asyncio,base64,shutil
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-sources={name:(root/'docs'/name).read_text() for name in ['app.mjs','question-flow.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','category-model.mjs']}
+sources={name:(root/'docs'/name).read_text() for name in ['app.mjs','question-flow.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','category-model.mjs','editor-workflows.mjs']}
 css=(root/'docs/pixel-theme.css').read_text()
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -14,7 +14,7 @@ for character in ('rogue','blades','mage','druid'):
 for name in ('pixel-constellation.png','pixel-corner.png'):
  css=css.replace("url('./"+name+"')", "url(data:image/png;base64,"+base64.b64encode((root/'docs'/name).read_bytes()).decode()+")")
 html=(root/'docs/index.html').read_text()
-html=html.replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+css+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<link rel="stylesheet" href="./editor-categories.css">','<style>'+(root/'docs/editor-categories.css').read_text()+'</style>').replace('<script src="./firebase-config.js"></script>','').replace('<script type="module" src="./app.mjs"></script>','')
+html=html.replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+css+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<link rel="stylesheet" href="./editor-categories.css">','<style>'+(root/'docs/editor-categories.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./editor-31.css">','<style>'+(root/'docs/editor-31.css').read_text()+'</style>').replace('<script src="./firebase-config.js"></script>','').replace('<script type="module" src="./app.mjs"></script>','')
 
 async def setup(page):
  await page.set_content(html)
@@ -22,10 +22,12 @@ async def setup(page):
   const store=new Map();Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)}});window.history.replaceState=()=>{};
   const blob=body=>URL.createObjectURL(new Blob([body],{type:'text/javascript'}));
   const category=blob(sources['category-model.mjs']);const flow=blob(sources['question-flow.mjs']),lobby=blob(sources['lobby-model.mjs']),layout=blob(sources['layout.mjs']),model=blob(sources['studio-model.mjs']);
-  const review=blob(sources['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`)),hist=blob(sources['history-model.mjs']),ed=blob(sources['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
+  const review=blob(sources['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`)),hist=blob(sources['history-model.mjs']);
   const core=blob(sources['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
+  const workflows=blob(sources['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
+  const ed=blob(sources['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`));
   const hook=`window.__setQuestion=(index)=>{room='DEMO123';role='guest';view='play';connected=true;member={status:'approved',name:'Spieler 1',team:'t1'};const question={id:index===1?'a':'b',category:index===1?'Lore':'Imposter',points:index===1?100:200,type:'text',prompt:'Welcher Champion ist gemeint?',hints:[]};roster={guest1:{name:'Spieler 1',team:'t1'}};publicState={title:'Demo',phase:'question',round:index,current:question,used:{a:true,b:index>1},board:{a:{id:'a',category:'Lore',points:100,used:true},b:{id:'b',category:'Imposter',points:200,used:index>1}},answerParticipants:{guest1:{name:'Spieler 1',team:'t1'}},settings:{buzzerEnabled:false,chatOpen:false},teams:{t1:'Team 1'},playerScores:{}};schedule()};window.__refresh=()=>schedule();`;
-  const app=sources['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(').replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './studio-editor.mjs'",`from '${ed}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${hist}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`);
+  const app=sources['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(').replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './studio-editor.mjs'",`from '${ed}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${hist}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`);
   await import(blob(app));window.__setQuestion(1);
  }''',sources)
 

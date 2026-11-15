@@ -7,7 +7,7 @@ const html=readFileSync(new URL('index.html',root),'utf8');
 const css=readFileSync(new URL('pixel-theme.css',root),'utf8');
 const sw=readFileSync(new URL('sw.js',root),'utf8');
 const mascot=readFileSync(new URL('mascot-pixel.png',root));
-test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'3.0.0')});
+test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'3.1.0')});
 test('2.2: Optimiertes transparentes Maskottchen wird als dekoratives PNG eingebunden',()=>{
  assert.doesNotMatch(html,/bq-pixel-scene/);
  assert.match(html,/href="\.\/characters\.css"/);
@@ -34,7 +34,7 @@ test('2.2: Dezente Akzente, keine globale Pixel-Schrift und keine Animationspfli
  assert.match(css,/@media\(prefers-reduced-transparency:reduce\)/);
 });
 test('2.2: Der Service Worker cached ausschließlich öffentliche App-Dateien samt Maskottchen',()=>{
- assert.match(sw,/brainquiz-shell-3\.0\.0/);
+ assert.match(sw,/brainquiz-shell-3\.1\.0/);
  assert.doesNotMatch(sw,/'\.\/mascot-pixel\.png'/);
  assert.doesNotMatch(sw,/'\.\/mascot-ranger\.png'/);
  assert.doesNotMatch(sw,/'\.\/mascot-lantern\.png'/);

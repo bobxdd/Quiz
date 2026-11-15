@@ -5,4 +5,4 @@ for (const path of ['docs/index.html','docs/app.mjs','docs/peer-client.mjs','doc
 }
 const source=readFileSync('docs/index.html','utf8');
 if(/firebase/i.test(source))throw Error('Firebase-Altlast in index.html');
-console.log('BrainQuiz 2.7 PeerJS WebRTC — statischer GitHub-Pages-Build bereit.');
+console.log('BrainQuiz 3.1 PeerJS WebRTC — statischer GitHub-Pages-Build bereit.');

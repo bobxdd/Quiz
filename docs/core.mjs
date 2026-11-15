@@ -2,7 +2,7 @@ import {collectCategories} from './category-model.mjs';
 import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='3.0.0';
+export const VERSION='3.1.0';
 export const MODES={text:'Freitext',multiple:'Multiple Choice',splash:'Splash-Art-Zoom',imposter:'Ability-Imposter',order:'Sortieren / Chronologie',estimate:'Schätzfrage',quote:'Champion-Zitat',emoji:'Emoji-Rätsel',audio:'Audio- / Login-Sound'};
 export const ABILITIES=['Passiv','Q','W','E','R'];
 export const TEAM_COLORS=['#79a8af','#b2a5dc','#b7ad83','#b79ab1','#8aa7a0','#b9a090'];

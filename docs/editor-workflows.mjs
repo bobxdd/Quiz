@@ -1,0 +1,50 @@
+/* Pure, host-only editor helpers. No public question payload is modified here. */
+import {categoryKey} from './category-model.mjs';
+import {validateQuestion} from './core.mjs';
+
+export function selectionSummary(quiz, ids) {
+ const unique=new Set(ids||[]);
+ const questions=(quiz?.questions||[]).filter(q=>unique.has(q.id));
+ return {count:questions.length, ids:questions.map(q=>q.id)};
+}
+export function changeSelectedQuestions(quiz, ids, {category,points}={}) {
+ const selected=new Set(ids||[]);
+ if(!selected.size)throw Error('Bitte zuerst mindestens eine Frage auswählen.');
+ if(category!==undefined && !(quiz.categories||[]).some(c=>categoryKey(c)===categoryKey(category)))throw Error('Bitte eine vorhandene Kategorie wählen.');
+ if(points!==undefined && (!Number.isInteger(Number(points))||Number(points)<0||Number(points)>10000))throw Error('Punkte müssen eine ganze Zahl zwischen 0 und 10.000 sein.');
+ let count=0;
+ for(const q of quiz.questions||[]){if(!selected.has(q.id))continue;if(category!==undefined)q.category=category;if(points!==undefined)q.points=Number(points);count++;}
+ if(!count)throw Error('Die ausgewählten Fragen sind nicht mehr vorhanden.');
+ return count;
+}
+export function reuseQuestion(quiz, sourceId, destination, newId) {
+ const source=quiz.questions?.find(q=>q.id===sourceId);
+ if(!source)throw Error('Frage wurde nicht gefunden.');
+ if(!(quiz.categories||[]).some(c=>categoryKey(c)===categoryKey(destination)))throw Error('Zielkategorie existiert nicht.');
+ if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');
+ if(!newId||quiz.questions.some(q=>q.id===newId))throw Error('Ungültige neue Fragen-ID.');
+ const copy=structuredClone(source);copy.id=newId;copy.title=(source.title||'Frage').slice(0,86)+' (Kopie)';copy.category=destination;
+ quiz.questions.push(copy);return copy;
+}
+export function quizAudit(quiz) {
+ const questions=quiz?.questions||[], errors=[], warnings=[];
+ if(!questions.length)errors.push({id:null,label:'Quiz',reason:'Noch keine Fragen angelegt.'});
+ const seenTitles=new Set(), seenTiles=new Set();
+ for(const q of questions){
+  const label=`${q.category||'Ohne Kategorie'} · ${q.title||'Unbenannte Frage'}`;
+  const problem=validateQuestion(q);
+  if(problem)errors.push({id:q.id,label,reason:problem});
+  const titleKey=`${categoryKey(q.category)}|${String(q.title||'').trim().toLocaleLowerCase('de')}`;
+  if(seenTitles.has(titleKey))warnings.push({id:q.id,label,reason:'Fragentitel ist in dieser Kategorie doppelt.'});seenTitles.add(titleKey);
+  const tileKey=`${categoryKey(q.category)}|${q.points}`;
+  if(seenTiles.has(tileKey))warnings.push({id:q.id,label,reason:'Mehrere Fragen haben denselben Punktwert in dieser Kategorie.'});seenTiles.add(tileKey);
+ }
+ return {errors,warnings,ready:errors.length===0,questionCount:questions.length};
+}
+
+// Round- and room-scoped action leases prevent duplicate host clicks while a
+// network request is pending. A finally release always permits legitimate retry.
+export function createActionLease() {
+ const busy=new Set();
+ return {async run(key,fn){if(busy.has(key))return false;busy.add(key);try{await fn();return true;}finally{busy.delete(key);}},isBusy:key=>busy.has(key)};
+}
