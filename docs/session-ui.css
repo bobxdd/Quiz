@@ -1,0 +1,146 @@
+/* BrainQuiz 2.9 – task-first two-scene session UI. Loaded after the legacy skin.
+   One synchronized board OR one active question; never both. */
+body.bq-game-mode{overflow:hidden;min-height:100dvh}
+.bq-game-mode .shell{display:block;min-height:100dvh;height:100dvh;overflow:hidden;max-width:2000px;margin:auto;padding:clamp(6px,.9vw,14px)}
+.bq-game-mode .workspace{display:flex;flex-direction:column;min-height:0;height:100%;width:100%;max-width:none}
+.bq-game-mode .topbar{flex:0 0 auto;padding:10px 14px;margin:0 0 8px;min-height:0;border-radius:12px}
+.bq-game-mode .topbar .header-primary{min-height:40px;gap:12px;justify-content:space-between}
+.bq-game-mode .topbar .header-secondary{display:none}
+.bq-game-mode .topbar .top-nav{margin:0;min-width:0}
+.bq-game-mode .topbar .nav{padding:6px 10px;min-height:35px}
+.bq-game-mode .topbar .header-state{margin-left:auto}
+.bq-game-mode .page-live.bq-session-page{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;gap:0;overflow:hidden}
+.bq-session-scene{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;gap:8px;isolation:isolate}
+.bq-scene-heading{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px;margin:0 2px}
+.bq-scene-heading h2{font-size:clamp(17px,2.1vw,27px);line-height:1.15;margin:0;font-weight:750}
+.bq-eyebrow{display:block;font-size:10px;letter-spacing:.16em;color:#a7b6bb;font-weight:800}
+.bq-session-scene>.glass,.bq-session-scene>.bq-question-body,.bq-session-scene>.bq-answer-review-body{min-height:0}
+.bq-board-panel{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;padding:clamp(7px,.85vw,14px)!important;overflow:hidden}
+.bq-board-full{height:100%;min-height:0;display:flex;flex-direction:column;gap:5px}
+.bq-board-full .board-scroll{flex:1;min-height:0;width:100%;overflow:hidden;padding:0;scrollbar-width:none}
+.bq-board-full .jeopardy-board{display:grid;width:100%;height:100%;min-width:0;grid-template-columns:repeat(var(--board-cols,5),minmax(0,1fr));gap:clamp(3px,.65vw,9px);align-items:stretch}
+.bq-board-full .jeopardy-board .column{height:100%;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(32px,50px) repeat(var(--board-rows,5),minmax(0,1fr));gap:clamp(3px,.65vw,8px)}
+.bq-board-full .jeopardy-board .coltitle{display:grid;place-items:center;min-width:0;min-height:0;height:auto;padding:4px;font-size:clamp(10px,1.15vw,15px);overflow:hidden;line-height:1.1;overflow-wrap:anywhere}
+.bq-board-full .jeopardy-board .tile{display:grid;place-items:center;min-height:0;height:100%;width:100%;padding:2px 4px;border-radius:7px;font-size:clamp(16px,2.2vw,34px);transition:background .12s,opacity .12s}
+.bq-board-full .jeopardy-board .tile.is-played{background:#171c21!important;opacity:.34!important;border-color:#3b444b!important;filter:grayscale(1);cursor:not-allowed;color:#829098}
+.bq-board-full .jeopardy-board .tile.is-played .tile-points{color:#78838a;text-decoration:line-through;text-decoration-thickness:2px}
+.bq-board-full .jeopardy-board .tile:not(:disabled):focus-visible{outline:3px solid #b3d6c8;outline-offset:2px}
+.bq-board-pages{flex:0 0 auto;min-height:35px;display:flex;align-items:center;justify-content:center;gap:14px}
+.bq-board-pages .btn{min-height:31px;padding:4px 10px}
+.bq-score-footer{flex:0 0 auto;display:flex;align-items:center;gap:clamp(6px,1.2vw,15px);min-height:62px;max-height:83px;min-width:0;border:1px solid rgba(194,204,205,.19);background:linear-gradient(120deg,rgba(37,43,50,.98),rgba(25,29,34,.96));border-radius:11px;padding:5px 12px;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.bq-score-heading{flex:0 0 auto;display:flex;flex-direction:column;line-height:1.2;min-width:80px}
+.bq-score-heading strong{font-size:12px;color:#dcebe6}
+.bq-score-heading>span{font-size:10px;color:#94a5ab}
+.bq-score-items{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));align-items:center;gap:3px 7px;max-height:62px;overflow:hidden}
+.bq-score-item{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;gap:1px;text-align:center;border-left:1px solid #ffffff1c;line-height:1.2}
+.bq-score-item>span{font-size:11px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b4c2c6}
+.bq-score-item>b{font-size:clamp(14px,1.4vw,19px);font-variant-numeric:tabular-nums;color:#e6eae4}
+.bq-score-footer .bq-character-dock,.bq-game-mode .bq-score-footer .bq-character-dock{flex:0 0 auto;display:flex!important;justify-content:flex-end;align-items:center;gap:2px;width:auto!important;max-width:none!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;background:none!important;overflow:visible}
+.bq-game-mode .bq-score-footer .bq-character-dock .bq-actor{width:clamp(32px,4vw,49px)!important;height:clamp(32px,4vw,49px)!important}
+.bq-question-panel{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;padding:clamp(9px,1.15vw,18px)!important;overflow:hidden}
+.bq-scene-content{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:auto;scrollbar-width:thin}
+.bq-question-panel .stage{flex:1;min-height:0;height:auto;margin:0;padding:clamp(10px,1.3vw,24px);max-width:none;width:100%;overflow:auto}
+.bq-question-panel .stage .se-scene,.bq-question-panel .stage .bq-scene{max-height:100%;min-height:0}
+.bq-question-panel .stage h2{font-size:clamp(18px,2.5vw,36px);line-height:1.25;margin-bottom:10px}
+.bq-question-body{flex:1;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.8fr);gap:10px;min-height:0}
+.bq-guest-compose{display:flex;flex-direction:column;gap:7px;min-width:0;min-height:0;overflow:auto;padding:clamp(9px,1.1vw,17px)!important}
+.bq-guest-compose .panelhead{margin-bottom:4px;flex:0 0 auto}
+.bq-guest-compose .formgrid{gap:8px;min-width:0}
+.bq-guest-compose .field{min-width:0}
+.bq-guest-compose .field textarea{min-height:60px;max-height:140px;resize:vertical}
+.bq-guest-compose .guest-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.bq-guest-compose .guest-choice{min-height:46px;padding:7px}
+.bq-buzzer-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bq-action-bar{flex:0 0 auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:40px}
+.bq-action-bar>.btn{min-height:36px}
+.bq-auxiliary{position:relative;flex:0 0 auto;max-width:100%;font-size:12px;color:#c7d4d5}
+.bq-auxiliary>summary{cursor:pointer;background:rgba(160,190,185,.08);border:1px solid rgba(192,218,210,.22);border-radius:7px;padding:7px 11px;min-height:36px;white-space:nowrap}
+.bq-auxiliary[open]{z-index:12}
+.bq-auxiliary[open]>.bq-host-detail,.bq-auxiliary[open]>.scoring-panel,.bq-auxiliary[open]>.glass.panel,.bq-auxiliary[open]>.row{position:absolute;right:0;bottom:calc(100% + 6px);width:min(720px,calc(100vw - 28px));max-height:min(60dvh,520px);overflow:auto;background:#232b30;border:1px solid #526265;border-radius:12px;padding:12px;box-shadow:0 14px 35px #000b;z-index:13}
+.bq-host-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.bq-host-detail>.scoring-panel{grid-column:1/-1}
+.bq-auxiliary .bq-host-detail .glass.panel{padding:12px}
+.bq-answer-review-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:10px}
+.bq-answers-panel{display:flex;flex-direction:column;min-height:0;padding:12px!important;overflow:hidden}
+.bq-answers-panel>h3{font-size:14px;margin:0 0 6px}
+.bq-answers-panel .answer-review{min-height:0;flex:1;overflow:auto}
+.bq-answers-panel .review-summary{margin-bottom:5px}
+.bq-answers-panel .review-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.bq-answers-panel .review-card{min-height:78px;padding:8px}
+.bq-answers-panel .frosted-shield{min-height:45px}
+.bq-answers-panel .review-value{min-height:42px}
+/* Compact enough that a normal 5x5 board + scores fits in one viewport. */
+@media(max-height:740px){
+ .bq-session-scene{gap:5px}.bq-game-mode .topbar{padding:7px 10px;margin-bottom:5px}
+ .bq-scene-heading{min-height:35px}.bq-board-full .jeopardy-board .column{grid-template-rows:minmax(27px,39px) repeat(var(--board-rows),minmax(0,1fr))}
+ .bq-score-footer{min-height:52px;max-height:58px;padding:3px 7px}
+ .bq-game-mode .bq-score-footer .bq-character-dock .bq-actor{width:35px!important;height:35px!important}
+ .bq-question-panel .stage{padding:9px}
+}
+@media(max-width:780px){
+ .bq-game-mode .topbar .header-primary{flex-wrap:wrap}.bq-game-mode .topbar .header-state{margin-left:auto}
+ .bq-scene-heading h2{font-size:18px}
+ .bq-question-body{display:flex;flex-direction:column;gap:6px}
+ .bq-guest-compose{flex:0 0 auto;max-height:34dvh;padding:8px!important}
+ .bq-question-panel{flex:1;min-height:0}
+ .bq-answer-review-body{display:flex;flex-direction:column;gap:6px}
+ .bq-answer-review-body .bq-answers-panel{max-height:35dvh;min-height:110px;flex:0 1 auto}
+ .bq-answers-panel .review-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .bq-score-heading{min-width:65px}.bq-score-item>span{font-size:10px}
+ .bq-game-mode .bq-score-footer .bq-character-dock .bq-actor{width:clamp(27px,8vw,36px)!important;height:clamp(27px,8vw,36px)!important}
+ .bq-question-panel .stage h2{font-size:clamp(18px,4.4vw,26px)}
+}
+@media(max-width:470px){
+ .bq-game-mode .shell{padding:4px}.bq-game-mode .topbar{border-radius:8px}
+ .bq-game-mode .topbar .header-state{font-size:10px}
+ .bq-session-scene{gap:5px}.bq-board-panel{padding:4px!important}
+ .bq-board-full .jeopardy-board .column{grid-template-rows:minmax(35px,47px) repeat(var(--board-rows),minmax(0,1fr))}
+ .bq-board-full .jeopardy-board .coltitle{font-size:12px}
+ .bq-board-full .jeopardy-board .tile{font-size:clamp(19px,6vw,29px)}
+ .bq-score-footer{gap:5px;padding:4px 5px;min-height:54px}
+ .bq-score-heading{min-width:59px}.bq-score-heading strong{font-size:10px}.bq-score-heading>span{font-size:9px}
+ .bq-score-items{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px}
+ .bq-score-item>b{font-size:14px}
+ .bq-game-mode .bq-score-footer .bq-character-dock .bq-actor{width:26px!important;height:26px!important}
+ .bq-action-bar{gap:4px}.bq-action-bar>.btn,.bq-auxiliary>summary{min-height:32px;padding:4px 7px;font-size:11px}
+ .bq-guest-compose{max-height:32dvh}
+}
+/* Presentation/zoom edge cases: do not silently clip critical content. A user
+   may scroll INSIDE the question/editor panel, never the full game page. */
+@media(max-height:500px){.bq-question-body{grid-template-columns:minmax(0,1fr) minmax(170px,.75fr)}.bq-score-footer{min-height:42px;max-height:45px}.bq-game-mode .topbar .brand small{display:none}}
+@media(prefers-reduced-motion:reduce){.bq-board-full .jeopardy-board .tile{transition:none}}
+@media print{body.bq-game-mode{overflow:visible}.bq-game-mode .shell{height:auto;overflow:visible}}
+/* Editor: everyday actions first; file/advanced tools disclosed when needed. */
+.se-file-actions{position:relative;display:inline-block}
+.se-file-actions>summary{list-style:none;cursor:pointer;border:1px solid rgba(195,210,211,.27);border-radius:7px;padding:7px 11px;min-height:34px;background:#20272e;color:#dce8e6;font-weight:650}
+.se-file-actions>summary::-webkit-details-marker{display:none}
+.se-file-menu{position:absolute;z-index:28;top:calc(100% + 6px);left:0;width:210px;display:flex;flex-direction:column;gap:5px;padding:8px;background:#222a30;border:1px solid #59686e;border-radius:9px;box-shadow:0 10px 25px #0009}
+.se-context-hint{color:#9fb1b5;font-size:11px;margin:0 0 5px}
+.se-context{position:fixed;z-index:10000;display:flex;flex-direction:column;width:226px;max-height:calc(100dvh - 16px);overflow:auto;padding:7px;background:#20262d;border:1px solid #778389;border-radius:11px;box-shadow:0 16px 36px rgba(0,0,0,.7)}
+.se-context-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#e9efec;font-size:12px;padding:2px 4px 6px;border-bottom:1px solid #ffffff24;margin-bottom:4px}
+.se-studio .se-context button[role=menuitem]{width:100%;display:block;min-height:35px;text-align:left;padding:7px 10px;margin:1px 0;background:transparent;color:#e4e9e7;border:1px solid transparent}
+.se-studio .se-context button[role=menuitem]:hover,.se-studio .se-context button[role=menuitem]:focus-visible{background:#435159;border-color:#7a9598;outline:0}
+.se-studio .se-context button.se-destructive{color:#f0b3b7}
+.se-more-properties{margin-top:10px;border-top:1px solid #ffffff26;padding-top:10px}
+.se-more-properties>summary{font-weight:650;color:#c3d2d2;cursor:pointer;padding:6px 0;margin-bottom:9px}
+.se-more-properties[open] .se-field{margin-top:8px}
+.se-studio .se-toolbar .se-inline{gap:5px}
+@media(max-width:720px){.se-context{width:min(226px,calc(100vw - 16px))}}
+
+/* Score pagination is always visible; even 24 manually added people are accessible. */
+.bq-score-pager{display:flex;align-items:center;gap:3px;margin-top:3px;font-size:10px;color:#bcd0cc}
+.bq-score-pager button{display:grid;place-items:center;width:23px;height:22px;padding:0;border:1px solid #637679;border-radius:5px;color:#f0f5f3;background:#29343a;cursor:pointer;font-size:17px}
+.bq-score-pager button:disabled{opacity:.32;cursor:default}
+.bq-score-pager button:focus-visible{outline:2px solid #f2dcae}
+@media(max-width:470px){.bq-score-footer .bq-score-heading{min-width:62px}.bq-score-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* The old 1.9 gallery expanded one answer to the full screen. In the
+   two-scene view answers remain compact, with more room for the question. */
+.bq-answers-panel .answer-review .review-grid{flex:0 0 auto;grid-auto-rows:minmax(92px,auto);align-items:start;align-content:start}
+.bq-answers-panel .review-card{min-height:95px;max-height:210px;overflow:auto}
+.bq-answers-panel .review-card .review-value{flex:0 1 auto;min-height:44px;max-height:105px;overflow:auto}
+.bq-answers-panel .review-card .frosted-shield{flex:0 1 auto;min-height:45px;padding:3px 0}
+
+/* Sparse quizzes must not stretch a single question to 500px height. */
+.bq-board-full .jeopardy-board.bq-board-sparse{grid-template-columns:repeat(var(--board-cols,1),minmax(0,min(240px,100%)));justify-content:center;align-content:start}
+.bq-board-full .jeopardy-board.bq-board-sparse .column{height:auto;grid-template-rows:minmax(32px,50px) repeat(var(--board-rows),minmax(52px,min(17dvh,110px)))}
+.bq-board-full .jeopardy-board.bq-board-sparse .tile{min-height:52px}

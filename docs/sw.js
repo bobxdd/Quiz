@@ -1,7 +1,7 @@
 // Offline-capable static shell only. Quiz data, WebRTC messages, private URLs and
 // unrecognized same-origin assets MUST NOT enter the service-worker Cache Storage.
-const NAME='brainquiz-shell-2.8.0';
-const ASSETS=['./','./index.html','./style.css','./pixel-theme.css','./characters.css','./pixel-constellation.png','./pixel-corner.png','./app.mjs','./core.mjs','./question-flow.mjs','./layout.mjs','./studio-model.mjs','./studio-editor.mjs','./answer-review.mjs','./history-model.mjs','./peer-client.mjs','./lobby-model.mjs','./icon.svg','./characters/rogue.webp','./characters/blades.webp','./characters/mage.webp','./characters/druid.webp','./manifest.webmanifest'];
+const NAME='brainquiz-shell-2.9.0';
+const ASSETS=['./','./index.html','./style.css','./pixel-theme.css','./characters.css','./session-ui.css','./pixel-constellation.png','./pixel-corner.png','./app.mjs','./core.mjs','./question-flow.mjs','./layout.mjs','./studio-model.mjs','./studio-editor.mjs','./answer-review.mjs','./history-model.mjs','./peer-client.mjs','./lobby-model.mjs','./icon.svg','./characters/rogue.webp','./characters/blades.webp','./characters/mage.webp','./characters/druid.webp','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 const ALLOWED_PATHS=new Set(ASSETS.map(path=>new URL(path,SCOPE).pathname));
 self.addEventListener('install',event=>event.waitUntil(caches.open(NAME).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));

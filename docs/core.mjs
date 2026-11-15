@@ -1,7 +1,7 @@
 import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='2.8.0';
+export const VERSION='2.9.0';
 export const MODES={text:'Freitext',multiple:'Multiple Choice',splash:'Splash-Art-Zoom',imposter:'Ability-Imposter',order:'Sortieren / Chronologie',estimate:'Schätzfrage',quote:'Champion-Zitat',emoji:'Emoji-Rätsel',audio:'Audio- / Login-Sound'};
 export const ABILITIES=['Passiv','Q','W','E','R'];
 export const TEAM_COLORS=['#79a8af','#b2a5dc','#b7ad83','#b79ab1','#8aa7a0','#b9a090'];
@@ -160,3 +160,22 @@ export function updatePlayerScore(record={},action={}){
  return {total:next,rounds,history:history.slice(-30)};
 }
 export function manualPlayerLabels(quiz){return Object.fromEntries((quiz.manualPlayers||[]).map((name,i)=>['manual_'+(i+1),name]));}
+
+// Presentation-only helpers: derive everything from the authoritative public state.
+// No answers or host-private fields are involved.
+export function sceneForPublicState(state){
+ return state?.current&&['question','paused','review','reveal'].includes(state.phase)?'question':'board';
+}
+export function isBoardCellPlayed(item,state){
+ return !!(item?.used||state?.used?.[item?.id]||state?.current?.id===item?.id);
+}
+export function pageBoardColumns(columns,width=1280,height=800){
+ const maxCols=width<470?2:width<720?3:width<1030?4:width<1380?5:6;
+ const maxRows=Math.max(2,Math.min(9,Math.floor((height-280)/57)));
+ const pages=[];
+ for(let c=0;c<columns.length;c+=maxCols){
+  const group=columns.slice(c,c+maxCols),highest=Math.max(0,...group.map(x=>x.items.length));
+  for(let start=0;start<highest;start+=maxRows)pages.push({columns:group.map(col=>({...col,items:col.items.slice(start,start+maxRows)})),start,rows:Math.min(maxRows,highest-start)});
+ }
+ return pages;
+}

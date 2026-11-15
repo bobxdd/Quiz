@@ -11,7 +11,7 @@ characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
  src='./characters/'+character+'.webp'
  characters_css=characters_css.replace(src,'data:image/webp;base64,'+base64.b64encode((root/'docs'/src).read_bytes()).decode())
-html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
+html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<link rel="stylesheet" href="./session-ui.css">','<style>'+(root/'docs/session-ui.css').read_text()+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
 for name in ['characters/rogue.webp','characters/blades.webp','characters/mage.webp','characters/druid.webp','pixel-constellation.png','pixel-corner.png']:
  html=html.replace('./'+name,'data:image/png;base64,'+base64.b64encode((root/'docs'/name).read_bytes()).decode())
 mockpeer=(root/'tests/mock-peerjs-browser.js').read_text()
@@ -63,8 +63,24 @@ async def main():
   question={'id':'q-test-p2p','category':'Lore','title':'Frage 1','type':'text','points':100,'prompt':'Wer fliegt durch Freljord?','answer':'Anivia'}
   quiz={'title':'Testquiz P2P','teams':['Rot','Blau'],'questions':[question]}
   await host.evaluate('(quiz)=>window.__probe.setQuiz(quiz)',quiz)
+  # Editor shortcuts mirror the visible toolbar and never depend on the native browser menu.
+  await host.locator('[data-view="editor"]').first.click()
+  await host.locator('.se-scene').wait_for(timeout=12000)
+  await host.locator('.se-scene').click(button='right',position={'x':40,'y':40})
+  await host.locator('.se-context').wait_for(timeout=8000)
+  assert await host.locator('.se-context [role="menuitem"]').count()>=3
+  await host.keyboard.press('ArrowDown')
+  await host.keyboard.press('Escape')
+  await host.locator('.se-context').wait_for(state='detached',timeout=8000)
+  await host.locator('.se-scene').focus()
+  await host.keyboard.press('Shift+F10')
+  await host.locator('.se-context').wait_for(timeout=8000)
+  await host.locator('.se-context [data-se-action="add-element"][data-kind="text"]').click()
+  await host.locator('.se-scene .se-element').first.wait_for(timeout=8000)
+  await host.screenshot(path=str(root/'screenshots/Vorschau_2_9_Frageneditor.png'),full_page=False)
+
   await host.locator('[data-action="publish"]').first.click()
-  await host.locator('.board-primary .tile').first.wait_for(timeout=12000)
+  await host.locator('.bq-board-scene .tile').first.wait_for(timeout=12000)
   async with ctx.expect_page() as event:
    await host.evaluate("window.open('about:blank','_blank')")
   guest=await event.value;guest.on('pageerror',lambda x:errors.append('Gast: '+str(x)))
@@ -82,12 +98,21 @@ async def main():
   await host.locator('.top-nav [data-view="teams"]').click()
   await host.locator('[data-action="approve"]').first.wait_for(timeout=12000)
   await host.locator('[data-action="approve"]').first.click()
-  await guest.locator('.guest-board').wait_for(timeout=12000)
-  assert await guest.locator('.guest-board .tile').count()==1
+  await guest.locator('.bq-board-scene').wait_for(timeout=12000)
+  assert await guest.evaluate('document.documentElement.scrollHeight <= window.innerHeight+5'), 'Board has unexpected body scroll'
+  footer=await guest.locator('.bq-score-footer').bounding_box()
+  assert footer and abs(footer['y']+footer['height']-900)<30, footer
+  await guest.screenshot(path=str(root/'screenshots/Vorschau_2_9_Quizbrett.png'),full_page=False)
+  assert await guest.locator('.bq-board-scene .tile').count()==1
   assert 'Anivia' not in await guest.locator('body').inner_text(), 'Host answer leaked before reveal'
   await host.locator('.top-nav [data-view="live"]').click()
-  await host.locator('.board-primary .tile').first.click()
-  await guest.locator('.guest-question').get_by_text('Wer fliegt durch Freljord?').wait_for(timeout=12000)
+  await host.locator('.bq-board-scene .tile').first.click()
+  await guest.locator('.bq-question-scene').get_by_text('Wer fliegt durch Freljord?').wait_for(timeout=12000)
+  assert await guest.locator('.bq-board-scene').count()==0, 'Board must be removed when question appears'
+  await host.locator('.bq-question-scene').wait_for(timeout=12000)
+  assert await host.locator('.bq-board-scene').count()==0, 'Host must see question scene only'
+  assert await guest.locator('.bq-score-footer').count()==1, 'Footer stays visible in question scene'
+
   await guest.locator('#answer-text').fill('Sivir')
   await guest.locator('[data-action="submit-answer"]').click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
@@ -98,8 +123,18 @@ async def main():
   assert await guest.locator('.bq-character-dock .bq-actor').count()==4
   assert await guest.locator('.bq-character-dock .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))'), 'Original character sprites were not loaded'
   assert 'Anivia' not in await guest.locator('.review-grid').inner_text()
-  await host.screenshot(path=str(root/'screenshots/Vorschau_2_7_P2P_Host.png'),full_page=True)
-  await guest.screenshot(path=str(root/'screenshots/Vorschau_2_7_P2P_Teilnehmer.png'),full_page=True)
+  assert await guest.locator('.bq-board-scene').count()==0, 'No board behind the review'
+  await host.screenshot(path=str(root/'screenshots/Vorschau_2_9_P2P_Host.png'),full_page=False)
+  await guest.screenshot(path=str(root/'screenshots/Vorschau_2_9_P2P_Teilnehmer.png'),full_page=False)
+  await host.locator('[data-action="back"]').first.click()
+  await guest.locator('.bq-board-scene .tile.is-played').first.wait_for(timeout=12000)
+  assert await guest.locator('.bq-question-scene').count()==0
+  assert await guest.locator('.bq-board-scene .tile.is-played:disabled').count()==1
+  await guest.set_viewport_size({'width':390,'height':780})
+  await guest.wait_for_timeout(200)
+  assert await guest.evaluate('document.documentElement.scrollHeight <= window.innerHeight+6'), 'Mobile board unexpectedly scrolls'
+  assert await guest.locator('.bq-score-footer').is_visible()
+  await guest.screenshot(path=str(root/'screenshots/Vorschau_2_9_Quizbrett_Mobil.png'),full_page=False)
   assert not errors,errors
   print('PASS: Two browser windows: P2P host create, question publish, guest request + approval, answer, private review and explicit reveal; no JS exceptions.')
   await browser.close()

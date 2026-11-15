@@ -72,7 +72,7 @@ export function renderScene(scene,{editing=false,selected='',revealed=false,inte
   const body=el.kind==='shape'?`<div class="se-shape ${escape(el.shape)}">${escape(el.text)}</div>`:img||`${label}<span class="se-content">${escape(el.text).replace(/\n/g,'<br>')}</span>${el.kind==='order'&&picked.includes(count)?`<strong class="se-order-rank">${picked.indexOf(count)+1}.</strong>`:''}`;
   return `<div class="se-element ${editing?'is-editable':''} ${selected===el.id?'is-selected':''} se-kind-${el.kind} ${correct?'se-correct':''} ${wrong?'se-wrong':''} ${picked.includes(count)&&el.kind==='order'?'se-picked':''}" style="${style}" ${attrs}>${body}${editing?`<span class="se-reveal-mark">${el.step===0?'Start':el.step===6?'Lösung':'Tipp '+el.step}</span><span class="se-resize" data-se-resize="${escape(el.id)}" title="Größe ändern"></span>`:''}</div>`;
  }).join('');
- return `<div class="se-scene ${editing?'se-editing':''}" style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}</div>`;
+ return `<div class="se-scene ${editing?'se-editing':''}" ${editing?'tabindex="0"':''} style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}</div>`;
 }
 export function validateScene(q){const scene=normalizeScene(q?.scene);if(!scene)return '';
  if(!scene.elements.length)return 'Mindestens ein Element hinzufügen.';
