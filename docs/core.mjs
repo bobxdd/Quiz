@@ -1,7 +1,8 @@
+import {collectCategories} from './category-model.mjs';
 import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='2.9.0';
+export const VERSION='3.0.0';
 export const MODES={text:'Freitext',multiple:'Multiple Choice',splash:'Splash-Art-Zoom',imposter:'Ability-Imposter',order:'Sortieren / Chronologie',estimate:'Schätzfrage',quote:'Champion-Zitat',emoji:'Emoji-Rätsel',audio:'Audio- / Login-Sound'};
 export const ABILITIES=['Passiv','Q','W','E','R'];
 export const TEAM_COLORS=['#79a8af','#b2a5dc','#b7ad83','#b79ab1','#8aa7a0','#b9a090'];
@@ -11,7 +12,7 @@ export function uid(){const bytes=new Uint8Array(16);crypto.getRandomValues(byte
 export function safeId(value){return String(value||uid()).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)||uid();}
 export function isImageData(value){return typeof value==='string' && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length<900000;}
 export function isAudioData(value){return typeof value==='string' && /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(value) && value.length<600000;}
-export function emptyQuiz(){return {version:1,title:'Meine Quiznacht',description:'',teams:['Team 1','Team 2'],manualPlayers:[],questions:[]};}
+export function emptyQuiz(){return {version:1,title:'Meine Quiznacht',description:'',teams:['Team 1','Team 2'],manualPlayers:[],categories:[],questions:[]};}
 export function normalizedQuiz(source){
  const obj=source&&typeof source==='object'?source:{};
  const names=Array.isArray(obj.teams)?obj.teams.map(x=>String(x??'').trim().slice(0,35)).filter(Boolean).slice(0,6):[];
@@ -20,7 +21,7 @@ export function normalizedQuiz(source){
  const q=raw&&typeof raw==='object'?raw:{};let id=safeId(q.id);if(seen.has(id))id=uid();seen.add(id);
  return {id,category:String(q.category||'Allgemein').slice(0,70),title:String(q.title||'Frage').slice(0,100),type:MODES[q.type]?q.type:'text',points:Math.max(0,Math.min(10000,Number(q.points)||100)),prompt:String(q.prompt||'').slice(0,2000),answer:String(q.answer||'').slice(0,2000),explanation:String(q.explanation||'').slice(0,2000),options:Array.from({length:4},(_,i)=>String(q.options?.[i]||'').slice(0,500)),correct:Math.max(0,Math.min(3,Number(q.correct)||0)),image:isImageData(q.image)?q.image:'',cropX:Math.max(0,Math.min(100,Number(q.cropX??50))),cropY:Math.max(0,Math.min(100,Number(q.cropY??50))),zoom:Math.max(1,Math.min(9,Number(q.zoom??3))),abilityNames:Array.from({length:5},(_,i)=>String(q.abilityNames?.[i]||ABILITIES[i]).slice(0,30)),icons:Array.from({length:5},(_,i)=>isImageData(q.icons?.[i])?q.icons[i]:''),imposterIndex:Math.max(0,Math.min(4,Number(q.imposterIndex)||0)),correctIcon:isImageData(q.correctIcon)?q.correctIcon:'',orderItems:(Array.isArray(q.orderItems)?q.orderItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120)),clue:String(q.clue||'').slice(0,1200),estimateTarget:Number.isFinite(Number(q.estimateTarget))?Number(q.estimateTarget):0,estimateUnit:String(q.estimateUnit||'').slice(0,40),seconds:Math.max(0,Math.min(600,Number(q.seconds)||0)),hints:(Array.isArray(q.hints)?q.hints:[]).slice(0,3).map(x=>String(x||'').slice(0,220)),audio:isAudioData(q.audio)?q.audio:'',audioStart:Math.max(0,Math.min(3600,Number(q.audioStart)||0)),audioDuration:Math.max(1,Math.min(12,Number(q.audioDuration)||8)),blocks:normalizeBlocks(q.blocks),scene:normalizeScene(q.scene),orderDisplayItems:(Array.isArray(q.orderDisplayItems)?q.orderDisplayItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120))};
  });
- return {version:1,title:String(obj.title||'Meine Quiznacht').slice(0,100),description:String(obj.description||'').slice(0,400),teams:names.length?names:['Team 1','Team 2'],manualPlayers:(Array.isArray(obj.manualPlayers)?obj.manualPlayers:[]).slice(0,24).map(x=>String(x||'').trim().slice(0,28)).filter(Boolean),questions};
+ return {version:1,title:String(obj.title||'Meine Quiznacht').slice(0,100),description:String(obj.description||'').slice(0,400),teams:names.length?names:['Team 1','Team 2'],manualPlayers:(Array.isArray(obj.manualPlayers)?obj.manualPlayers:[]).slice(0,24).map(x=>String(x||'').trim().slice(0,28)).filter(Boolean),categories:collectCategories(obj.categories,questions),questions};
 }
 export function buildPublicBoard(quiz,used={}){return Object.fromEntries(quiz.questions.map(q=>[q.id,{id:q.id,category:q.category,type:q.type,points:q.points,used:!!used[q.id]}]));}
 export function buildTeams(quiz){return Object.fromEntries(quiz.teams.map((name,i)=>['t'+(i+1),name]));}

@@ -13,4 +13,4 @@ test('2.1: Die Host-Punkteverwaltung verdrängt nicht die Antwortkarten',()=>{as
 test('2.1: Aufdeckungs-Karte ist eine durchgehende Milchglasfläche',()=>{assert.match(css,/\.review-card\.is-hidden\{background:linear-gradient\(138deg/);assert.match(css,/backdrop-filter:blur\(28px\)/);assert.match(css,/\.review-card\.is-hidden \.review-value\{border:0;background:transparent/);});
 test('2.1: Schmale Geräte verwenden zwei beziehungsweise eine Spalte',()=>{assert.match(css,/max-width:680px/);assert.match(css,/repeat\(min\(2,var\(--review-columns,4\)\)/);assert.match(css,/max-width:360px/);});
 test('2.1: Sicherheitsregeln für verdeckte Antworten bleiben unverändert',()=>{assert.match(app,/hidden=!a\.revealed/);assert.match(app,/hidden\?`<div class="frosted-shield"/);});
-test('2.1: Versionswechsel aktualisiert auch den Offline-Cache',()=>{assert.match(core,/VERSION='2\.9\.0'/);assert.match(sw,/brainquiz-shell-2\.9\.0/);});
+test('2.1: Versionswechsel aktualisiert auch den Offline-Cache',()=>{assert.match(core,/VERSION='3\.0\.0'/);assert.match(sw,/brainquiz-shell-3\.0\.0/);});
