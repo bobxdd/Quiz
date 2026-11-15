@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!*.example
+*.brainquiz.json
+*.brainplay.json
+*service-account*.json
+serviceAccountKey.json
+firebase-debug.log
+*.exe
+*.bat
+test-artifacts/
+.DS_Store
+gha-creds-*.json

@@ -1,0 +1,12 @@
+{
+  "name": "brainquiz-studio-web",
+  "private": true,
+  "version": "2.7.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check:syntax": "node --check docs/question-flow.mjs && node --check docs/app.mjs && node --check docs/studio-editor.mjs && node --check docs/studio-model.mjs && node --check docs/core.mjs && node --check docs/history-model.mjs && node --check docs/answer-review.mjs && node --check docs/peer-client.mjs && node --check docs/lobby-model.mjs && node --check docs/layout.mjs",
+    "test:browser-review": "python3 tests/live-review-browser.py",
+    "build:pages": "node scripts/configure-pages.mjs"
+  }
+}
