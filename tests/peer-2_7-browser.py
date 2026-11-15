@@ -5,15 +5,16 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs']
+files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
  src='./characters/'+character+'.webp'
  characters_css=characters_css.replace(src,'data:image/webp;base64,'+base64.b64encode((root/'docs'/src).read_bytes()).decode())
-html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<link rel="stylesheet" href="./session-ui.css">','<style>'+(root/'docs/session-ui.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./editor-categories.css">','<style>'+(root/'docs/editor-categories.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./editor-31.css">','<style>'+(root/'docs/editor-31.css').read_text()+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
+html=(root/'docs/index.html').read_text().replace('<link rel="stylesheet" href="./style.css">','<style>'+(root/'docs/style.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./pixel-theme.css">','<style>'+(root/'docs/pixel-theme.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./characters.css">','<style>'+characters_css+'</style>').replace('<link rel="stylesheet" href="./session-ui.css">','<style>'+(root/'docs/session-ui.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./editor-categories.css">','<style>'+(root/'docs/editor-categories.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./editor-31.css">','<style>'+(root/'docs/editor-31.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./map-ui.css">','<style>'+(root/'docs/map-ui.css').read_text()+'</style>').replace('<link rel="stylesheet" href="./actor-motion.css">','<style>'+(root/'docs/actor-motion.css').read_text()+'</style>').replace('<script type="module" src="./app.mjs"></script>','')
 for name in ['characters/rogue.webp','characters/blades.webp','characters/mage.webp','characters/druid.webp','pixel-constellation.png','pixel-corner.png']:
  html=html.replace('./'+name,'data:image/png;base64,'+base64.b64encode((root/'docs'/name).read_bytes()).decode())
+sources['studio-model.mjs']=sources['studio-model.mjs'].replace('./world-map.svg','data:image/svg+xml;base64,'+base64.b64encode((root/'docs/world-map.svg').read_bytes()).decode())
 mockpeer=(root/'tests/mock-peerjs-browser.js').read_text()
 # Blob-loaded app scripts otherwise resolve relative PNGs against about:blank.
 # Replace the four dynamic mascot URLs with real image bytes so screenshots and
@@ -38,14 +39,16 @@ async def install(page):
   const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const workflows=blob(src['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const editor=blob(src['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`));
-  const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`));
+  const map=blob(src['map-tools.mjs']);const rules=blob(src['round-rules.mjs'].replace("from './core.mjs'",`from '${core}'`));
+  const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`));
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member})};`;
   const app=src['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(')
    .replace("import('./peer-client.mjs')",`import('${peer}')`)
    .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`)
    .replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`)
    .replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${history}'`)
-   .replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`);
+   .replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`)
+   .replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`);
   await import(blob(app));
  }''',sources)
 
@@ -61,7 +64,7 @@ async def main():
   await host.locator('.se-studio').first.wait_for(timeout=12000)
   code=await host.evaluate('window.__probe.room()')
   assert len(code)==16,code
-  question={'id':'q-test-p2p','category':'Lore','title':'Frage 1','type':'text','points':100,'prompt':'Wer fliegt durch Freljord?','answer':'Anivia'}
+  question={'id':'q-test-p2p','category':'Lore','title':'Frage 1','type':'text','roundMode':'written','points':100,'prompt':'Wer fliegt durch Freljord?','answer':'Anivia'}
   quiz={'title':'Testquiz P2P','teams':['Rot','Blau'],'questions':[question]}
   await host.evaluate('(quiz)=>window.__probe.setQuiz(quiz)',quiz)
   # Editor shortcuts mirror the visible toolbar and never depend on the native browser menu.
@@ -123,8 +126,8 @@ async def main():
   await host.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal-answer"]').first.click()
   await guest.locator('.review-grid').get_by_text('Sivir').wait_for(timeout=12000)
-  assert await guest.locator('.bq-character-dock .bq-actor').count()==4
-  assert await guest.locator('.bq-character-dock .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))'), 'Original character sprites were not loaded'
+  assert await guest.locator('.bq-scene-cameos .bq-actor').count()>=1
+  assert await guest.locator('.bq-scene-cameos .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))'), 'Original character sprites were not loaded'
   assert 'Anivia' not in await guest.locator('.review-grid').inner_text()
   assert await guest.locator('.bq-board-scene').count()==0, 'No board behind the review'
   await host.screenshot(path=str(root/'screenshots/Vorschau_2_9_P2P_Host.png'),full_page=False)

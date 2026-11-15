@@ -49,10 +49,10 @@ async def main():
   assert len(reused['questions'])==3 and reused['questions'][-1]['category']=='Lorefragen' and reused['questions'][-1]['id'] not in [q['id'] for q in old['questions']],reused
   assert len(reused['questions'][0]['answer'])==len(old['questions'][0]['answer'])
   print('PASS: question bank creates independent copy in selected category')
-  await page.locator('[data-se-action="preview"]').click()
+  await page.locator('[data-se-action="toggle-preview"]').click()
   await page.locator('.se-audience-preview').wait_for();assert await page.locator('.se-audience-label').count()==1
   await page.locator('[data-se-action="preview-device"]').click();await page.locator('.se-audience-mobile').wait_for()
-  await page.locator('[data-se-action="preview"]').click()
+  await page.locator('[data-se-action="toggle-preview"]').click()
   await page.locator('[data-se-action="audit"]').click();await page.locator('.se-audit').wait_for()
   assert await page.locator('.se-audit').get_by_text('Fehler',exact=False).count()>=1
   assert not (await page.locator('.se-save-badge').inner_text()).startswith('●')

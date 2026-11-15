@@ -1,4 +1,4 @@
-# BrainQuiz Studio 2.7 — GitHub Pages + PeerJS (ohne Firebase)
+# BrainQuiz Studio 3.6 — GitHub Pages + PeerJS (ohne Firebase)
 
 **Ein Website-Link für Host und bis zu acht Gäste.** Host und Teilnehmer benutzen dieselbe GitHub-Pages-Seite. Die Quizrunde ist Peer-to-Peer: Der Browser des Hosts hält den maßgeblichen Raumzustand und tauscht per WebRTC Data Channels gezielte Nachrichten mit den Gästen aus. Der kostenlose öffentliche PeerJS-Cloud-Dienst vermittelt die Verbindung. Weder Firebase noch Supabase, eigene Login-Konten, ein Rechner als dauerhafter Server oder ein kostenpflichtiger Cloud-Plan sind zur Einrichtung erforderlich.
 
@@ -18,8 +18,8 @@
 1. Website als **Host** öffnen → **Online-Raum erstellen**.
 2. Fragen im Editor anlegen/importieren und **Quiz live veröffentlichen**.
 3. Über **Einladung kopieren** den Link mit Raumcode an Freunde senden. Sie öffnen denselben GitHub-Pages-Link, wählen einen Anzeigenamen und warten auf die Hostfreigabe.
-4. Host ordnet die Anfragen Teams zu. Dann Frage auf dem Quizbrett auswählen, Antworten sammeln, einzeln aufdecken, bewerten.
-5. Buzzer und private Teamchats werden vom Host kontrolliert; jeder Gast erhält nur seine eigenen Antworten und Teamnachrichten. Das vollständige Lösungsquiz und private Rundendaten werden **nicht** an andere Browser verteilt.
+4. Host ordnet die Anfragen Teams zu. Dann eine Frage auf dem Quizbrett auswählen. Standardmäßig buzzern die Teilnehmer; der Host bewertet richtig (+Fragewert) oder falsch (−halber Fragewert, Person/Team für diese Runde gesperrt). In ausdrücklich schriftlichen Runden geben alle zunächst verdeckte Antworten ab, die der Host gezielt aufdecken kann.
+5. Buzzer und gemeinsame, teamgetrennte Teamchats werden vom Host kontrolliert; jeder Gast erhält nur seine eigenen noch verdeckten Antworten und Nachrichten seines Teams. Das vollständige Lösungsquiz und private Rundendaten werden **nicht** an andere Browser verteilt.
 6. Host-Fenster offen lassen. Ein Host kann seinen Raum bei Seiten-Neuladen über **Raum fortsetzen** anhand einer lokalen Sicherung wiederaufnehmen; die Gäste können sich danach erneut verbinden. Für kritische Quizsets zusätzlich den Datei-Export benutzen.
 
 ## Was bleibt gespeichert?
@@ -37,12 +37,24 @@
 - **Peer-to-Peer-Sicherheit:** Das Quiz wird nur vom Host bewertet. Nicht freigegebene Daten werden vor dem Versand gefiltert. WebRTC verschlüsselt den Transport. Das verhindert nicht, dass ein technisch versierter Gast öffentliche Daten untersucht oder seinen eigenen Browser manipuliert; sicherheitskritische Entscheidungen bleiben beim Host.
 - Die Funktionalität wurde mit simuliertem PeerJS in Node.js und mehreren Browserfenstern getestet. Ein externer PeerJS-Cloud-, ICE-, TURN- oder echter 9-Geräte-Test steht noch aus.
 
+## Weitere Frageformate
+
+- **Tipprunden:** bis zu vier Tipps nacheinander aufdecken; der Tipp-Knopf bleibt in der Hostleiste sichtbar.
+- **Weltkarte:** Teilnehmer setzen per Maus, Touch oder Tastatur einen Pin; die Abgabe bleibt vor der Aufdeckung privat, die Lösung erscheint erst nach Hostfreigabe.
+- **Bild-Imposter:** bis zu acht Grafiken einschließlich einer austauschbaren; das Originalbild und die Auflösung bleiben privat.
+- **Audio / Bild / Splash / Reihenfolge / Schätzen / Zitate:** im visuellen Editor als Vorlagen anlegen, Buzzer oder ausdrücklichen Schreibmodus unabhängig vom Format auswählen.
+- **Editor:** Kategorien und Fragen per Rechtsklick öffnen, duplizieren oder nach Bestätigung löschen, außerdem Fragenbank, Sammelbearbeitung und Zuschauer-Vorschau.
+- **Charaktere:** vier Originalbilder, dezente Randauftritte und Coverbewegungen; unter „Bewegung reduzieren“ ohne Aufdeckungsanimation.
+
 ## Entwicklerprüfung
 
 ```sh
 npm run check:syntax
 npm test
 python3 tests/peer-2_7-browser.py
+python3 tests/features-3_4-browser.py
+python3 tests/editor-3_1-browser.py
+python3 tests/question-animation-2_5-browser.py
 npm run build:pages
 ```
 

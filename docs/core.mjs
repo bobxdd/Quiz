@@ -2,8 +2,8 @@ import {collectCategories} from './category-model.mjs';
 import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='3.1.0';
-export const MODES={text:'Freitext',multiple:'Multiple Choice',splash:'Splash-Art-Zoom',imposter:'Ability-Imposter',order:'Sortieren / Chronologie',estimate:'Schätzfrage',quote:'Champion-Zitat',emoji:'Emoji-Rätsel',audio:'Audio- / Login-Sound'};
+export const VERSION='3.6.0';
+export const MODES={text:'Freitext',multiple:'Multiple Choice',splash:'Splash-Art-Zoom',imposter:'Ability-Imposter',order:'Sortieren / Chronologie',estimate:'Schätzfrage',quote:'Champion-Zitat',emoji:'Emoji-Rätsel',audio:'Audio- / Login-Sound',map:'Kartenpunkt wählen'};
 export const ABILITIES=['Passiv','Q','W','E','R'];
 export const TEAM_COLORS=['#79a8af','#b2a5dc','#b7ad83','#b79ab1','#8aa7a0','#b9a090'];
 export function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -12,16 +12,16 @@ export function uid(){const bytes=new Uint8Array(16);crypto.getRandomValues(byte
 export function safeId(value){return String(value||uid()).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)||uid();}
 export function isImageData(value){return typeof value==='string' && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length<900000;}
 export function isAudioData(value){return typeof value==='string' && /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(value) && value.length<600000;}
-export function emptyQuiz(){return {version:1,title:'Meine Quiznacht',description:'',teams:['Team 1','Team 2'],manualPlayers:[],categories:[],questions:[]};}
+export function emptyQuiz(){return {version:1,scoreMode:'team',title:'Meine Quiznacht',description:'',teams:['Team 1','Team 2'],manualPlayers:[],categories:[],questions:[]};}
 export function normalizedQuiz(source){
  const obj=source&&typeof source==='object'?source:{};
  const names=Array.isArray(obj.teams)?obj.teams.map(x=>String(x??'').trim().slice(0,35)).filter(Boolean).slice(0,6):[];
  const seen=new Set();
  const questions=(Array.isArray(obj.questions)?obj.questions:[]).slice(0,180).map((raw)=>{
  const q=raw&&typeof raw==='object'?raw:{};let id=safeId(q.id);if(seen.has(id))id=uid();seen.add(id);
- return {id,category:String(q.category||'Allgemein').slice(0,70),title:String(q.title||'Frage').slice(0,100),type:MODES[q.type]?q.type:'text',points:Math.max(0,Math.min(10000,Number(q.points)||100)),prompt:String(q.prompt||'').slice(0,2000),answer:String(q.answer||'').slice(0,2000),explanation:String(q.explanation||'').slice(0,2000),options:Array.from({length:4},(_,i)=>String(q.options?.[i]||'').slice(0,500)),correct:Math.max(0,Math.min(3,Number(q.correct)||0)),image:isImageData(q.image)?q.image:'',cropX:Math.max(0,Math.min(100,Number(q.cropX??50))),cropY:Math.max(0,Math.min(100,Number(q.cropY??50))),zoom:Math.max(1,Math.min(9,Number(q.zoom??3))),abilityNames:Array.from({length:5},(_,i)=>String(q.abilityNames?.[i]||ABILITIES[i]).slice(0,30)),icons:Array.from({length:5},(_,i)=>isImageData(q.icons?.[i])?q.icons[i]:''),imposterIndex:Math.max(0,Math.min(4,Number(q.imposterIndex)||0)),correctIcon:isImageData(q.correctIcon)?q.correctIcon:'',orderItems:(Array.isArray(q.orderItems)?q.orderItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120)),clue:String(q.clue||'').slice(0,1200),estimateTarget:Number.isFinite(Number(q.estimateTarget))?Number(q.estimateTarget):0,estimateUnit:String(q.estimateUnit||'').slice(0,40),seconds:Math.max(0,Math.min(600,Number(q.seconds)||0)),hints:(Array.isArray(q.hints)?q.hints:[]).slice(0,3).map(x=>String(x||'').slice(0,220)),audio:isAudioData(q.audio)?q.audio:'',audioStart:Math.max(0,Math.min(3600,Number(q.audioStart)||0)),audioDuration:Math.max(1,Math.min(12,Number(q.audioDuration)||8)),blocks:normalizeBlocks(q.blocks),scene:normalizeScene(q.scene),orderDisplayItems:(Array.isArray(q.orderDisplayItems)?q.orderDisplayItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120))};
+ return {id,roundMode:q.roundMode==='written'?'written':'buzzer',category:String(q.category||'Allgemein').slice(0,70),title:String(q.title||'Frage').slice(0,100),type:MODES[q.type]?q.type:'text',points:Math.max(0,Math.min(10000,Number(q.points)||100)),prompt:String(q.prompt||'').slice(0,2000),answer:String(q.answer||'').slice(0,2000),explanation:String(q.explanation||'').slice(0,2000),options:Array.from({length:4},(_,i)=>String(q.options?.[i]||'').slice(0,500)),correct:Math.max(0,Math.min(3,Number(q.correct)||0)),image:isImageData(q.image)?q.image:'',cropX:Math.max(0,Math.min(100,Number(q.cropX??50))),cropY:Math.max(0,Math.min(100,Number(q.cropY??50))),zoom:Math.max(1,Math.min(9,Number(q.zoom??3))),abilityNames:Array.from({length:Math.max(5,Math.min(8,q.scene?.elements?.filter?.(e=>e.kind==='image').length||q.icons?.length||5))},(_,i)=>String(q.abilityNames?.[i]||ABILITIES[i]||`Bild ${i+1}`).slice(0,30)),icons:Array.from({length:Math.max(5,Math.min(8,q.scene?.elements?.filter?.(e=>e.kind==='image').length||q.icons?.length||5))},(_,i)=>isImageData(q.icons?.[i])?q.icons[i]:''),imposterIndex:Math.max(0,Math.min(7,Number(q.imposterIndex)||0)),mapTargetX:Math.max(0,Math.min(100,Number(q.mapTargetX??50)||0)),mapTargetY:Math.max(0,Math.min(100,Number(q.mapTargetY??50)||0)),correctIcon:isImageData(q.correctIcon)?q.correctIcon:'',orderItems:(Array.isArray(q.orderItems)?q.orderItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120)),clue:String(q.clue||'').slice(0,1200),estimateTarget:Number.isFinite(Number(q.estimateTarget))?Number(q.estimateTarget):0,estimateUnit:String(q.estimateUnit||'').slice(0,40),seconds:Math.max(0,Math.min(600,Number(q.seconds)||0)),hints:(Array.isArray(q.hints)?q.hints:[]).slice(0,4).map(x=>String(x||'').slice(0,220)),audio:isAudioData(q.audio)?q.audio:'',audioStart:Math.max(0,Math.min(3600,Number(q.audioStart)||0)),audioDuration:Math.max(1,Math.min(12,Number(q.audioDuration)||8)),blocks:normalizeBlocks(q.blocks),scene:normalizeScene(q.scene),orderDisplayItems:(Array.isArray(q.orderDisplayItems)?q.orderDisplayItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120))};
  });
- return {version:1,title:String(obj.title||'Meine Quiznacht').slice(0,100),description:String(obj.description||'').slice(0,400),teams:names.length?names:['Team 1','Team 2'],manualPlayers:(Array.isArray(obj.manualPlayers)?obj.manualPlayers:[]).slice(0,24).map(x=>String(x||'').trim().slice(0,28)).filter(Boolean),categories:collectCategories(obj.categories,questions),questions};
+ return {version:1,scoreMode:obj.scoreMode==='individual'?'individual':'team',title:String(obj.title||'Meine Quiznacht').slice(0,100),description:String(obj.description||'').slice(0,400),teams:names.length?names:['Team 1','Team 2'],manualPlayers:(Array.isArray(obj.manualPlayers)?obj.manualPlayers:[]).slice(0,24).map(x=>String(x||'').trim().slice(0,28)).filter(Boolean),categories:collectCategories(obj.categories,questions),questions};
 }
 export function buildPublicBoard(quiz,used={}){return Object.fromEntries(quiz.questions.map(q=>[q.id,{id:q.id,category:q.category,type:q.type,points:q.points,used:!!used[q.id]}]));}
 export function buildTeams(quiz){return Object.fromEntries(quiz.teams.map((name,i)=>['t'+(i+1),name]));}
@@ -30,23 +30,24 @@ export function buildScores(quiz){return Object.fromEntries(quiz.teams.map((_,i)
 // A private question is never embedded in the public room. The `visual` argument
 // must be a freshly rendered crop (splash) or a newly shuffled list (order).
 export function publicQuestion(q,reveal=false,visual='',releasedHints=0,sceneStep=0){
- const pub={id:q.id,category:q.category,type:q.type,points:q.points,prompt:q.scene?'':q.prompt,blocks:q.scene?[]:publicBlocks(q.blocks,reveal)};
+ const pub={id:q.id,category:q.category,type:q.type,roundMode:q.roundMode==='written'?'written':'buzzer',points:q.points,prompt:q.scene?'':q.prompt,blocks:q.scene?[]:publicBlocks(q.blocks,reveal)};
  if(q.scene)pub.scene=publicScene(q.scene,reveal?6:sceneStep,reveal);
  if(q.type==='multiple')pub.options=q.scene&&!reveal?'ABCD'.split('').map(letter=>q.scene.elements.some(el=>el.kind==='choice'&&el.letter===letter&&el.step<=sceneStep)?q.options['ABCD'.indexOf(letter)]:''):q.options.slice(0,4);
  if(q.type==='splash')pub.image=typeof visual==='string'?visual:'';
- if(q.type==='imposter'){const images=q.scene?.elements.filter(el=>el.kind==='image')||[];pub.icons=q.icons.slice(0,5).map((icon,i)=>q.scene&&!reveal&&images[i]?.step>sceneStep?'':icon);pub.abilityNames=q.abilityNames.slice(0,5);}
+ if(q.type==='imposter'){const images=q.scene?.elements.filter(el=>el.kind==='image')||[];pub.icons=q.icons.slice(0,8).map((icon,i)=>q.scene&&!reveal&&images[i]?.step>sceneStep?'':icon);pub.abilityNames=q.abilityNames.slice(0,8);}
  if(q.type==='order'){pub.displayItems=Array.isArray(visual)?visual.slice(0,10).map((x,i)=>q.scene&&!reveal&&!q.scene.elements.some(el=>el.kind==='order'&&el.letter==='ABCDEFGHIJ'[i]&&el.step<=sceneStep)?'':x):[];}
  if(q.type==='quote'||q.type==='emoji')pub.clue=q.scene&&!reveal?'':q.clue||'';
  if(q.type==='estimate')pub.estimateUnit=q.estimateUnit||'';
  if(q.type==='audio')pub.audio=q.audio||'';
- pub.hints=(q.hints||[]).slice(0,Math.max(0,Math.min(3,releasedHints))).filter(Boolean);
- pub.hintStep=Math.max(0,Math.min(3,releasedHints));
+ pub.hints=(q.hints||[]).slice(0,Math.max(0,Math.min(4,releasedHints))).filter(Boolean);
+ pub.hintStep=Math.max(0,Math.min(4,releasedHints));
  if(reveal){
   pub.answer=q.answer;pub.explanation=q.explanation||'';
   if(q.type==='multiple')pub.correct=q.correct;
   if(q.type==='imposter'){pub.imposterIndex=q.imposterIndex;pub.correctIcon=q.correctIcon;}
   if(q.type==='order')pub.orderItems=(q.orderItems||[]).slice();if(q.scene?.template==='order')pub.orderCorrect=q.scene.sortCorrect.slice();
   if(q.type==='estimate')pub.estimateTarget=q.estimateTarget;
+  if(q.type==='map'){pub.mapTargetX=q.mapTargetX;pub.mapTargetY=q.mapTargetY;}
  }
  return pub;
 }
@@ -104,15 +105,16 @@ export function validateQuestion(q){
  if(q.type==='multiple'&&(!Array.isArray(q.options)||q.options.slice(0,4).length!==4||q.options.some(s=>!s.trim())))return 'Vier Antworten erforderlich';
  if(q.type==='audio'&&!q.audio)return 'Audioausschnitt fehlt';
  if(q.type==='splash'&&!q.image)return 'Bild fehlt';
+ if(q.type==='map'&&(!Number.isFinite(q.mapTargetX)||!Number.isFinite(q.mapTargetY)))return 'Zielpunkt auf Weltkarte fehlt';
  if(q.type==='splash'&&Number(q.zoom)<=1)return 'Zoomfaktor muss größer als 1 sein';
- if(q.type==='imposter'&&(!Array.isArray(q.icons)||q.icons.length<5||q.icons.some(i=>!i)))return 'Fünf Ability-Bilder erforderlich';
+ if(q.type==='imposter'&&(!Array.isArray(q.icons)||q.icons.length<2||q.icons.length>8||q.icons.some(i=>!i)))return 'Zwei bis acht Bilder erforderlich';
  if(q.type==='imposter'&&!q.correctIcon)return 'Korrektes Ersatzsymbol fehlt';
  if(q.type==='order'&&(!Array.isArray(q.orderItems)||q.orderItems.length<3||q.orderItems.some(s=>!s.trim())))return 'Mindestens drei vollständige Sortiereinträge erforderlich';
  if(q.type==='order'&&new Set(q.orderItems.map(x=>x.trim().toLowerCase())).size!==q.orderItems.length)return 'Sortiereinträge müssen eindeutig sein';
  if(q.type==='estimate'&&!Number.isFinite(Number(q.estimateTarget)))return 'Gültigen Schätzwert angeben';
  if((q.type==='quote'||q.type==='emoji')&&!q.clue?.trim())return 'Zitat beziehungsweise Emojis fehlen';
  if(q.type==='emoji'&&!q.clue?.trim())return 'Emoji-Hinweis fehlt';
- if(!String(q.answer||'').trim()&&!['order','estimate','multiple'].includes(q.type)&&!(q.type==='text'&&q.blocks?.length))return 'Host-Lösung fehlt';
+ if(!String(q.answer||'').trim()&&!['order','estimate','multiple'].includes(q.type)&&q.type!=='imposter'&&q.type!=='map'&&!(q.type==='text'&&q.blocks?.length))return 'Host-Lösung fehlt';
  return '';
 }
 
@@ -125,7 +127,7 @@ export function quickBoard(categories=DEFAULT_CATEGORIES,points=STANDARD_POINTS)
   for(const value of points.slice(0,10)){
    const pointsNumber=Number(value);
    if(!Number.isFinite(pointsNumber)||pointsNumber<0||pointsNumber>10000)continue;
-   out.push({id:uid(),category,title:`${category} ${pointsNumber}`,type:'text',points:pointsNumber,prompt:'',answer:'',options:['','','',''],hints:['','',''],blocks:[]});
+   out.push({id:uid(),category,title:`${category} ${pointsNumber}`,type:'text',points:pointsNumber,prompt:'',answer:'',options:['','','',''],hints:['','','',''],blocks:[]});
   }
  }
  return out;

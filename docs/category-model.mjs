@@ -8,7 +8,9 @@ export const CATEGORY_SUGGESTIONS = Object.freeze([
   {name:'Fähigkeiten',description:'Abilities und Imposter',template:'imposter'},
   {name:'Items',description:'Gegenstände und Effekte',template:'text'},
   {name:'Zitate',description:'Champion-Zitate',template:'quote'},
-  {name:'Sounds',description:'Audio- und Login-Sounds',template:'audio'}
+  {name:'Sounds',description:'Audio- und Login-Sounds',template:'audio'},
+  {name:'Karten',description:'Auf einer Karte den richtigen Ort markieren',template:'map'},
+  {name:'Alle antworten',description:'Jeder schreibt zuerst eine geheime Antwort',template:'written'}
 ]);
 export const MAX_CATEGORIES=180;
 export function cleanCategoryName(value){return String(value??'').trim().replace(/\s+/g,' ').slice(0,70);}

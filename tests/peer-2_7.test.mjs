@@ -71,11 +71,9 @@ test('Host assigns one buzzer, validates answer round and secrets, and guests se
  const buzz=await Promise.all([guest1.buzzer(room,'1','bad team','fake'),guest2.buzzer(room,'1','bad team','fake')]);
  assert.equal(buzz.filter(Boolean).length,1);const winner=host.data.buzzers['1'];assert.ok(['Alice','Bob'].includes(winner.name));
  const lucky=winner.uid===guest1.uid?guest1:guest2,loser=lucky===guest1?guest2:guest1;
- await assert.rejects(loser.answer(room,'1','t1','spoof answer'),/Buzzer-Team/);
- await lucky.answer(room,'1','fake','SECRET GUESS');await sleep(60);
- assert.equal(lucky.guestData.responses['1'][lucky.uid].text,'SECRET GUESS');
+ await assert.rejects(loser.answer(room,'1','t1','spoof answer'),/mündlich/);
+ await assert.rejects(lucky.answer(room,'1','fake','SECRET GUESS'),/mündlich/);
  assert.ok(!JSON.stringify(loser.guestData).includes('SECRET GUESS'));
- await assert.rejects(lucky.answer(room,'1','fake','DUPLICATE'),/bereits abgegeben/);
  await assert.rejects(lucky.answer(room,'0','fake','STALE'),/nicht offen/);
  host.shutdown();guest1.shutdown();guest2.shutdown();
 });

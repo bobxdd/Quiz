@@ -19,7 +19,8 @@ test('2.8: each animation uses the same original sprites',()=>{
   assert.match(css,new RegExp('bq-actor-'+action));
  }
  assert.match(app,/function maybeAnimateGameplay/);
- assert.match(app,/bq-character-dock/);
+ assert.match(app,/bq-scene-cameos/);
+ assert.doesNotMatch(app,/CHARACTER_IDS.map\(\(_,i\)=>characterMarkup\(i\)\)/);
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.doesNotMatch(app,/mascot-ranger\.png|mascot-lantern\.png|mascot-alchemist\.png/);
 });

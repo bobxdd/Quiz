@@ -1,6 +1,6 @@
 /* BrainQuiz 1.6: standalone question canvas schema. No HTML accepted, no secret answer sent before reveal. */
 export const SCENE_WIDTH=1000,SCENE_HEIGHT=560;
-export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Ability-Imposter',quote:'Zitat',emoji:'Emoji',estimate:'Schätzfrage',audio:'Audio'};
+export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
 const TYPES=new Set(['text','image','shape','choice','order']);
 const COLORS=new Set(['#ffffff','#d4d6e2','#adb0c5','#9c8cff','#ff95a7','#75d7b6','#20212d','#343644']);
 const safeHexColor=(value,fallback)=>typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value)?value.toLowerCase():fallback;
@@ -32,7 +32,7 @@ export function templateScene(name='text',q={}){
  const options=(q.options||[]).filter(Boolean);
  if(template==='multiple')elements.push(...'ABCD'.split('').map((letter,i)=>element('choice',{letter,x:80+(i%2)*430,y:200+Math.floor(i/2)*138,w:400,h:111,text:options[i]||`Antwort ${letter}`,font:25,bg:'#363e43'})));
  if(template==='order')elements.push(...'ABCDEFG'.split('').map((letter,i)=>element('order',{letter,x:70+(i%2)*450,y:155+Math.floor(i/2)*80,w:416,h:70,text:q.orderDisplayItems?.[i]||q.orderItems?.[i]||`Eintrag ${letter}`,font:21,bg:'#363e43'})));
- if(template==='hints')elements.push(element('text',{x:100,y:183,w:790,h:86,text:'Hinweis 1',step:1,bg:'#363e43'}),element('text',{x:100,y:298,w:790,h:86,text:'Hinweis 2',step:2,bg:'#363e43'}));
+ if(template==='hints')elements.push(...[1,2,3,4].map((n,i)=>element('text',{x:90+(i%2)*420,y:180+Math.floor(i/2)*143,w:395,h:112,text:`Hinweis ${n}`,step:n,bg:'#363e43'}))); 
  if(template==='image')elements.push(element('image',{x:140,y:164,w:720,h:340,alt:'Bild hinzufügen'}));
  if(template==='imposter')elements.push(...'PQWER'.split('').map((letter,i)=>element('image',{letter:letter==='P'?'A':letter,x:40+i*194,y:185,w:178,h:210,alt:['Passiv','Q','W','E','R'][i]})));
  if(template==='quote')elements.push(element('text',{role:'clue',x:110,y:192,w:780,h:165,font:32,text:q.clue||'Zitat eingeben',align:'center',bg:'#363e43'}));
@@ -41,7 +41,7 @@ export function templateScene(name='text',q={}){
  if(template==='audio')elements.push(element('text',{x:180,y:230,w:640,h:120,font:28,text:'Audioquiz',align:'center'}));
  return normalizeScene({template,elements,sortCorrect:'ABCDEFG'.split('')});
 }
-export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='multiple'?'multiple':q.type==='order'?'order':q.type==='quote'?'quote':q.type==='emoji'?'emoji':q.type==='imposter'?'imposter':q.type==='audio'?'audio':q.type==='estimate'?'estimate':q.type==='splash'?'image':'text',q);return q.scene;}
+export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='multiple'?'multiple':q.type==='order'?'order':q.type==='quote'?'quote':q.type==='emoji'?'emoji':q.type==='imposter'?'imposter':q.type==='audio'?'audio':q.type==='estimate'?'estimate':q.type==='splash'?'image':q.type==='map'?'map':'text',q);return q.scene;}
 export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!scene)return q;q.scene=scene;
  const heading=scene.elements.find(x=>x.kind==='text'&&x.role==='question')||scene.elements.find(x=>x.kind==='text'&&x.step===0);
  if(heading)q.prompt=heading.text;
@@ -53,7 +53,7 @@ export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!sce
   q.type='order';const entries=scene.elements.filter(x=>x.kind==='order').slice(0,10);
   const byLetter=new Map(entries.map(el=>[el.letter,el.text]));q.orderDisplayItems=entries.slice().sort((a,b)=>a.letter.localeCompare(b.letter)).map(el=>el.text);
   const order=scene.sortCorrect.filter(letter=>byLetter.has(letter));q.orderItems=order.map(letter=>byLetter.get(letter));
- }else if(scene.template==='imposter'){q.type='imposter';const images=scene.elements.filter(el=>el.kind==='image').slice(0,5);q.icons=images.map(el=>el.src||'');q.abilityNames=['Passiv','Q','W','E','R'];}else if(scene.template==='quote'||scene.template==='emoji'){q.type=scene.template;const clue=scene.elements.find(x=>x.kind==='text'&&x.role==='clue')||scene.elements.find(x=>x.kind==='text'&&x.role!=='question');q.clue=clue?.text||'';}else if(scene.template==='estimate'){q.type='estimate';}else if(scene.template==='audio'){q.type='audio';}else if(scene.template==='image'){q.type='text';}else q.type='text';
+ }else if(scene.template==='imposter'){q.type='imposter';const images=scene.elements.filter(el=>el.kind==='image').slice(0,8);q.icons=images.map(el=>el.src||'');q.abilityNames=images.map((el,i)=>el.alt||['Passiv','Q','W','E','R'][i]||`Bild ${i+1}`);}else if(scene.template==='quote'||scene.template==='emoji'){q.type=scene.template;const clue=scene.elements.find(x=>x.kind==='text'&&x.role==='clue')||scene.elements.find(x=>x.kind==='text'&&x.role!=='question');q.clue=clue?.text||'';}else if(scene.template==='estimate'){q.type='estimate';}else if(scene.template==='audio'){q.type='audio';}else if(scene.template==='map'){q.type='map';}else if(scene.template==='image'){q.type='text';}else q.type='text';
  return q;
 }
 export function publicScene(raw,step=0,showAnswers=false){const scene=normalizeScene(raw);if(!scene)return null;
@@ -66,13 +66,18 @@ export function renderScene(scene,{editing=false,selected='',revealed=false,inte
   const n=el.kind==='choice'?Math.max(0,'ABCD'.indexOf(el.letter)):0;
   const correct=revealed&&el.kind==='choice'&&(n===correctIndex);
   const wrong=revealed&&el.kind==='choice'&&!correct;
+  const imposter=revealed&&scene.template==='imposter'&&el.kind==='image'&&scene.elements.filter(x=>x.kind==='image').indexOf(el)===correctIndex;
   const count=el.kind==='order'?'ABCDEFGH IJ'.replace(/\s/g,'').indexOf(el.letter):-1;
   const attrs=editing?`data-se-element="${escape(el.id)}" tabindex="0" role="button" aria-label="Element ${escape(el.kind)} bearbeiten"`:(interactive&&canAnswer&&el.kind==='choice'?`data-action="select-choice" data-choice="${escape(el.letter)}" tabindex="0" role="button"`:(interactive&&canAnswer&&el.kind==='order'?`data-action="pick-order" data-index="${count}" tabindex="0" role="button"`:''));
   const img=el.kind==='image'?(el.src?`<img src="${el.src}" draggable="false" alt="${escape(el.alt)}">`:'<div class="se-empty-image">Bild hochladen</div>'):'',label=el.letter&&['choice','order'].includes(el.kind)?`<span class="se-letter">${escape(el.letter)}</span>`:'';
   const body=el.kind==='shape'?`<div class="se-shape ${escape(el.shape)}">${escape(el.text)}</div>`:img||`${label}<span class="se-content">${escape(el.text).replace(/\n/g,'<br>')}</span>${el.kind==='order'&&picked.includes(count)?`<strong class="se-order-rank">${picked.indexOf(count)+1}.</strong>`:''}`;
-  return `<div class="se-element ${editing?'is-editable':''} ${selected===el.id?'is-selected':''} se-kind-${el.kind} ${correct?'se-correct':''} ${wrong?'se-wrong':''} ${picked.includes(count)&&el.kind==='order'?'se-picked':''}" style="${style}" ${attrs}>${body}${editing?`<span class="se-reveal-mark">${el.step===0?'Start':el.step===6?'Lösung':'Tipp '+el.step}</span><span class="se-resize" data-se-resize="${escape(el.id)}" title="Größe ändern"></span>`:''}</div>`;
+  return `<div class="se-element ${editing?'is-editable':''} ${selected===el.id?'is-selected':''} se-kind-${el.kind} ${correct?'se-correct':''} ${wrong?'se-wrong':''} ${imposter?'se-imposter-image':''} ${picked.includes(count)&&el.kind==='order'?'se-picked':''}" style="${style}" ${attrs}>${body}${imposter?'<span class="se-imposter-label">AUSGETAUSCHT</span>':''}${editing?`<span class="se-reveal-mark">${el.step===0?'Start':el.step===6?'Lösung':'Tipp '+el.step}</span><span class="se-resize" data-se-resize="${escape(el.id)}" title="Größe ändern"></span>`:''}</div>`;
  }).join('');
- return `<div class="se-scene ${editing?'se-editing':''}" ${editing?'tabindex="0"':''} style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}</div>`;
+ const pin=arguments[1]?.mapPin||null;
+ const solution=arguments[1]?.mapSolution||null;
+ const pins=Array.isArray(arguments[1]?.mapPublicPins)?arguments[1].mapPublicPins:[];
+ const mapMarkup=scene.template==='map'?`<div class="se-world-map" role="${arguments[1]?.mapCanPick?'button':'img'}" ${arguments[1]?.mapCanPick?'tabindex="0" data-map-choice="true" aria-label="Ort auf der Weltkarte auswählen"':'aria-label="Weltkarte"'}><img src="./world-map.svg" alt="Weltkarte" draggable="false">${pin?`<span class="bq-pin bq-pin-self" style="left:${Math.min(100,Math.max(0,Number(pin.x)))}%;top:${Math.min(100,Math.max(0,Number(pin.y)))}%" aria-hidden="true">📍</span>`:''}${solution?`<span class="bq-pin bq-pin-solution" style="left:${solution.x}%;top:${solution.y}%" aria-hidden="true">★</span>`:''}${pins.map((pin,i)=>`<span class="bq-pin bq-pin-public" style="left:${pin.x}%;top:${pin.y}%" title="${escape(pin.name||`Antwort ${i+1}`)}" aria-hidden="true">📍</span>`).join('')}</div>`:'';
+ return `<div class="se-scene ${editing?'se-editing':''}" ${editing?'tabindex="0"':''} style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}${mapMarkup}</div>`;
 }
 export function validateScene(q){const scene=normalizeScene(q?.scene);if(!scene)return '';
  if(!scene.elements.length)return 'Mindestens ein Element hinzufügen.';
