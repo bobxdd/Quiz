@@ -357,7 +357,8 @@ function sessionFooter(){
  const width=window.innerWidth||1280,perPage=width<470?2:width<760?3:width<1000?5:8;
  const pages=Math.max(1,Math.ceil(list.length/perPage));scorePage=Math.min(scorePage,pages-1);
  const visible=list.slice(scorePage*perPage,(scorePage+1)*perPage);
- return `<footer class="bq-score-footer" aria-label="Aktueller Punktestand"><div class="bq-score-heading"><strong>Punktestand</strong><span>${list.length?list.length+' Teilnehmer':'Noch keine Spieler'}</span>${pages>1?`<div class="bq-score-pager"><button type="button" data-action="score-page" data-delta="-1" aria-label="Vorherige Punktestände" ${scorePage===0?'disabled':''}>‹</button><span aria-live="polite">${scorePage+1}/${pages}</span><button type="button" data-action="score-page" data-delta="1" aria-label="Weitere Punktestände" ${scorePage===pages-1?'disabled':''}>›</button></div>`:''}</div>
+ const unit=scoreMode(publicState)==='team'?'Teams':'Personen';
+ return `<footer class="bq-score-footer" aria-label="Aktueller Punktestand"><div class="bq-score-heading"><strong>Punktestand</strong><span>${list.length?list.length+' '+unit:'Noch keine '+unit}</span>${pages>1?`<div class="bq-score-pager"><button type="button" data-action="score-page" data-delta="-1" aria-label="Vorherige Punktestände" ${scorePage===0?'disabled':''}>‹</button><span aria-live="polite">${scorePage+1}/${pages}</span><button type="button" data-action="score-page" data-delta="1" aria-label="Weitere Punktestände" ${scorePage===pages-1?'disabled':''}>›</button></div>`:''}</div>
  <div class="bq-score-items">${visible.length?visible.map(p=>`<span class="bq-score-item" title="${e(p.label)}: ${Number(p.points).toLocaleString('de-DE')} Punkte"><span>${e(p.label)}</span><b>${Number(p.points).toLocaleString('de-DE')}</b></span>`).join(''):'<span class="muted">–</span>'}</div>
  </footer>`;
 }
