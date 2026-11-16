@@ -310,3 +310,40 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
     border:1px solid CanvasText;
   }
 }
+
+/* Audit 2026-11: opened host controls must never be covered by the question stage.
+   The stage creates its own stacking context. Raising only the nested dropdown
+   cannot escape the lower action-bar context, and overflow-y:auto clips the
+   popup. Lift the action BAR itself and unclip its open control panel. */
+.bq-question-scene .bq-action-bar:has(>.bq-auxiliary[open]){
+ position:relative;z-index:80!important;
+ overflow:visible!important;max-height:none!important;
+ isolation:isolate;
+}
+.bq-question-scene .bq-action-bar>.bq-auxiliary[open]{
+ position:relative;z-index:90!important;
+}
+.bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail,
+.bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.scoring-panel{
+ z-index:91!important;pointer-events:auto;
+}
+/* On narrow screens, a floating menu can extend above the visible screen.
+   Put it INSIDE the scroll flow without covering questions or click targets. */
+@media(max-width:680px){
+ .bq-question-scene .bq-action-bar:has(>.bq-auxiliary[open]){
+  max-height:none!important;overflow:visible!important;
+ }
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]{
+  flex:1 1 100%!important;min-width:0;width:100%;order:99;
+ }
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail,
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.scoring-panel{
+  position:relative!important;inset:auto!important;
+  width:100%!important;max-height:none!important;
+  display:grid;grid-template-columns:minmax(0,1fr);
+  overflow:visible!important;margin-top:8px;
+ }
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail>.scoring-panel{
+  grid-column:1!important;
+ }
+}
