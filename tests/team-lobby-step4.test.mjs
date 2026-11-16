@@ -21,6 +21,7 @@ test('Step 4 team creation: deterministic IDs, unique names, strict five-new-tea
  assert.throws(()=>addLobbyTeam(teams,'Rot'),/bereits/);
  assert.throws(()=>addLobbyTeam(teams,'A'),/2 bis 28/);
  assert.throws(()=>addLobbyTeam(teams,'X'.repeat(29)),/2 bis 28/);
+ teams=created.teams;
  for(const name of ['Nebel','Komet'])teams=addLobbyTeam(teams,name).teams;
  assert.equal(Object.keys(teams).length,5);
  assert.throws(()=>addLobbyTeam(teams,'Sonne'),/5 Teams/);
