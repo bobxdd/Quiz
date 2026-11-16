@@ -80,11 +80,7 @@ export function renderScene(scene,{editing=false,selected='',revealed=false,inte
   const body=el.kind==='shape'?`<div class="se-shape ${escape(el.shape)}">${escape(el.text)}</div>`:img||`${label}<span class="se-content">${escape(el.text).replace(/\n/g,'<br>')}</span>${el.kind==='order'&&picked.includes(count)?`<strong class="se-order-rank">${picked.indexOf(count)+1}.</strong>`:''}`;
   return `<div class="se-element ${editing?'is-editable':''} ${selected===el.id?'is-selected':''} se-kind-${el.kind} ${correct?'se-correct':''} ${wrong?'se-wrong':''} ${imposter?'se-imposter-image':''} ${picked.includes(count)&&el.kind==='order'?'se-picked':''}" style="${style}" ${attrs}>${body}${imposter?'<span class="se-imposter-label">AUSGETAUSCHT</span>':''}${editing?`<span class="se-reveal-mark">${el.step===0?'Start':el.step===6?'Lösung':'Tipp '+el.step}</span><span class="se-resize" data-se-resize="${escape(el.id)}" title="Größe ändern"></span>`:''}</div>`;
  }).join('');
- const pin=arguments[1]?.mapPin||null;
- const solution=arguments[1]?.mapSolution||null;
- const pins=Array.isArray(arguments[1]?.mapPublicPins)?arguments[1].mapPublicPins:[];
- const legacyMapMarkup=scene.template==='map'?`<div class="se-world-map" role="${arguments[1]?.mapCanPick?'button':'img'}" ${arguments[1]?.mapCanPick?'tabindex="0" data-map-choice="true" aria-label="Ort auf der Weltkarte auswählen"':'aria-label="Weltkarte"'}><img src="./world-map.svg" alt="Weltkarte" draggable="false">${pin?`<span class="bq-pin bq-pin-self" style="left:${Math.min(100,Math.max(0,Number(pin.x)))}%;top:${Math.min(100,Math.max(0,Number(pin.y)))}%" aria-hidden="true">📍</span>`:''}${solution?`<span class="bq-pin bq-pin-solution" style="left:${solution.x}%;top:${solution.y}%" aria-hidden="true">★</span>`:''}${pins.map((pin,i)=>`<span class="bq-pin bq-pin-public" style="left:${pin.x}%;top:${pin.y}%" title="${escape(pin.name||`Antwort ${i+1}`)}" aria-hidden="true">📍</span>`).join('')}</div>`:'';
- return `<div class="se-scene ${editing?'se-editing':''}" ${editing?'tabindex="0"':''} style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}${legacyMapMarkup}</div>`;
+ return `<div class="se-scene ${editing?'se-editing':''}" ${editing?'tabindex="0"':''} style="--scene-w:${SCENE_WIDTH}" aria-label="Fragenfläche">${content}</div>`;
 }
 export function validateScene(q){const scene=normalizeScene(q?.scene);if(!scene)return '';
  if(!scene.elements.length)return 'Mindestens ein Element hinzufügen.';
