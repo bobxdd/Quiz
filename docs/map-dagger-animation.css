@@ -1,9 +1,12 @@
 /* Step 6: exactly one throw at map-solution reveal, never during answers.
    No fullscreen tint, no particle bursts, no looping effects, no hit blocking. */
 .bq-map-pin.is-solution.bq-throw-waiting{visibility:hidden!important}
+.bq-map-question.bq-map-throw-active{--bq-map-throw-rail:146px;box-sizing:border-box;padding-left:var(--bq-map-throw-rail)!important}
+.bq-map-question.bq-map-throw-active>.bq-map-title{margin-left:calc(-1*var(--bq-map-throw-rail))}
+@media(max-width:680px){.bq-map-question.bq-map-throw-active{--bq-map-throw-rail:92px}}
 .bq-map-throw-layer{position:fixed;inset:0;z-index:70;overflow:hidden;pointer-events:none!important;user-select:none;isolation:isolate;contain:layout style}
 .bq-map-throw-layer *{pointer-events:none!important}
-.bq-map-throw-actor{position:absolute;width:142px;height:142px;transform-origin:48% 85%;animation:bq-map-thrower-pose 4100ms steps(28,end) both;z-index:3}
+.bq-map-throw-actor{position:absolute;width:142px;height:142px;scale:var(--bq-actor-scale,1);transform-origin:top left;animation:bq-map-thrower-pose 4100ms steps(28,end) both;z-index:3}
 .bq-map-throw-body.bq-actor{position:absolute;inset:0;width:142px;height:142px;filter:drop-shadow(0 5px 4px #17212478);
  /* Only the static original weapon/arm are covered; the rest of the original sprite stays untouched. */
  clip-path:polygon(0 0,100% 0,100% 46%,67% 46%,67% 81%,100% 81%,100% 100%,0 100%)}
