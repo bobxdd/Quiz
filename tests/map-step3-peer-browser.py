@@ -171,9 +171,12 @@ async def main():
   small=await second.evaluate("""() => {
    const a=document.querySelector('.bq-map-throw-actor')?.getBoundingClientRect();
    const m=document.querySelector('.bq-map-viewport')?.getBoundingClientRect();
-   return a&&m?{right:a.right,mapLeft:m.left,actorWidth:a.width,viewportWidth:innerWidth}:null;
+   const reset=document.querySelector('.bq-map-reset');
+   return a&&m&&reset?{right:a.right,mapLeft:m.left,actorWidth:a.width,viewportWidth:innerWidth,
+    resetNoWrap:getComputedStyle(reset).whiteSpace==='nowrap',resetFits:reset.scrollWidth<=reset.clientWidth+2}:null;
   }""")
   assert small and small['right']<=small['mapLeft']+2 and small['actorWidth']<=105 and small['right']<=small['viewportWidth']+2,small
+  assert small['resetNoWrap'] and small['resetFits'],'World overview label clipped/wrapped during mobile throw: '+str(small)
   await second.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-mobile-windup.png'),animations='allow')
   await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-windup.png'),animations='allow')
   await guest.wait_for_timeout(2400)
