@@ -31,7 +31,7 @@ export function lobbyGuestHTML(lobby,member){
    </article>`;
   }).join('')}</div>
   ${phaseOpen&&teams.length<6&&!member?.createdTeam?`<form class="bq-lobby-create" id="lobby-create-form"><label for="bq-new-team"><strong>Eigenes Team erstellen</strong><span>Der nächste freie Teamfarbton wird automatisch vergeben.</span></label><div class="bq-lobby-create-row"><input id="bq-new-team" name="teamname" maxlength="28" minlength="2" autocomplete="off" required placeholder="Teamname" value="${e(proposed)}"><button class="btn small" type="submit">Team erstellen</button></div></form>`:''}
-  ${proposed?`<p class="bq-lobby-proposal" role="status">${dot('t3')}Neues Team „${e(proposed)}“ wird mit deiner Freigabe erstellt.</p>`:''}
+  ${proposed?`<p class="bq-lobby-proposal" role="status">Neues Team „${e(proposed)}“ wird mit deiner Freigabe erstellt. Die Farbe wird automatisch vergeben.</p>`:''}
   <div class="bq-lobby-ready-bar">
    <div><strong>2. Fertig?</strong><p>${!hasTeam?'Wähle zuerst ein Team aus.':pending?'Deine Auswahl wartet auf Freigabe.':'Der Host sieht deinen Bereitschaftsstatus sofort.'}</p></div>
    <button type="button" class="btn ${ready?'bq-lobby-ready-on':'primary'}" data-action="lobby-ready" data-ready="${ready?'false':'true'}" ${!hasTeam||!phaseOpen?'disabled':''} aria-pressed="${ready}">${ready?'✓ Bereit · zurücknehmen':'✓ Ich bin bereit'}</button>
