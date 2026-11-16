@@ -149,6 +149,7 @@ async def main():
   # second publication may mutate the now committed team/round data.
   await expect(host.locator('.top-nav [data-view="editor"]')).to_have_count(0)
   await expect(host.locator('[data-action="publish"]')).to_have_count(0)
+  await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene').wait_for()
   new=await host.evaluate('window.__probe.info().publicState')
   assert new['teams']['t3']=='Aurora & Wald'
