@@ -78,7 +78,13 @@ async def main():
    # Import must always make a separate board and leave the originals intact.
    payload=json.dumps({'version':1,'title':'Importiert','questions':[],'teams':['A','B']}).encode()
    await page.locator('#import-quiz').set_input_files({'name':'probe.brainquiz.json','mimeType':'application/json','buffer':payload})
-   await page.locator('.se-board-context>strong').get_by_text('Importiert').wait_for(timeout=8000)
+   try: await page.locator('.se-board-context>strong').get_by_text('Importiert').wait_for(timeout=8000)
+   except Exception:
+    print('DIAG import',{'title':await page.locator('.se-board-context>strong').all_inner_texts(),
+                          'toaster':await page.locator('#toaster').all_inner_texts(),
+                          'errors':errors,
+                          'file':await page.locator('#import-quiz').count()})
+    raise
    assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==4
    assert await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)==original
    print('PASS: non-destructive imported board')
