@@ -89,6 +89,23 @@ async def main():
   team_stats=await host.locator('.bq-host-team-row').filter(has_text='Aurora & Wald').inner_text()
   assert '1/2 bereit' in team_stats,team_stats  # Charlie has not pressed ready
   print('PASS: subsequent players can join a team created in this room',flush=True)
+  # Host-created teams use the same capacity/name rules as participant-created ones.
+  for team_name,expected_count in [('Host Gold',4),('Host Violett',5)]:
+   creator=host.locator('.bq-host-team-create')
+   if await creator.get_attribute('open') is None:
+    await creator.locator('summary').click()
+   await host.locator('#bq-host-team-name').fill(team_name)
+   await host.locator('#host-team-create-form button[type="submit"]').click()
+   await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',expected_count)
+  assert await host.locator('.bq-host-team-create').count()==0
+  await a.wait_for_function("() => Object.keys(window.__probe.info().guestLobby?.teams||{}).length===5")
+  assert await a.locator('.bq-lobby-team').count()==5
+  assert await a.locator('#lobby-create-form').count()==0
+  names=await host.evaluate("Object.values(window.__probe.info().publicState.teams)")
+  assert len(names)==5 and len(set(names))==5,names
+  assert (await host.evaluate('Object.keys(window.__probe.getGame().data.roster).length'))==3
+  print('PASS: host can create two teams directly; five-team limit enforced without consuming guest slots',flush=True)
+
 
   # A team change automatically cancels an earlier ready signal.
   await a.wait_for_timeout(210)
@@ -129,6 +146,8 @@ async def main():
   new=await host.evaluate('window.__probe.info().publicState')
   assert new['teams']['t3']=='Aurora & Wald'
   assert 't3' in new['scores']
+  assert new['teams']['t4']=='Host Gold' and new['teams']['t5']=='Host Violett'
+  assert 't4' in new['scores'] and 't5' in new['scores']
   print('PASS: created team persists through republish',flush=True)
 
   await host.locator('.bq-board-scene .tile:not([disabled])').first.click()
