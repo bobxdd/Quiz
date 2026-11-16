@@ -7,7 +7,7 @@ const parse=(raw,fallback)=>{try{return raw?JSON.parse(raw):fallback;}catch{retu
 const clean=(items)=>{
  const seen=new Set(),out=[];
  for(const entry of items){
-  if(!validId(entry?.id)||seen.has(entry.id))continue;
+  if(!validId(entry?.id)||seen.has(entry.id))throw Error('Quizbrett-Verzeichnis enthält ungültige oder doppelte Kennungen. Keine Daten wurden überschrieben.');
   seen.add(entry.id);
   out.push({id:entry.id,title:String(entry.title||'Unbenanntes Quizbrett').slice(0,100),updatedAt:Math.max(0,Number(entry.updatedAt)||0)});
  }
@@ -45,9 +45,11 @@ export function loadBoard(store,id){
  if(!data||!data.quiz||!Array.isArray(data.quiz.questions)||!Number.isSafeInteger(data.revision)||data.revision<1)throw Error('Quizbrett-Daten ungültig. Es wurde nichts überschrieben.');
  return {id,revision:data.revision,quiz:data.quiz};
 }
-export function resumeBoard(store,emptyQuiz,makeId){
+export function resumeBoard(store,emptyQuiz,makeId,preferredId=''){
  const list=boardList(store),active=activeBoard(store);
- if(active&&list.some(x=>x.id===active))return loadBoard(store,active);
+ // A tab's explicit selection wins over changes to the global last-used pointer by other tabs.
+ if(preferredId&&list.some(x=>x.id===preferredId))return loadBoard(store,preferredId);
+ if(active){if(!list.some(x=>x.id===active))throw Error('Zuletzt aktives Quizbrett nicht auffindbar. Es wurde kein anderes Brett stillschweigend geladen.');return loadBoard(store,active);}
  if(list.length){const saved=loadBoard(store,list[0].id);store.setItem(ACTIVE,saved.id);return saved;}
  // Legacy migration: the old LOCAL draft is COPIED, never removed or overwritten.
  const old=store.getItem('bq-quiz-LOCAL');
