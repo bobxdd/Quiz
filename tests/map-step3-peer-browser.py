@@ -51,8 +51,22 @@ async def main():
   print('PASS: host secret answer coordinates absent from guest state, markup, and visible text')
   rect=await guest.locator('.bq-map-viewport').bounding_box()
   assert rect and rect['width']>=900 and rect['height']>=300,rect
+  before=await guest.evaluate("""() => ({role:window.__probe.info().role,member:window.__probe.info().member,
+    phase:window.__probe.info().publicState?.phase,round:window.__probe.info().publicState?.round,
+    participants:window.__probe.info().publicState?.answerParticipants,
+    uid:window.__probe.getGame()?.uid,
+    mapBound:document.querySelector('.bq-map-viewport')?.dataset.mapBound,
+    mapCanChoose:document.querySelector('.bq-map-viewport')?.dataset.mapChoice,
+    elementsFromPoint:document.elementsFromPoint(document.querySelector('.bq-map-viewport').getBoundingClientRect().left+rect.width*.71,
+       document.querySelector('.bq-map-viewport').getBoundingClientRect().top+rect.height*.42).slice(0,5).map(el=>el.className)
+  })""".replace("rect.width",str(rect['width'])).replace("rect.height",str(rect['height'])))
+  print('MAP DIAG before click',before,flush=True)
   await guest.mouse.click(rect['x']+rect['width']*.71,rect['y']+rect['height']*.42)
-  await guest.locator('.bq-map-pin.is-self').wait_for()
+  await guest.wait_for_timeout(300)
+  after=await guest.evaluate("""() => ({pinned:!!document.querySelector('.bq-map-pin.is-self'),message:document.querySelector('.bq-map-result')?.innerText,
+    bound:document.querySelector('.bq-map-viewport')?.dataset.mapBound,clickable:document.querySelector('.bq-map-viewport')?.dataset.mapChoice})""")
+  print('MAP DIAG after click',after,flush=True)
+  await guest.locator('.bq-map-pin.is-self').wait_for(timeout=5000)
   assert await guest.locator('[data-action="submit-answer"]').is_enabled()
   await guest.locator('[data-action="submit-answer"]').click()
   await guest.locator('[data-action="submit-answer"]').get_by_text('Pin aktualisieren').wait_for(timeout=12000)
