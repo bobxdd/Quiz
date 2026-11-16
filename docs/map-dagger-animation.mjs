@@ -21,7 +21,7 @@ export function mapThrowTarget(viewport,marker){
  * The character stands just ABOVE the map: the body never blocks a map answer. */
 export function mapThrowOrigin(viewport,width=innerWidth,height=innerHeight){
  const r=viewport.getBoundingClientRect();
- const rail=(typeof getComputedStyle==='function'?Number.parseFloat(getComputedStyle(viewport.closest('.bq-map-question')||viewport).getPropertyValue('--bq-map-throw-rail')):NaN)||146;
+ const rail=(typeof getComputedStyle==='function'?Number.parseFloat(getComputedStyle(viewport.closest?.('.bq-map-question')||viewport).getPropertyValue('--bq-map-throw-rail')):NaN)||146;
  const scale=Math.min(1,Math.max(.5,(rail-10)/142));
  const actorWidth=142*scale;
  const actorX=clamp(r.left-rail+Math.max(0,(rail-actorWidth)/2),4,Math.max(4,width-actorWidth-4));
