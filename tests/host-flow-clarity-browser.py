@@ -59,6 +59,19 @@ async def main():
    await host.set_viewport_size({'width':width,'height':height})
    await audit_layout(host,f'host pregame {width}')
    await host.screenshot(path=str(OUT/f'host-flow-empty-lobby-{width}.png'),full_page=True,animations='disabled')
+   if width==390:
+    team=host.locator('.bq-host-lobby-team-section .bq-host-lobby-summary')
+    await team.scroll_into_view_if_needed()
+    layout=await team.evaluate("""el=>{
+      const r=el.getBoundingClientRect(),teams=el.querySelectorAll('.bq-host-team-row');
+      return {visible:getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden',
+        height:r.height,width:r.width,teams:teams.length,
+        firstHeight:teams[0]?.getBoundingClientRect().height||0};
+    }""")
+    assert layout['visible'] and layout['height']>125 and layout['teams']==2 and layout['firstHeight']>35,layout
+    await host.screenshot(path=str(OUT/'host-flow-teams-phone-scrolled.png'),animations='disabled')
+    await host.evaluate('window.scrollTo(0,0)')
+
   print('PASS host sees code, share actions, zero pending status and clear start call to action',flush=True)
 
   async with ctx.expect_page() as opening:
