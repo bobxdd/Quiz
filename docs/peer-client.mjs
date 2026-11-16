@@ -171,7 +171,7 @@ export class PeerGame{
   if(['lobby-join','lobby-create','lobby-ready'].includes(action)){
    if(!member||!['pending','approved'].includes(member.status))throw Error('Diese Person darf die Lobby nicht verändern.');
    if(!canArrangeLobby(pub))throw Error('Die Teamaufstellung ist nach Spielbeginn gesperrt.');
-   if(now-(ctx.lastLobbyChange||0)<160)throw Error('Bitte vor der nächsten Änderung kurz warten.');
+   if(now-(ctx.lastLobbyChange||0)<160&&!(action==='lobby-ready'&&['lobby-join','lobby-create'].includes(ctx.lastLobbyAction)))throw Error('Bitte vor der nächsten Änderung kurz warten.');
    if(action==='lobby-join'){
     const id=payload.team;
     if(!validTeamId(id)||!Object.hasOwn(pub.teams||{},id))throw Error('Dieses Team existiert nicht.');
@@ -196,7 +196,7 @@ export class PeerGame{
     if(member.status==='pending'&&!member.teamRequest)throw Error('Bitte zuerst ein Team wählen.');
     member.ready=payload.ready;
    }
-   ctx.lastLobbyChange=now;
+   ctx.lastLobbyChange=now;ctx.lastLobbyAction=action;
    this._changed();
    return true;
   }
