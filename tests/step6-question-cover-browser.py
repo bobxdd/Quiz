@@ -36,6 +36,7 @@ async def main():
     await route.fulfill(status=200,content_type='text/javascript',body=patched)
    await page.route('**/app.mjs',intercept)
    await page.goto(f'http://127.0.0.1:{server.server_port}/')
+   await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for(timeout=15000)
    await page.locator('.top-nav [data-view="live"]').click()
