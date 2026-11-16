@@ -29,7 +29,9 @@ async def main():
   await host.locator('[data-action="publish"]').first.click()
   await host.locator('.bq-board-scene .tile').first.wait_for()
 
-  guest=await ctx.new_page();guest.on('pageerror',lambda err:errors.append('Gast: '+str(err)))
+  async with ctx.expect_page() as opening:
+   await host.evaluate("window.open('about:blank','_blank')")
+  guest=await opening.value;guest.on('pageerror',lambda err:errors.append('Gast: '+str(err)))
   await install(guest)
   await guest.locator('#join-room').fill(code);await guest.locator('#join-name').fill('Alice')
   await guest.locator('button[type="submit"]').first.click()
