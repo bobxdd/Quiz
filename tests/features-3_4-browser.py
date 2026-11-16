@@ -12,7 +12,7 @@ async def new_guest(ctx,code,name):
  page=await opening.value;print('GUEST',name,'install',flush=True);await mod.install(page);print('GUEST',name,'installed',flush=True)
  await page.locator('#join-room').fill(code);await page.locator('#join-name').fill(name)
  print('GUEST',name,'joining',flush=True);await page.locator('button[type="submit"]').first.click();print('GUEST',name,'clicked',flush=True)
- await page.get_by_text('FREIGABE AUSSTEHEND').wait_for(timeout=12000);print('GUEST',name,'pending',flush=True)
+ await page.locator('.bq-lobby-notice').wait_for(timeout=12000);print('GUEST',name,'pending',flush=True)
  return page
 
 async def main():
@@ -45,7 +45,7 @@ async def main():
   await host.locator(f'#team-{charlie_uid}').wait_for()
   assert await host.locator(f'#team-{charlie_uid}').input_value()=='t2'
   await host.locator(f'[data-action="approve"][data-uid="{charlie_uid}"]').click()
-  await a.locator('.bq-board-scene').wait_for();await b.locator('.bq-board-scene').wait_for();await c.locator('.bq-board-scene').wait_for()
+  await a.locator('.bq-lobby').wait_for();await b.locator('.bq-lobby').wait_for();await c.locator('.bq-lobby').wait_for()
   await a.locator('.bq-shared-team-chat summary').click()
   await a.locator('#chat-text').fill('Nur Team Rot sieht mich')
   await a.locator('#chat-form button[type="submit"]').click(timeout=3000)
