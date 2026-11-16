@@ -52,10 +52,18 @@ async def main():
   await guest.locator('.bq-map-pin.is-self').wait_for()
   assert await guest.locator('[data-action="submit-answer"]').is_enabled()
   await guest.locator('[data-action="submit-answer"]').click()
-  await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
-  answer=await host.evaluate("""() => Object.values(window.__probe.getGame().data?.responses||{})""")
+  await guest.locator('[data-action="submit-answer"]').get_by_text('Pin aktualisieren').wait_for(timeout=12000)
+  assert (await guest.evaluate('window.__probe.info().publicState.phase'))=='question'
   assert await guest.locator('.bq-map-pin.is-solution').count()==0
-  print('PASS: guest can place a pin and submit without seeing secret solution')
+  # Repositioning is allowed even after first submission while the round stays open.
+  rect=await guest.locator('.bq-map-viewport').bounding_box()
+  await guest.mouse.click(rect['x']+rect['width']*.39,rect['y']+rect['height']*.55)
+  await guest.locator('[data-action="submit-answer"]').click()
+  answer=await host.evaluate("""() => Object.values(window.__probe.getGame().data.responses||{})""")
+  assert any('39' in str(rec) for bucket in answer for rec in bucket.values()),answer
+  print('PASS: guest can move and re-send their private pin until map round closes')
+  await host.locator('[data-action="start-review"]').first.click()
+  await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal"]').first.click()
   await guest.locator('.bq-map-pin.is-solution img[src$="dagger-pin.svg"]').wait_for(timeout=12000)
   released=await guest.evaluate('window.__probe.info().publicState.current')
