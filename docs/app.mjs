@@ -50,7 +50,7 @@ function preserveForm(draw){
  const focused=document.activeElement,id=focused?.id,value=focused?.value,selection=(()=>{try{return [focused.selectionStart,focused.selectionEnd]}catch{return null}})();
  const previousScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
  const expanded=[...document.querySelectorAll('#app details[data-bq-persist][open]')].map(el=>el.dataset.bqPersist);
- const saved=[...document.querySelectorAll('.questionlist,.studio-list,.studio-tools,.workspace,.chatfeed')].map((el,i)=>({selector:el.id?'#'+CSS.escape(el.id):'.'+[...el.classList].find(c=>['questionlist','studio-list','studio-tools','workspace','chatfeed'].includes(c)),top:el.scrollTop,left:el.scrollLeft,index:i,nearBottom:el.classList.contains('chatfeed')&&el.scrollHeight-el.scrollTop-el.clientHeight<60}));
+ const saved=[...document.querySelectorAll('.questionlist,.studio-list,.studio-tools,.workspace,.chatfeed,.bq-scene-content,.bq-guest-compose,.bq-answers-panel .answer-review')].map((el,i)=>({selector:el.id?'#'+CSS.escape(el.id):'.'+[...el.classList].find(c=>['questionlist','studio-list','studio-tools','workspace','chatfeed','bq-scene-content','bq-guest-compose','answer-review'].includes(c)),top:el.scrollTop,left:el.scrollLeft,index:i,nearBottom:el.classList.contains('chatfeed')&&el.scrollHeight-el.scrollTop-el.clientHeight<60}));
  draw();
  const nextScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
  if(previousScene===nextScene){for(const key of expanded){const item=[...document.querySelectorAll('#app details[data-bq-persist]')].find(x=>x.dataset.bqPersist===key);if(item)item.open=true;}}
