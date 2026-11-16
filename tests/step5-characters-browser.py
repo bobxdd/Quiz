@@ -36,7 +36,7 @@ async def main():
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos').count()==0,'Editor must remain clear'
-   await page.locator('[data-action="view"][data-view="live"]').click()
+   await page.locator('.top-nav [data-action="view"][data-view="live"]').click()
    await page.locator('.bq-board-scene').wait_for(timeout=12000)
    await expect(page.locator('.bq-screen-watcher')).to_have_count(1)
    assert await page.locator('.bq-screen-watcher').is_visible()
@@ -68,7 +68,7 @@ async def main():
    assert await page.locator('.bq-action-actor').count()==0
    assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth + 3'),'Unexpected horizontal overflow'
    await page.screenshot(path=str(OUT/'step5-mobile-clean-board.png'),animations='disabled')
-   await page.locator('[data-action="view"][data-view="editor"]').click()
+   await page.locator('.top-nav [data-action="view"][data-view="editor"]').click()
    await page.locator('.se-board-context').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos,.bq-peek-fingers').count()==0
    assert not errors,errors
