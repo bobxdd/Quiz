@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright,expect
 
 ROOT=Path(__file__).resolve().parents[1]
+OUT=ROOT/'qa-artifacts';OUT.mkdir(exist_ok=True)
 loader=importlib.util.spec_from_file_location('bq_saved_fixture',ROOT/'tests/categories-3_0-browser.py')
 fixture=importlib.util.module_from_spec(loader);loader.loader.exec_module(fixture)
 install=fixture.install
@@ -50,6 +51,20 @@ async def main():
   await page.locator('[data-action="save-board"]').click()
   await page.locator('[data-action="back-to-quizzes"]').click()
   await expect(page.locator('.bq-saved-quiz')).to_have_count(2)
+  for width,height in [(390,844),(1366,900)]:
+   await page.set_viewport_size({'width':width,'height':height})
+   await expect(page.locator('.bq-saved-quiz-actions .btn.primary')).to_have_count(2)
+   widths=await page.evaluate("""() => ({
+    viewport:document.documentElement.clientWidth,
+    content:document.documentElement.scrollWidth,
+    quizButtons:[...document.querySelectorAll('.bq-saved-quiz-actions [data-action="host-saved-board"]')]
+     .map(b=>({w:b.getBoundingClientRect().width,h:b.getBoundingClientRect().height}))
+   })""")
+   assert widths['content']<=widths['viewport']+8,'Quiz library overflows on '+str(width)+': '+str(widths)
+   assert all(b['h']>=36 and b['w']>=75 for b in widths['quizButtons']),widths
+   await page.screenshot(path=str(OUT/f'saved-quiz-picker-{width}x{height}.png'),full_page=True,animations='disabled')
+  await page.set_viewport_size({'width':1366,'height':900})
+  print('PASS saved quiz picker: both cards and lobby actions visible without horizontal overflow on desktop/mobile',flush=True)
   # Host the FIRST saved quiz, not the most recently edited second one.
   await page.locator(f'.bq-saved-quiz[data-saved-quiz-id="{first}"] [data-action="host-saved-board"]').click()
   await page.locator('.bq-host-lobby-summary').wait_for(timeout=15000)
@@ -64,6 +79,7 @@ async def main():
   await expect(page.locator('[data-action="publish"]')).to_have_count(0)
   await expect(page.locator('[data-action="leave-host-room"]')).to_have_count(1)
   await expect(page.get_by_role('button',name='Lobby schließen')).to_have_count(1)
+  await page.screenshot(path=str(OUT/'saved-quiz-host-lobby-desktop.png'),full_page=True,animations='disabled')
   saved_count=await page.evaluate('JSON.parse(localStorage.getItem("bq-board-workspaces-v1")).length')
   assert saved_count==2
   assert await page.evaluate('(r)=>localStorage.getItem("bq-published-"+r)',code)=='1'
