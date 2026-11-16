@@ -155,7 +155,6 @@ async def main():
   # Actual toggles should roundtrip in shared room state and remain accessible.
   before=(await host.evaluate('window.__probe.info().publicState.settings'))
   await host.locator('[data-action="toggle-chat"]').click()
-  await expect.poll if False else None
   await host.wait_for_timeout(350)
   after=(await host.evaluate('window.__probe.info().publicState.settings'))
   assert after['chatOpen']!=before['chatOpen'],(before,after)
