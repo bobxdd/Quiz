@@ -3,7 +3,7 @@ import asyncio,importlib.util,shutil
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-spec=importlib.util.spec_from_file_location('bq_peer',root/'tests/peer-2_7-browser.py');mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+spec=importlib.util.spec_from_file_location('bq_peer',root/'tests/categories-3_0-browser.py');mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
 
 async def new_guest(ctx,code,name):
  print('GUEST',name,'opening',flush=True)
@@ -17,7 +17,7 @@ async def new_guest(ctx,code,name):
 
 async def main():
  async with async_playwright() as pw:
-  browser=await pw.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox','--no-proxy-server'])
+  browser=await pw.chromium.launch(args=['--no-sandbox','--no-proxy-server'])
   ctx=await browser.new_context(viewport={'width':1366,'height':900},reduced_motion='reduce')
   errors=[]
   host=await ctx.new_page();host.on('pageerror',lambda e:errors.append('Host '+str(e)))
@@ -25,7 +25,7 @@ async def main():
   await host.get_by_role('button',name='Online-Raum erstellen').click()
   await host.locator('.se-studio').wait_for();code=await host.evaluate('window.__probe.room()')
   quiz={'title':'3.4 Regression','teams':['Rot','Blau'], 'questions':[
-   {'id':'map-1','category':'Weltkarte','title':'Wo liegt die Stadt?','prompt':'Markiere den gesuchten Ort auf der Weltkarte','answer':'Ort in Afrika','type':'map','roundMode':'written','points':100,'mapTargetX':57,'mapTargetY':54},
+   {'id':'map-1','category':'Weltkarte','title':'Wo liegt die Stadt?','prompt':'Markiere den gesuchten Ort auf der Weltkarte','answer':'Ort in Afrika','type':'map','roundMode':'written','points':100,'mapTargetSet':True,'mapTargetX':57,'mapTargetY':54},
    {'id':'hints-1','category':'Rätsel','title':'Ratefigur','prompt':'Errate die Figur anhand der Tipps','answer':'Anivia','type':'text','roundMode':'buzzer','points':200,'hints':['Eis','Fliegt','Freljord','Wiedergeburt']}
   ]}
   await host.evaluate('(q)=>window.__probe.setQuiz(q)',quiz)
@@ -48,8 +48,6 @@ async def main():
   await a.locator('.bq-board-scene').wait_for();await b.locator('.bq-board-scene').wait_for();await c.locator('.bq-board-scene').wait_for()
   await a.locator('.bq-shared-team-chat summary').click()
   await a.locator('#chat-text').fill('Nur Team Rot sieht mich')
-  await a.screenshot(path='/mnt/data/brainquiz34_teamchat_debug.png')
-  print('CHAT DIAGNOSTIC',await a.locator('#chat-form button[type="submit"]').evaluate('e=>{let b=e.getBoundingClientRect(),v=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {button:[b.x,b.y,b.width,b.height],cover:v?.outerHTML?.slice(0,400), z:getComputedStyle(e.closest(".bq-shared-team-chat")).zIndex, open:e.closest(".bq-shared-team-chat").open, board:getComputedStyle(e.closest(".bq-board-scene")).zIndex, boardIsolation:getComputedStyle(e.closest(".bq-board-scene")).isolation}}'),flush=True)
   await a.locator('#chat-form button[type="submit"]').click(timeout=3000)
   await b.locator('.bq-shared-team-chat summary').click()
   await b.locator('.chatfeed').get_by_text('Nur Team Rot sieht mich').wait_for(timeout=12000)
@@ -63,19 +61,20 @@ async def main():
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   for p in [a,b,c]:
-   await p.locator('.bq-question-scene [data-map-choice]').wait_for(timeout=10000)
-   await p.locator('.bq-question-scene [data-map-choice]').click(position={'x':190,'y':135})
-   await p.locator('.bq-pin-self').wait_for()
+   await p.locator('.bq-map-viewport').wait_for(state='visible',timeout=10000)
+   await p.locator('.bq-map-viewport').click(position={'x':190,'y':135})
+   await p.locator('.bq-map-pin.is-self').wait_for()
    await p.locator('[data-action="submit-answer"]').click()
+  await host.locator('[data-action="start-review"]').first.click()
   await a.locator('.review-grid .review-card').first.wait_for(timeout=12000)
   assert await a.locator('.review-grid').get_by_text('@map:').count()==0
-  assert await a.locator('.bq-pin-public').count()==0
+  assert await a.locator('.bq-map-pin.is-public').count()==0
   await host.locator('[data-action="reveal-answer"]').first.click()
-  await a.locator('.bq-pin-public').first.wait_for(timeout=12000)
-  assert await a.locator('.bq-pin-public').count()==1
-  assert await a.locator('.bq-pin-solution').count()==0
+  await a.locator('.bq-map-pin.is-public').first.wait_for(timeout=12000)
+  assert await a.locator('.bq-map-pin.is-public').count()==1
+  assert await a.locator('.bq-map-pin.is-solution').count()==0
   await host.locator('[data-action="reveal"]').first.click()
-  await a.locator('.bq-pin-solution').first.wait_for(timeout=12000)
+  await a.locator('.bq-map-pin.is-solution').first.wait_for(timeout=12000)
   print('PASS: map pin hidden, individual reveal, correct target only on solution',flush=True)
   await host.locator('[data-action="back"]').first.click()
   await host.locator('.bq-board-scene .tile:not([disabled])').first.click()
