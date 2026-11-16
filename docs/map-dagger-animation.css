@@ -1,0 +1,57 @@
+/* Step 6: exactly one throw at map-solution reveal, never during answers.
+   No fullscreen tint, no particle bursts, no looping effects, no hit blocking. */
+.bq-map-pin.is-solution.bq-throw-waiting{visibility:hidden!important}
+.bq-map-throw-layer{position:fixed;inset:0;z-index:70;overflow:hidden;pointer-events:none!important;user-select:none;isolation:isolate;contain:layout style}
+.bq-map-throw-layer *{pointer-events:none!important}
+.bq-map-throw-actor{position:absolute;width:142px;height:142px;transform-origin:48% 85%;animation:bq-map-thrower-pose 4100ms steps(28,end) both;z-index:3}
+.bq-map-throw-body.bq-actor{position:absolute;inset:0;width:142px;height:142px;filter:drop-shadow(0 5px 4px #17212478);
+ /* Only the static original weapon/arm are covered; the rest of the original sprite stays untouched. */
+ clip-path:polygon(0 0,100% 0,100% 46%,67% 46%,67% 81%,100% 81%,100% 100%,0 100%)}
+.bq-map-throw-actor--rogue{--bq-throw-sleeve:#673849;--bq-throw-sleeve-highlight:#bb7581;--bq-throw-hand:#d7a37e}
+.bq-map-throw-actor--blades{--bq-throw-sleeve:#783042;--bq-throw-sleeve-highlight:#c0777a;--bq-throw-hand:#e0ae8e}
+.bq-map-throw-actor--mage{--bq-throw-sleeve:#5c417c;--bq-throw-sleeve-highlight:#aa8dcc;--bq-throw-hand:#ddbd9e}
+.bq-map-throw-actor--druid{--bq-throw-sleeve:#485539;--bq-throw-sleeve-highlight:#9aa66d;--bq-throw-hand:#caa879}
+/* A visibly articulated sleeve/hand. All four outfits use the SAME pose and timing. */
+.bq-map-throw-arm{position:absolute;left:88px;top:85px;width:39px;height:16px;transform-origin:6px 8px;background:var(--bq-throw-sleeve);border:3px solid #29222e;box-shadow:inset 0 3px var(--bq-throw-sleeve-highlight),0 3px 2px #0005;z-index:4;animation:bq-map-throw-arm-lift 4100ms steps(21,end) both}
+.bq-map-throw-hand{position:absolute;left:31px;top:-1px;width:13px;height:13px;border:3px solid #3e3038;background:var(--bq-throw-hand);box-shadow:inset 2px 1px #f0d2b1}
+.bq-map-throw-held{position:absolute;left:35px;top:-33px;width:19px;height:36px;object-fit:contain;image-rendering:pixelated;transform:rotate(34deg);transform-origin:50% 100%;animation:bq-map-held-knife 4100ms steps(1,end) both;filter:drop-shadow(1px 2px 1px #0006)}
+.bq-map-throw-flight{position:absolute;z-index:5;width:32px;height:46px;object-fit:contain;image-rendering:pixelated;transform-origin:center bottom;opacity:0;filter:drop-shadow(1px 2px 2px #0008);animation:bq-map-dagger-flight 1150ms cubic-bezier(.28,.55,.35,1) 2180ms both}
+.bq-map-throw-impact{position:absolute;z-index:4;width:23px;height:8px;transform:translate(-50%,-50%);opacity:0;pointer-events:none;animation:bq-map-throw-impact 510ms steps(6,end) 3310ms both}
+.bq-map-throw-impact::before{content:"";position:absolute;inset:0;border-bottom:3px solid #a58c66;border-radius:50%;box-shadow:0 2px 4px #26333e88}
+@keyframes bq-map-thrower-pose{
+ 0%{opacity:0;transform:translate3d(-15px,8px,0) rotate(-2deg)}
+ 10%{opacity:1;transform:translate3d(0,0,0) rotate(0deg)}
+ 24%,38%{opacity:1;transform:translate3d(0,0,0) rotate(0deg)}
+ 54%{opacity:1;transform:translate3d(-3px,0,0) rotate(-3deg)}
+ 64%{opacity:1;transform:translate3d(6px,0,0) rotate(3deg)}
+ 86%{opacity:1;transform:translate3d(2px,0,0) rotate(0deg)}
+ 94%{opacity:1;transform:translate3d(0,0,0) rotate(0deg)}
+ 100%{opacity:0;transform:translate3d(-8px,6px,0) rotate(0deg)}
+}
+@keyframes bq-map-throw-arm-lift{
+ 0%,12%{transform:rotate(61deg)}
+ 25%{transform:rotate(24deg)}
+ 40%{transform:rotate(-72deg)}
+ 51%{transform:rotate(-84deg)}
+ 56%{transform:rotate(-78deg)}
+ 64%{transform:rotate(-8deg)}
+ 76%{transform:rotate(13deg)}
+ 100%{transform:rotate(30deg)}
+}
+@keyframes bq-map-held-knife{0%,52%{opacity:1}53%,100%{opacity:0}}
+@keyframes bq-map-dagger-flight{
+ 0%{opacity:0;transform:translate3d(0,0,0) rotate(-62deg)}
+ 1%{opacity:1;transform:translate3d(0,0,0) rotate(-62deg)}
+ 44%{opacity:1;transform:translate3d(var(--bq-flight-mid-x),var(--bq-flight-mid-y),0) rotate(-18deg)}
+ 79%{opacity:1;transform:translate3d(var(--bq-flight-late-x),var(--bq-flight-late-y),0) rotate(14deg)}
+ 96%{opacity:1;transform:translate3d(var(--bq-flight-x),var(--bq-flight-y),0) rotate(0deg)}
+ 100%{opacity:0;transform:translate3d(var(--bq-flight-x),var(--bq-flight-y),0) rotate(0deg)}
+}
+@keyframes bq-map-throw-impact{
+ 0%{opacity:0;transform:translate(-50%,-50%) scale(.45)}
+ 27%{opacity:.8;transform:translate(-50%,-50%) scale(1)}
+ 100%{opacity:0;transform:translate(-50%,-50%) scale(1.3)}
+}
+@media(prefers-reduced-motion:reduce){.bq-map-throw-layer{display:none!important}.bq-map-pin.is-solution.bq-throw-waiting{visibility:visible!important}}
+@media(forced-colors:active){.bq-map-throw-layer{display:none!important}.bq-map-pin.is-solution.bq-throw-waiting{visibility:visible!important}}
+@media print{.bq-map-throw-layer{display:none!important}.bq-map-pin.is-solution.bq-throw-waiting{visibility:visible!important}}
