@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from '../docs/answer-review.mjs';
 const roster=n=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{name:'Spieler '+(i+1),team:'t'+((i%2)+1)}]));
 const responses=(n,type='estimate')=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{uid:'user_'+(i+1),team:'t1',text:type==='estimate'?String(100+i):`Antwort ${i+1}`} ]));
-for(const n of [4,5,6,7,8])test(`Gemeinsamer Review bei ${n} Spielern bleibt bis zur letzten Antwort geschlossen`,()=>{
+for(const n of [4,5,6,7,8,9,10])test(`Gemeinsamer Review bei ${n} Spielern bleibt bis zur letzten Antwort geschlossen`,()=>{
  const expected=participantSnapshot(roster(n));const part=responses(n-1);assert.deepEqual(answerProgress(expected,part),{total:n,submitted:n-1,complete:false});
  assert.deepEqual(answerProgress(expected,responses(n)),{total:n,submitted:n,complete:true});
  const board=makeAnswerReview(expected,responses(n),17);
