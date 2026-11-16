@@ -3,6 +3,10 @@
 .bq-map-pin.is-solution.bq-throw-waiting{visibility:hidden!important}
 .bq-map-question.bq-map-throw-active{--bq-map-throw-rail:146px;box-sizing:border-box;padding-left:var(--bq-map-throw-rail)!important}
 .bq-map-question.bq-map-throw-active>.bq-map-title{margin-left:calc(-1*var(--bq-map-throw-rail))}
+/* Controls remain full-width while only the map itself yields a small casting rail. */
+.bq-map-question.bq-map-throw-active>.bq-map-controls{margin-left:calc(-1*var(--bq-map-throw-rail));min-width:0}
+.bq-map-question.bq-map-throw-active .bq-map-reset{white-space:nowrap}
+
 @media(max-width:680px){.bq-map-question.bq-map-throw-active{--bq-map-throw-rail:92px}}
 .bq-map-throw-layer{position:fixed;inset:0;z-index:70;overflow:hidden;pointer-events:none!important;user-select:none;isolation:isolate;contain:layout style}
 .bq-map-throw-layer *{pointer-events:none!important}
