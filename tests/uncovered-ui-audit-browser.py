@@ -19,7 +19,10 @@ async def audit(page,label,selector,cap=45):
  data=await page.evaluate("""({selector,cap})=>{
   const all=[...document.querySelectorAll(selector)].filter(el=>{
    if(el.disabled||el.getAttribute('aria-hidden')==='true'||el.closest('[inert]'))return false;
-   if(el.closest('details:not([open])')&&!el.matches('summary'))return false;
+   const closed=el.closest('details:not([open])');
+   // Only the summary of ITS OWN closed details is an interactive target.
+   // A nested summary inside another closed details is not actually visible.
+   if(closed&&!(el.matches('summary')&&el.parentElement===closed))return false;
    const st=getComputedStyle(el),r=el.getBoundingClientRect();
    return st.display!=='none'&&st.visibility==='visible'&&Number(st.opacity)>0&&
     st.pointerEvents!=='none'&&r.width>=9&&r.height>=8;
