@@ -8,7 +8,8 @@ const clean=(items)=>Array.isArray(items)?items.filter(x=>validId(x?.id)).slice(
 export function boardList(store){return clean(parse(store.getItem(INDEX),[]));}
 export function activeBoard(store){return store.getItem(ACTIVE)||'';}
 export function createBoard(store,quiz,makeId,{activate=true}={}){
- const id=makeId();if(!validId(id)||boardList(store).some(x=>x.id===id)||store.getItem(key(id)))throw Error('Quizbrett-ID ungültig oder bereits vergeben.');
+ const existing=boardList(store);if(existing.length>=100)throw Error('Maximal 100 lokale Quizbretter. Bitte zuerst bestehende Bretter als Backup exportieren.');
+ const id=makeId();if(!validId(id)||existing.some(x=>x.id===id)||store.getItem(key(id)))throw Error('Quizbrett-ID ungültig oder bereits vergeben.');
  const record={revision:1,quiz};
  store.setItem(key(id),JSON.stringify(record));
  try{store.setItem(INDEX,JSON.stringify([...boardList(store),{id,title:String(quiz.title||'Neues Quizbrett').slice(0,100),updatedAt:Date.now()}]));}
