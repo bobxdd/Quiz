@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent} from '../docs/answer-review.mjs';
+import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from '../docs/answer-review.mjs';
 const roster=n=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{name:'Spieler '+(i+1),team:'t'+((i%2)+1)}]));
 const responses=(n,type='estimate')=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{uid:'user_'+(i+1),team:'t1',text:type==='estimate'?String(100+i):`Antwort ${i+1}`} ]));
 for(const n of [4,5,6,7,8])test(`Gemeinsamer Review bei ${n} Spielern bleibt bis zur letzten Antwort geschlossen`,()=>{
@@ -68,4 +68,29 @@ test('Publizierte Review-Karten bekommen nur aufgedeckten Wert und keine Rohantw
   for(const other of Object.keys(priv).filter(x=>!b.entries[x].revealed))assert.ok(!Object.hasOwn(b.entries[other],'value'));
  }
  assert.equal(Object.keys(b.entries).filter(id=>b.entries[id].revealed).length,3);
+});
+
+test('Quality part 2: no submission is never displayed as a hidden answer',()=>{
+ const board=makeAnswerReview(participantSnapshot(roster(3)),responses(2),22);
+ assert.equal(answerCardState(board.entries.user_1),'hidden');
+ assert.equal(answerCardState(board.entries.user_3),'missing');
+ const opened=revealAnswer(board,'user_1',responses(2).user_1);
+ assert.equal(answerCardState(opened.entries.user_1),'revealed');
+ assert.equal(answerCardState(opened.entries.user_3),'missing');
+ const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ assert.match(app,/answerCardState\(a\)/);
+ assert.match(app,/!submitted\?'<span class="small muted">Keine Antwort abgegeben/);
+ assert.match(app,/!submitted\?'is-missing':hidden\?'is-hidden'/);
+});
+test('Security part 2: malicious reserved participant IDs cannot contaminate answer review',()=>{
+ const names=Object.fromEntries([['__proto__',{name:'Bad'}],['constructor',{name:'Bad'}],['prototype',{name:'Bad'}],['safe_user',{name:'Alice'}]]);
+ const expected=participantSnapshot(names);
+ assert.deepEqual(Object.keys(expected),['safe_user']);
+ const review=makeAnswerReview(names,{},23);
+ assert.deepEqual(Object.keys(review.entries),['safe_user']);
+ assert.equal(Object.getPrototypeOf(review.entries),Object.prototype);
+ for(const special of ['__proto__','constructor','prototype']){
+  assert.equal(Object.hasOwn(review.entries,special),false);
+  assert.throws(()=>revealAnswer(review,special,{text:'No'}),/nicht zur aktuellen/);
+ }
 });
