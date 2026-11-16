@@ -145,16 +145,17 @@ async def main():
    await b.screenshot(path=str(OUT/f'step4-lobby-{width}x{height}.png'),full_page=True,animations='disabled')
    print('PASS: clear responsive lobby',width,height,flush=True)
 
-  # Publishing or resetting a quiz must preserve the dynamically created team.
-  await host.locator('.top-nav [data-view="editor"]').click()
-  await host.locator('[data-action="publish"]').first.click()
+  # A published quiz is intentionally permanent for this room. No editor or
+  # second publication may mutate the now committed team/round data.
+  await expect(host.locator('.top-nav [data-view="editor"]')).to_have_count(0)
+  await expect(host.locator('[data-action="publish"]')).to_have_count(0)
   await host.locator('.bq-board-scene').wait_for()
   new=await host.evaluate('window.__probe.info().publicState')
   assert new['teams']['t3']=='Aurora & Wald'
   assert 't3' in new['scores']
   assert new['teams']['t4']=='Host Gold' and new['teams']['t5']=='Host Violett'
   assert 't4' in new['scores'] and 't5' in new['scores']
-  print('PASS: created team persists through republish',flush=True)
+  print('PASS: published quiz locked; dynamically created teams persist without republishing',flush=True)
 
   await host.locator('.bq-board-scene .tile:not([disabled])').first.click()
   await a.locator('.bq-question-scene').wait_for(timeout=12000)
