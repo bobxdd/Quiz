@@ -6,14 +6,14 @@
 import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,updatePlayerScore} from './core.mjs';
-import {approval,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
+import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges} from './question-flow.mjs';
 
 const HOST_PREFIX='brainquiz27-';
 const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
 const safeUid=id=>UID_RE.test(id||'')&&!['__proto__','constructor','prototype'].includes(id);
 const TOKEN_RE=/^[a-f0-9]{32,128}$/;
-const MAX_PLAYERS=8, MAX_WAITING=24, MAX_MESSAGE_BYTES=18000;
+const MAX_WAITING=24, MAX_MESSAGE_BYTES=18000;
 const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
 const safeText=(value,length)=>String(value??'').trim().slice(0,length);
 const randomHex=(bytes=20)=>Array.from(crypto.getRandomValues(new Uint8Array(bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -212,6 +212,16 @@ export class PeerGame{
  _rpc(action,payload={}){this._ensureGuest(this.room);const id='r'+(++this.requestNo)+'_'+randomHex(4);return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('Antwort des Hosts ausgeblieben.'))},9000);this.pending.set(id,{timer,resolve,reject});try{this.conn.send({t:'action',id,action,payload})}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e)}})}
  _getHostData(room){this._assertHost(room);return this.data;}
  async join(room,name){this._ensureGuest(room);return clone(this.guestData.members?.[this.uid]||null)}
+ /** A host may create a team directly, without becoming a player or bypassing the lobby lock. */
+ async hostCreateLobbyTeam(room,name){
+  const d=this._getHostData(room);
+  if(!canArrangeLobby(d.public))throw Error('Teams können nur vor Spielbeginn erstellt werden.');
+  const added=addLobbyTeam(d.public.teams,name);
+  d.public.teams=added.teams;
+  d.public.scores={...(d.public.scores||{}),[added.id]:0};
+  this._changed();
+  return {id:added.id,name:added.teams[added.id],color:added.color};
+ }
  async hostAssign(room,uid,player,team){
   const d=this._getHostData(room),member=d.members?.[uid];
   if(!member||member.status==='removed')throw Error('Diese Beitrittsanfrage existiert nicht.');
