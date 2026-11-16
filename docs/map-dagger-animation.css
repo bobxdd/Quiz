@@ -11,17 +11,64 @@
 .bq-map-throw-layer{position:fixed;inset:0;z-index:70;overflow:hidden;pointer-events:none!important;user-select:none;isolation:isolate;contain:layout style}
 .bq-map-throw-layer *{pointer-events:none!important}
 .bq-map-throw-actor{position:absolute;width:142px;height:142px;scale:var(--bq-actor-scale,1);transform-origin:top left;animation:bq-map-thrower-pose 4100ms steps(28,end) both;z-index:3}
-.bq-map-throw-body.bq-actor{position:absolute;inset:0;width:142px;height:142px;filter:drop-shadow(0 5px 4px #17212478);
- /* Only the static original weapon/arm are covered; the rest of the original sprite stays untouched. */
- clip-path:polygon(0 0,100% 0,100% 46%,67% 46%,67% 81%,100% 81%,100% 100%,0 100%)}
-.bq-map-throw-actor--rogue{--bq-throw-sleeve:#673849;--bq-throw-sleeve-highlight:#bb7581;--bq-throw-hand:#d7a37e}
-.bq-map-throw-actor--blades{--bq-throw-sleeve:#783042;--bq-throw-sleeve-highlight:#c0777a;--bq-throw-hand:#e0ae8e}
-.bq-map-throw-actor--mage{--bq-throw-sleeve:#5c417c;--bq-throw-sleeve-highlight:#aa8dcc;--bq-throw-hand:#ddbd9e}
-.bq-map-throw-actor--druid{--bq-throw-sleeve:#485539;--bq-throw-sleeve-highlight:#9aa66d;--bq-throw-hand:#caa879}
-/* A visibly articulated sleeve/hand. All four outfits use the SAME pose and timing. */
-.bq-map-throw-arm{position:absolute;left:88px;top:85px;width:39px;height:16px;transform-origin:6px 8px;background:var(--bq-throw-sleeve);border:3px solid #29222e;box-shadow:inset 0 3px var(--bq-throw-sleeve-highlight),0 3px 2px #0005;z-index:4;animation:bq-map-throw-arm-lift 4100ms steps(21,end) both}
-.bq-map-throw-hand{position:absolute;left:31px;top:-1px;width:13px;height:13px;border:3px solid #3e3038;background:var(--bq-throw-hand);box-shadow:inset 2px 1px #f0d2b1}
-.bq-map-throw-held{position:absolute;left:35px;top:-33px;width:19px;height:36px;object-fit:contain;image-rendering:pixelated;transform:rotate(34deg);transform-origin:50% 100%;animation:bq-map-held-knife 4100ms steps(1,end) both;filter:drop-shadow(1px 2px 1px #0006)}
+/* Each limb is an exact, isolated portion of its ORIGINAL 300×300 character
+   texture, not a rectangle with a hand drawn over it. The original body keeps
+   the same sprite; only its static throwing-arm area is cut away to avoid a
+   second, ghost arm during the movement. */
+.bq-map-throw-body.bq-actor{
+ position:absolute;inset:0;width:142px;height:142px;
+ background-size:100% 100%;image-rendering:pixelated;
+ clip-path:var(--bq-body-outline);
+ filter:drop-shadow(0 5px 4px #17212478)
+}
+.bq-map-throw-actor--rogue{
+ --bq-body-outline:polygon(0 0,100% 0,100% 64%,69% 64%,69% 93%,100% 93%,100% 100%,0 100%);
+ --bq-arm-outline:polygon(65% 64%,74% 62%,80% 66%,82% 77%,79% 81%,72% 80%,66% 74%);
+ --bq-shoulder-x:99px;--bq-shoulder-y:99px;
+ --bq-grip-x:111px;--bq-grip-y:103px
+}
+.bq-map-throw-actor--blades{
+ --bq-body-outline:polygon(0 0,100% 0,100% 68%,71% 68%,71% 96%,100% 96%,100% 100%,0 100%);
+ --bq-arm-outline:polygon(70% 68%,79% 67%,85% 73%,88% 82%,84% 87%,78% 85%,70% 77%);
+ --bq-shoulder-x:104px;--bq-shoulder-y:103px;
+ --bq-grip-x:118px;--bq-grip-y:109px
+}
+.bq-map-throw-actor--mage{
+ --bq-body-outline:polygon(0 0,100% 0,100% 66%,68% 66%,68% 96%,100% 96%,100% 100%,0 100%);
+ --bq-arm-outline:polygon(63% 70%,74% 68%,80% 74%,81% 82%,76% 87%,68% 85%,63% 79%);
+ --bq-shoulder-x:96px;--bq-shoulder-y:102px;
+ --bq-grip-x:110px;--bq-grip-y:111px
+}
+.bq-map-throw-actor--druid{
+ --bq-body-outline:polygon(0 0,100% 0,100% 72%,70% 72%,70% 97%,100% 97%,100% 100%,0 100%);
+ --bq-arm-outline:polygon(69% 72%,78% 71%,84% 78%,86% 86%,82% 91%,75% 89%,68% 81%);
+ --bq-shoulder-x:102px;--bq-shoulder-y:108px;
+ --bq-grip-x:115px;--bq-grip-y:115px
+}
+/* One arm rig for ALL four outfits. Pivot at each real shoulder and reuse
+   exactly the same class-specific WebP used by the stationary torso. */
+.bq-map-throw-arm-rig{
+ position:absolute;inset:0;width:142px;height:142px;
+ transform-origin:var(--bq-shoulder-x) var(--bq-shoulder-y);
+ z-index:4;
+ animation:bq-map-original-arm-lift 4100ms steps(24,end) both
+}
+.bq-map-throw-original-arm{
+ position:absolute;inset:0;display:block;width:142px;height:142px;
+ background-position:center;background-size:100% 100%;background-repeat:no-repeat;
+ image-rendering:pixelated;
+ clip-path:var(--bq-arm-outline);
+ pointer-events:none
+}
+/* The held knife is a child of the same ORIGINAL arm rig and disappears at
+   release. The separately flying copy then takes over without a pop-up hand. */
+.bq-map-throw-held{
+ position:absolute;left:var(--bq-grip-x);top:calc(var(--bq-grip-y) - 33px);
+ width:19px;height:36px;object-fit:contain;image-rendering:pixelated;
+ transform:rotate(34deg);transform-origin:50% 100%;
+ animation:bq-map-held-knife 4100ms steps(1,end) both;
+ filter:drop-shadow(1px 2px 1px #0006);pointer-events:none
+}
 .bq-map-throw-flight{position:absolute;z-index:5;width:32px;height:46px;object-fit:contain;image-rendering:pixelated;transform-origin:center bottom;opacity:0;filter:drop-shadow(1px 2px 2px #0008);animation:bq-map-dagger-flight 1150ms cubic-bezier(.28,.55,.35,1) 2180ms both}
 .bq-map-throw-impact{position:absolute;z-index:4;width:23px;height:8px;transform:translate(-50%,-50%);opacity:0;pointer-events:none;animation:bq-map-throw-impact 510ms steps(6,end) 3310ms both}
 .bq-map-throw-impact::before{content:"";position:absolute;inset:0;border-bottom:3px solid #a58c66;border-radius:50%;box-shadow:0 2px 4px #26333e88}
@@ -35,15 +82,18 @@
  94%{opacity:1;transform:translate3d(0,0,0) rotate(0deg)}
  100%{opacity:0;transform:translate3d(-8px,6px,0) rotate(0deg)}
 }
-@keyframes bq-map-throw-arm-lift{
- 0%,12%{transform:rotate(61deg)}
- 25%{transform:rotate(24deg)}
- 40%{transform:rotate(-72deg)}
- 51%{transform:rotate(-84deg)}
- 56%{transform:rotate(-78deg)}
- 64%{transform:rotate(-8deg)}
- 76%{transform:rotate(13deg)}
- 100%{transform:rotate(30deg)}
+@keyframes bq-map-original-arm-lift{
+ /* 0–0.6s: intact arm, short hold. 0.6–2.2s: original sleeve and
+    hand raise clearly from the shoulder, then a controlled wind-up.
+    2.2s: dagger leaves the raised hand. 2.2–3.2s: throw follow-through.
+    No artificial rectangle, overlay skin color or extra 'emotions'. */
+ 0%,13%{transform:rotate(0deg)}
+ 23%{transform:rotate(12deg)}
+ 36%{transform:rotate(-48deg)}
+ 50%,54%{transform:rotate(-92deg)}
+ 62%{transform:rotate(-113deg)}
+ 76%{transform:rotate(-24deg)}
+ 100%{transform:rotate(0deg)}
 }
 @keyframes bq-map-held-knife{0%,52%{opacity:1}53%,100%{opacity:0}}
 @keyframes bq-map-dagger-flight{
