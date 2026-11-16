@@ -156,3 +156,42 @@
 @media(prefers-reduced-motion:reduce){
  .bq-map-layer,.bq-map-pin{transition:none!important;animation:none!important}
 }
+
+/* Step 3 interaction hardening: a map must remain a real, hit-testable viewport.
+   Compact only the redundant guest instructions; never clip the map behind panels. */
+.bq-game-mode .page-live.bq-session-page:has(.bq-map-viewport){
+ overflow-x:hidden;overflow-y:auto;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-question-panel{
+ overflow:visible;min-height:430px;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-scene-content,
+.bq-question-scene:has(.bq-map-viewport) .stage{
+ overflow:visible;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-scene.se-scene{
+ max-height:none;overflow:visible;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose{
+ max-height:none;min-height:0;flex:0 0 auto;
+ gap:4px;padding:8px 12px!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose>.bq-guest-mode,
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose .bq-map-hint{
+ display:none;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose .formgrid{
+ display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose .bq-map-result{
+ margin:0;flex:1 1 160px;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-guest-compose .formgrid>.btn{
+ flex:0 1 auto;min-height:42px;min-width:180px;
+}
+@media(max-width:680px){
+ .bq-question-scene:has(.bq-map-viewport) .bq-question-panel{min-height:405px}
+ .bq-question-scene:has(.bq-map-viewport) .bq-guest-compose .formgrid>.btn{
+  width:100%;min-width:0;
+ }
+}
