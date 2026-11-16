@@ -40,7 +40,13 @@ async def main():
   await guest.locator('button[type="submit"]').first.click()
   await guest.locator('.bq-lobby-notice').wait_for(timeout=12000)
   await host.locator('.top-nav [data-view="teams"]').click()
+  print('STEP4 APPROVE BEFORE',{'selects':await host.locator('select[id^="team-"]').all_input_values(),
+    'pending':await host.locator('[data-action="approve"]').count(),
+    'members':await host.evaluate("Object.fromEntries(Object.entries(window.__probe.getGame().data.members).map(([id,m])=>[id,m.status]))")},flush=True)
   await host.locator('[data-action="approve"]').first.click()
+  await host.wait_for_timeout(230)
+  print('STEP4 APPROVE AFTER',{'members':await host.evaluate("Object.fromEntries(Object.entries(window.__probe.getGame().data.members).map(([id,m])=>[id,m.status]))"),
+    'toaster':await host.locator('#toaster').all_inner_texts()},flush=True)
   await guest.locator('.bq-lobby').wait_for(timeout=12000)
   # A second approved guest deliberately does not submit. Their answer card
   # must be 'no answer', never a misleading frosted/hidden answer.
