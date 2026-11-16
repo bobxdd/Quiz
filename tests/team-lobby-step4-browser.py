@@ -92,12 +92,16 @@ async def main():
   print('PASS: subsequent players can join a team created in this room',flush=True)
   # Host-created teams use the same capacity/name rules as participant-created ones.
   for team_name,expected_count in [('Host Gold',4),('Host Violett',5)]:
-   creator=host.locator('.bq-host-team-create')
-   if await creator.get_attribute('open') is None:
-    await creator.locator('summary').click()
+   # The host's lobby re-renders (and collapses its <details>) after each
+   # accepted creation. Wait for the rendered, closed form before reopening it.
+   await expect(host.locator('.bq-host-team-create:not([open])')).to_have_count(1,timeout=10000)
+   await host.locator('.bq-host-team-create:not([open]) summary').click()
+   await expect(host.locator('#host-team-create-form button[type="submit"]')).to_be_visible()
    await host.locator('#bq-host-team-name').fill(team_name)
    await host.locator('#host-team-create-form button[type="submit"]').click()
    await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',arg=expected_count)
+   if expected_count<5:
+    await expect(host.locator('.bq-host-team-create:not([open])')).to_have_count(1,timeout=10000)
   await expect(host.locator('.bq-host-team-create')).to_have_count(0,timeout=10000)
   await a.wait_for_function("() => Object.keys(window.__probe.info().guestLobby?.teams||{}).length===5")
   await a.locator('.bq-lobby-team').nth(4).wait_for(state='visible',timeout=10000)
