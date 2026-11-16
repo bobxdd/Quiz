@@ -33,10 +33,13 @@ test('Step 6: target coordinates follow the true marker, not a guessed projectil
 test('Step 6: fixed character origin does not depend on the target',()=>{
  const box={getBoundingClientRect:()=>({left:150,top:410,width:800,height:410})};
  const start=mapThrowOrigin(box,1366,900);
- assert.equal(start.actorX,174);
- assert.equal(start.actorY,268);
- assert.equal(start.handX,start.actorX+111);
- assert.equal(start.handY,start.actorY+53);
+ assert.equal(start.actorX,9);
+ assert.equal(start.actorY,428);
+ assert.ok(start.scale>.9&&start.scale<=1);
+ assert.equal(start.handX,start.actorX+111*start.scale);
+ assert.equal(start.handY,start.actorY+53*start.scale);
+ assert.match(css,/\.bq-map-question\.bq-map-throw-active/);
+ assert.match(app,/removeMapThrowRail\(\)/);
  const mobile=mapThrowOrigin(box,390,844);
  assert.ok(mobile.actorX>=4&&mobile.actorX<=244);
 });
