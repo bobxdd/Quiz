@@ -34,11 +34,14 @@ test('Früherer Review-Fallback kappt manipulierte 20er-Teilnehmerliste auf acht
  const oversized=Object.fromEntries(Array.from({length:20},(_,i)=>['user_'+i,{name:'Spieler '+i,team:'t1'}]));
  assert.equal(Object.keys(participantSnapshot(oversized)).length,8);
 });
-test('P2P host assigns roster; new guests cannot assign their own teams',()=>{
+test('P2P host confirms team membership; guest requests never directly grant access',()=>{
  const peer=readFileSync(new URL('../docs/peer-client.mjs',import.meta.url),'utf8');
  assert.match(peer,/async hostAssign\(room,uid,player,team\)/);
- assert.match(peer,/approval\(d\.roster,uid,player,team\)/);
+ assert.match(peer,/approval\(d\.roster,uid,member,destination\)/);
  assert.match(peer,/member\?\.status!=='approved'/);
+ assert.match(peer,/case 'lobby-join'/);
+ assert.match(peer,/case 'lobby-create'/);
+ assert.match(peer,/Hostfreigabe erforderlich/);
 });
 test('GitHub Pages workflow publishes the static PeerJS site after tests',()=>{
  const y=readFileSync(new URL('../.github/workflows/pages.yml',import.meta.url),'utf8');
