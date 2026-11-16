@@ -3,7 +3,7 @@
    Pure functions shared by browser runtime and regression tests. */
 import {MAX_PLAYERS} from './lobby-model.mjs';
 const safeText=(v,max)=>String(v??'').slice(0,max);
-const allowedId=id=>/^[A-Za-z0-9_-]{2,128}$/.test(id);
+const allowedId=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{2,128}$/.test(id)&&!['__proto__','prototype','constructor'].includes(id);
 export function participantSnapshot(roster){
  const valid=Object.entries(roster||{}).filter(([id,r])=>allowedId(id)&&r&&typeof r==='object'&&String(r.name||'').trim()).slice(0,MAX_PLAYERS);
  return Object.fromEntries(valid.map(([id,r])=>[id,{name:safeText(String(r.name).trim(),28)}]));
