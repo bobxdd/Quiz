@@ -47,11 +47,13 @@ async def main():
 
    # Start-page quick selection must open exactly the chosen board, not the last-used board.
    await page.goto(url)
-   await page.locator('.bq-landing-boards>summary').click()
+   if not await page.locator('.bq-landing-boards').evaluate('(el)=>el.open'):
+    await page.locator('.bq-landing-boards>summary').click()
    await page.locator(f'[data-action="open-landing-board"][data-board-id="{second}"]').click()
    await page.locator('.se-board-context>strong').get_by_text('Zweites Brett').wait_for()
    await page.goto(url)
-   await page.locator('.bq-landing-boards>summary').click()
+   if not await page.locator('.bq-landing-boards').evaluate('(el)=>el.open'):
+    await page.locator('.bq-landing-boards>summary').click()
    await page.locator(f'[data-action="open-landing-board"][data-board-id="{first}"]').click()
    await page.locator('.se-board-context>strong').get_by_text('Waldquiz').wait_for()
    print('PASS: explicit startup board picker preserves intended board identity')

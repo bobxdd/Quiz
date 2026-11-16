@@ -42,7 +42,7 @@ export function lobbyGuestHTML(lobby,member){
 export function hostLobbySummary(lobby){
  const teams=safeTeams(lobby?.teams),players=Array.isArray(lobby?.players)?lobby.players:[];
  return `<section class="glass panel bq-host-lobby-summary" aria-label="Team-Bereitschaft">
-  <div class="panelhead"><h2>Team-Lobby</h2><span class="bq-lobby-headcount" role="status" aria-live="polite"><strong>${Number(lobby?.ready)||0} / ${Number(lobby?.approved)||0}</strong> bereit</span></div>
+  <div class="panelhead"><div class="bq-host-lobby-title"><h2>Team-Lobby</h2><p class="small muted">Quiz: <strong>${e(lobby?.title||'BrainQuiz')}</strong></p></div><span class="bq-lobby-headcount" role="status" aria-live="polite"><strong>${Number(lobby?.ready)||0} / ${Number(lobby?.approved)||0}</strong> bereit</span></div>
   <div class="bq-host-team-grid">${teams.map(([id,name])=>{
     const group=players.filter(p=>p.team===id),ready=group.filter(p=>p.ready).length;
     return `<div class="bq-host-team-row" style="--bq-team-color:${teamColor(id)}"><strong>${teamLabel(id,name)}</strong><span>${ready}/${group.length} bereit</span><small>${group.map(p=>e(p.name)+(p.ready?' ✓':'')).join(', ')||'Noch keine Mitglieder'}</small></div>`;

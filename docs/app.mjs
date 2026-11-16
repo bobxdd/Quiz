@@ -61,6 +61,8 @@ const canHost=()=>role==='host';
 // A published live quiz is a committed game, not an editable draft. This flag
 // lives in the authoritative shared room state and survives host reconnection.
 const isPublished=()=>!isOffline()&&(publicState?.published===true||(()=>{try{return localStorage.getItem('bq-published-'+room)==='1'}catch{return false}})());
+const waitingInLobby=()=>canHost()&&!isOffline()&&view==='teams'&&Number(publicState?.round||0)===0&&publicState?.phase==='board';
+const roomCloseLabel=()=>waitingInLobby()||!isPublished()?'Lobby schließen':'Spielraum schließen';
 const editorOnlyActions=new Set(['quick-add','quick-replace','quickset','new-q','clone-q','delete-q','move-up','move-down','new-board','open-board','new-stored-board','add-block','block-delete','block-clone','block-up','block-down','clone-layout','undo-layout','redo-layout','import','publish','preview-q','preview-reveal']);const activeQuestion=()=>publicState?.current;const roundKey=()=>String(publicState?.round??0);const isOpen=()=>publicState?.phase==='question';const winner=()=>buzzers?.[roundKey()]||null;const teamName=t=>publicState?.teams?.[t]||t||'–';const now=()=>game?game.serverNow():Date.now();const buzzLocks=()=>publicState?.buzzerBlocked?.[roundKey()]||{};const isBuzzLocked=id=>!!(id&&(buzzLocks()?.[id]||(scoreMode(publicState)==='team'&&publicState?.buzzerBlockedTeams?.[roundKey()]?.[member?.team])));const viewerStateLabel=()=>publicState?.phase==='board'?'Quizbrett sichtbar':publicState?.phase==='review'?'Antwortübersicht sichtbar':publicState?.phase==='reveal'?'Lösung sichtbar':publicState?.phase==='paused'?'Frage pausiert':hasLiveQuestion()?'Frage geöffnet':'Warten';
 function notice(text){const el=$('toaster');if(!el)return;el.textContent=text;el.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.classList.remove('show'),4400);}
 function error(err){const message=String(err?.message||err||'Unbekannter Fehler');console.error('[BrainQuiz]',err);notice(message.slice(0,230));}
@@ -85,7 +87,70 @@ function hasValidRoom(value){return /^[A-HJ-NP-Z2-9]{16}$/.test(value);}
 async function initialize(){if(game)return game;const module=await import('./peer-client.mjs');game=new module.PeerGame();await game.init();return game;}
 function saveLocal(){try{if(isOffline()){if(!boardId)throw Error('Kein Quizbrett geöffnet.');if(boardConflict)throw Error('Ein anderer Tab hat dieses Brett verändert. Bitte Änderungen als Kopie sichern oder gespeicherte Version laden.');boardRevision=persistBoard(localStorage,boardId,boardRevision,normalizedQuiz(quiz));}else{localStorage.setItem('bq-quiz-'+room,JSON.stringify(quiz));queueHostCloudSave();}saveState=isOffline()?'Lokal gesichert':'Im Host-Browser gesichert';return true}catch(err){const message=String(err?.message||'Quizbrett konnte nicht gespeichert werden.');if(/anderen Tab|anderer Tab/.test(message))boardConflict=true;saveState=boardConflict?'KONFLIKT – als Kopie sichern!':'SPEICHERFEHLER – Backup exportieren!';notice(message.slice(0,220));return false;}}
 function loadLocal(){try{const val=localStorage.getItem('bq-quiz-'+room);quiz=val?normalizedQuiz(JSON.parse(val)):emptyQuiz()}catch{quiz=emptyQuiz()}selected=quiz.questions[0]?.id||''}
-async function promoteOnline(){if(!isOffline())return;await initialize();const source=normalizedQuiz(quiz);const code=roomCode();await game.create(code,source);await game.saveHostQuiz(code,source);room=code;quiz=source;hostCloudReady=true;saveLocal();localStorage.setItem('bq-last-host',room);history.replaceState(null,'',location.pathname+'?room='+room);view='editor';listenRoom();notice('PeerJS-Raum erstellt. Das Hostfenster während des Spielens geöffnet lassen.');}
+/* The saved board is the only source of truth for a newly hosted quiz.
+ * Never replace the local board with an empty online draft or edit it from the lobby. */
+let hostingSavedBoard=false;
+function saveCurrentBoard(){
+ if(!isOffline()||!boardId)throw Error('Quiz speichern ist nur im lokalen Frageneditor möglich.');
+ studio.flush?.();
+ if(!saveLocal())throw Error('Quiz konnte nicht gespeichert werden. Speicherplatz oder Konflikt prüfen; alternativ Backup exportieren.');
+ schedule();notice('Quiz „'+quiz.title+'“ gespeichert. Du kannst jetzt eine Lobby damit hosten.');
+}
+function backToSavedQuizzes(){
+ if(!isOffline())throw Error('Die Quizbibliothek ist während einer laufenden Lobby nicht verfügbar.');
+ studio.flush?.();
+ if(!saveLocal())throw Error('Das Quiz konnte nicht gespeichert werden. Du bleibst im Editor, damit keine Änderungen verloren gehen.');
+ room='';role='landing';view='start';publicState=null;
+ history.replaceState(null,'',location.pathname);schedule();
+}
+function createNewLocalQuiz(){
+ if(role!=='landing'&&!isOffline())throw Error('Ein neues Quiz kann nur außerhalb eines laufenden Spielraums erstellt werden.');
+ if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das bisherige Quiz konnte nicht gespeichert werden.');}
+ const created=createBoard(localStorage,emptyQuiz(),makeBoardId);
+ room='LOCAL';role='host';view='editor';
+ applyBoardWorkspace(created);loadOfflineBoardState();
+ history.replaceState(null,'',location.pathname);schedule();notice('Neues Quiz angelegt. Fragen erstellen und anschließend speichern.');
+}
+async function hostSavedQuiz(id){
+ if(hostingSavedBoard)return;
+ if(role!=='landing'&&!isOffline())throw Error('Ein weiterer Raum kann erst nach Schließen des laufenden Spielraums gestartet werden.');
+ hostingSavedBoard=true;
+ try{
+  if(isOffline()){
+   studio.flush?.();
+   if(!saveLocal())throw Error('Das Quiz konnte nicht sicher gespeichert werden. Lobby wurde nicht erstellt.');
+  }
+  // loadBoard validates the selected stable id, directory and revision. Do not
+  // silently host the last edited quiz if the requested saved board is missing.
+  const record=loadBoard(localStorage,id);
+  const source=normalizedQuiz(record.quiz);
+  for(const question of source.questions){if(question.scene)reconcileQuestion(question);}
+  const audit=quizAudit(source);
+  if(!audit.ready)throw Error('Quiz „'+source.title+'“ ist noch nicht bereit: '+audit.errors.slice(0,3).map(x=>x.label+': '+x.reason).join(' | ')+'. Bitte zuerst bearbeiten und speichern.');
+  if(audit.warnings.length&&!confirm(audit.warnings.length+' Hinweise bei „'+source.title+'“. Trotzdem mit diesem Quiz eine Lobby hosten?'))return;
+  await initialize();
+  const code=roomCode();
+  let created=false;
+  try{
+   // The very first room snapshot already owns the published board. Guests can
+   // join the team lobby without ever seeing unpublished/editable question data.
+   await game.create(code,source,{published:true});created=true;
+   await game.saveHostQuiz(code,source);
+   localStorage.setItem('bq-last-host',code);
+   localStorage.setItem('bq-published-'+code,'1');
+  }catch(err){
+   try{if(created)await game.deleteRoom(code);else game.shutdown();}catch{}
+   try{if(localStorage.getItem('bq-last-host')===code)localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+code);}catch{}
+   game=null;
+   throw err;
+  }
+  room=code;role='host';view='teams';quiz=source;selected=source.questions[0]?.id||'';
+  hostCloudReady=true;cloudDirty=false;clearTimeout(cloudTimer);
+  history.replaceState(null,'',location.pathname+'?room='+room);
+  listenRoom();notice('Lobby für „'+source.title+'“ gestartet. Lade deine Mitspieler ein.');
+ }finally{hostingSavedBoard=false;}
+}
+async function promoteOnline(){if(!isOffline())return;await hostSavedQuiz(boardId);}
 function backupFilename(prefix='BrainQuiz_Host'){
  const title=String(quiz?.title||'Quizbrett').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48)||'Quizbrett';
  const location=isOffline()?boardId.slice(1,8):room;
@@ -273,7 +338,7 @@ function maybeAnimateMapDagger(){
 function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen'],['live','▦','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Vorschau']]:isPublished()?[['live','◈','Quiz'],['present','▣','Präsentation'],['teams','♙','Lobby'],['history','▤','Verlauf'],['setup','⚙','Einstellungen']]:[['editor','✎','Fragen'],['live','◈','Quizbrett'],['present','▣','Vorschau'],['teams','♙','Lobby'],['setup','⚙','Einstellungen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(isPublished()?'Spielraum schließen':'Lobby schließen','leave-host-room','small danger'):''}<div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
  maybeAnimateQuestion();
  const pointsPanel=document.getElementById('review-points-panel');if(pointsPanel)pointsPanel.addEventListener('toggle',()=>{reviewPointsOpen=pointsPanel.open});
  if(view==='editor'&&role==='host')studio.mount(document.getElementById('se-root'));
@@ -286,6 +351,29 @@ function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';c
  }
  maybeAnimateMapDagger();
 }
+function savedQuizzesStart(drafts,workspaceError,hostCode){
+ const rows=drafts.map(b=>`<article class="bq-saved-quiz" data-saved-quiz-id="${e(b.id)}">
+  <div class="bq-saved-quiz-info"><strong>${e(b.title)}</strong>
+   <small>${b.updatedAt?'Gespeichert: '+new Date(b.updatedAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Lokal gespeichert'}</small></div>
+  <div class="bq-saved-quiz-actions">
+   ${btn('Bearbeiten','open-landing-board','small',`data-board-id="${e(b.id)}"`)}
+   ${btn('Lobby hosten','host-saved-board','primary small',`data-board-id="${e(b.id)}" title="${e(b.title)} als Lobby hosten"`)}
+  </div>
+ </article>`).join('');
+ return `<section class="glass panel start-card bq-saved-quiz-home">
+  <div class="bq-saved-quiz-home-head"><div><h2>Meine Quizze</h2><p class="small muted">Erstellen, speichern und das gewünschte Quiz direkt als Lobby starten.</p></div>
+   ${btn('+ Neues Quiz erstellen','create-new-quiz','primary')}</div>
+  ${workspaceError?`<p class="small muted" role="alert">${e(workspaceError)}</p>`:''}
+  ${drafts.length?`<details class="bq-landing-boards" open><summary>Gespeicherte Quizze (${drafts.length})</summary><div class="bq-landing-boards-list">${rows}</div></details>`:
+   '<p class="small muted">Noch kein Quiz gespeichert. Erstelle dein erstes Quiz und klicke im Editor auf „Quiz speichern“.</p>'}
+  <div class="bq-saved-quiz-secondary">
+   ${btn('Quizbrett bearbeiten','create-offline','small')}
+   ${hostCode?btn('Live-Raum fortsetzen','resume','small'):''}
+   ${btn('Online-Raum erstellen','create','small')}
+  </div>
+  <p class="small muted">„Online-Raum erstellen“ bleibt für ältere Entwurfsabläufe verfügbar. Einfacher: Ein gespeichertes Quiz auswählen und „Lobby hosten“ anklicken.</p>
+ </section>`;
+}
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
  let drafts=[],workspaceError='';try{drafts=boardList(localStorage);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
@@ -294,8 +382,8 @@ function landing(){
  <main class="start-main"><h1>${invite?'Quiz beitreten':'BrainQuiz Online'}</h1>
  ${invite?`<p class="small muted">Raum ${e(roomFromLink)} · Gib deinen Namen ein, um dem Quiz beizutreten.</p>`:'<p class="small muted">Ein Link für alle. Quiz erstellen und direkt mit bis zu zehn Freunden im Browser spielen.</p>'}
  <div class="start-grid ${invite?'bq-invite-landing':''}">
- ${!invite?`<section class="glass panel start-card"><h2>Quiz hosten</h2><div class="row">${btn('Quizbrett bearbeiten','create-offline','primary')}${btn('Online-Raum erstellen','create','small',configured?'':'disabled')}${hostCode?btn('Live-Raum fortsetzen','resume','small',configured?'':'disabled'):''}</div><p class="small muted">${workspaceError?e(workspaceError):drafts.length?drafts.length+' lokal gespeicherte Quizbretter · Das zuletzt geöffnete wird fortgesetzt.':'Dein Quizbrett wird in diesem Browser gespeichert.'} Ein Live-Raum ist unabhängig vom lokalen Entwurf. Zum Spielen eines vorhandenen Bretts zuerst „Quizbrett bearbeiten“ und dort „Live-Raum starten“ wählen.</p>${drafts.length?`<details class="bq-landing-boards"><summary>Gespeicherte Quizbretter (${drafts.length})</summary><div class="bq-landing-boards-list">${drafts.map(b=>`<button type="button" class="btn small" data-action="open-landing-board" data-board-id="${e(b.id)}">${e(b.title)} <small>· ${e(b.id.slice(1,7).toUpperCase())}</small></button>`).join('')}</div></details>`:''}</section>`:''}
- <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
+ ${!invite?savedQuizzesStart(drafts,workspaceError,hostCode):''}
+  <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
  </div>
  <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section></main></div>`;
 }
@@ -481,7 +569,7 @@ function renderTeams(){
  }).join('');
  return `${hostLobbySummary(lobby)}<div class="grid"><div class="stack"><section class="glass panel"><div class="panelhead"><h3>Beitrittsanfragen</h3><span class="pill ${waiting.length?'warn':''}">${waiting.length} ANFRAGEN</span></div>${waiting.length?`<div class="roster">${pendingHTML}</div>`:'<div class="empty">Aktuell keine wartenden Spieler.</div>'}</section><section class="glass panel"><div class="panelhead"><h3>Teilnehmer</h3><span class="pill ${slots?'good':'warn'}">${occupied}/${MAX_PLAYERS} PLÄTZE</span></div>${!slots?'<p class="small muted">Der Raum ist voll. Entferne einen Spieler, um einen Platz freizugeben.</p>':''}<div class="roster">${accepted.length?accepted.map(([id,p])=>`<div class="person"><div class="row"><span class="dot ${presence?.[id]?'live':''}"></span><div><b>${e(p.name)}</b><small><span class="bq-team-swatch" style="--bq-team-color:${teamColor(p.team)}" aria-hidden="true"></span> ${e(teamName(p.team))} · ${presence?.[id]?'Online':'Nicht verbunden'} · ${members[id]?.ready?'✓ Bereit':'Nicht bereit'}</small></div></div>${btn('Entfernen','kick','small danger',`data-uid="${e(id)}"`)}</div>`).join(''):'<div class="empty">Noch keine Teilnehmer freigegeben.</div>'}</div></section></div><div class="stack"><section class="glass panel"><div class="panelhead"><h3>Teilnehmerpunkte</h3></div>${personScores().map(p=>`<div class="scoreline"><span>${e(p.name)}</span><b>${p.points.toLocaleString('de-DE')}</b></div>`).join('')}</section><section class="glass panel"><div class="panelhead"><h3>Zugriff</h3></div><p>Der Host bestätigt Beitritte. Teams und Bereitschaft werden von Teilnehmern vor Spielbeginn selbst gewählt.</p></section></div></div>`;
 }
-function renderSetup(){return `<div class="grid"><section class="glass panel"><div class="panelhead"><h3>Spielraum & Einladung</h3><span class="pill good">GITHUB LIVE</span></div><label class="field">Raumcode<input readonly value="${e(room)}" class="mono" style="font-size:20px;letter-spacing:.14em"></label><div class="row" style="margin-top:12px">${btn('Einladungslink kopieren','invite','primary')}${btn('Raum-Link kopieren','copy-room','')}</div><div class="divider"></div><div class="hint">Die Website läuft unabhängig von deinem PC. Während der laufenden Runde muss der Host-Browser verbunden sein; nur die Gäste brauchen keine Installation.</div></section><div class="stack">${canHost()?`<section class="glass panel"><div class="panelhead"><h3>Private Host-Dateien</h3><span class="pill warn">NICHT VERSCHICKEN</span></div><p>Host-Quizdateien enthalten die Lösungen und Originalbilder. Nur der Host sollte sie erhalten.</p><div class="row">${btn('Host-Quiz exportieren','export','primary')}${btn('Quiz importieren','import','')}</div><input type="file" id="import-quiz" accept=".json,.brainquiz" hidden><div class="divider"></div>${btn('Spielstand zurücksetzen','reset-questions','danger small')} ${btn(isPublished()?'Spielraum schließen':'Lobby schließen','leave-host-room','danger small')}</section>`:''}<section class="glass panel"><div class="panelhead"><h3>Verbindungsdetails</h3></div><div class="hint"><b>PeerJS / WebRTC</b><br>Verbindung: ${connected?'Aktiv':'Unterbrochen'}<br>Angemeldet: ${e(game?.uid?.slice(0,14)||'–')}…<br>Der Host-Browser hält den Spielstand. Vor dem Schließen ein Quiz-Backup exportieren.</div></section></div></div>`;}
+function renderSetup(){return `<div class="grid"><section class="glass panel"><div class="panelhead"><h3>Spielraum & Einladung</h3><span class="pill good">GITHUB LIVE</span></div><label class="field">Raumcode<input readonly value="${e(room)}" class="mono" style="font-size:20px;letter-spacing:.14em"></label><div class="row" style="margin-top:12px">${btn('Einladungslink kopieren','invite','primary')}${btn('Raum-Link kopieren','copy-room','')}</div><div class="divider"></div><div class="hint">Die Website läuft unabhängig von deinem PC. Während der laufenden Runde muss der Host-Browser verbunden sein; nur die Gäste brauchen keine Installation.</div></section><div class="stack">${canHost()?`<section class="glass panel"><div class="panelhead"><h3>Private Host-Dateien</h3><span class="pill warn">NICHT VERSCHICKEN</span></div><p>Host-Quizdateien enthalten die Lösungen und Originalbilder. Nur der Host sollte sie erhalten.</p><div class="row">${btn('Host-Quiz exportieren','export','primary')}${btn('Quiz importieren','import','')}</div><input type="file" id="import-quiz" accept=".json,.brainquiz" hidden><div class="divider"></div>${btn('Spielstand zurücksetzen','reset-questions','danger small')} ${btn(roomCloseLabel(),'leave-host-room','danger small')}</section>`:''}<section class="glass panel"><div class="panelhead"><h3>Verbindungsdetails</h3></div><div class="hint"><b>PeerJS / WebRTC</b><br>Verbindung: ${connected?'Aktiv':'Unterbrochen'}<br>Angemeldet: ${e(game?.uid?.slice(0,14)||'–')}…<br>Der Host-Browser hält den Spielstand. Vor dem Schließen ein Quiz-Backup exportieren.</div></section></div></div>`;}
 function currentQuestion(){return quiz.questions.find(q=>q.id===selected)||quiz.questions[0]||null;}
 function renderEditor(){return studio.render();}
 function renderPresenter(){
@@ -557,6 +645,11 @@ const studio=createStudioEditor({
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
  case 'create-offline':startOffline();return;
+ case 'create-new-quiz':createNewLocalQuiz();return;
+ case 'save-board':saveCurrentBoard();return;
+ case 'back-to-quizzes':backToSavedQuizzes();return;
+ case 'host-current-board':await hostSavedQuiz(boardId);return;
+ case 'host-saved-board':await hostSavedQuiz(button.dataset.boardId);return;
  case 'open-landing-board':startOffline(button.dataset.boardId);return;
  case 'new-board':newStoredBoard();return;
  case 'open-board':openStoredBoard(button.dataset.boardId);return;
@@ -604,7 +697,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'lobby-join':{if(role!=='guest')return;await game.chooseLobbyTeam(room,button.dataset.team);notice('Team ausgewählt.');return;}
  case 'lobby-ready':{if(role!=='guest')return;await game.setLobbyReady(room,button.dataset.ready==='true');notice(button.dataset.ready==='true'?'Bereit gemeldet.':'Bereitschaft zurückgenommen.');return;}
  case 'create':await createRoom();return;
- case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
+ case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
   case 'resume':{const code=localStorage.getItem('bq-last-host');if(!code)throw Error('Kein vorheriger Hostraum gespeichert.');await enterRoom(code);return;}
  case 'view':if(isPublished()&&button.dataset.view==='editor'){notice('Dieses Quiz ist bereits veröffentlicht. Der Frageneditor bleibt geschlossen.');return;}view=button.dataset.view;if(isOffline()&&view==='live'){const board=buildPublicBoard(quiz,publicState?.used||{});publicState={...publicState,board,manualPlayers:manualPlayerLabels(quiz)};}schedule();return;
  case 'invite':{const link=location.origin+location.pathname+'?room='+room;await navigator.clipboard.writeText(`BrainQuiz Live\n${link}\nRaumcode: ${room}`);notice('Einladung kopiert.');return;}
