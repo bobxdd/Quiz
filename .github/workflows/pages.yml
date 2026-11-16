@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
       - name: Chromium browser checks for local quizboard recovery and mobile UI
         run: |
-          python -m pip install --disable-pip-version-check playwright==1.56.0
+          python -m pip install --disable-pip-version-check playwright==1.65.2
           python -m playwright install --with-deps chromium
           python tests/board-workspace-browser.py
       - name: No private quiz files, passwords or Windows packages in repository
