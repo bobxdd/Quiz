@@ -179,3 +179,83 @@ body.bq-game-mode{overflow:hidden;min-height:100dvh}
 
 .bq-question-panel .se-kind-image{position:absolute!important}
 .bq-map-marker{position:absolute;transform:translate(-50%,-65%);font-size:25px;color:#f2c56b;line-height:1;text-shadow:0 2px 4px #000,0 0 8px #000;z-index:9;pointer-events:none}
+
+/* BrainQuiz 3.6.1 / step 1: immersive question and answer view.
+   Visual-only changes: no quiz state, permissions or network logic changed. */
+body.bq-game-mode:has(.bq-question-scene) .shell{
+  max-width:none;width:100%;padding:clamp(4px,.55vw,9px);
+}
+body.bq-game-mode:has(.bq-question-scene) .topbar{
+  padding:5px 12px;margin-bottom:4px;
+}
+body.bq-game-mode:has(.bq-question-scene) .topbar .header-primary{min-height:34px}
+body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4px 9px}
+.bq-question-scene{gap:6px}
+.bq-question-scene .bq-scene-heading{min-height:35px;margin:0 4px}
+.bq-question-scene .bq-scene-heading h2{font-size:clamp(18px,1.85vw,27px);overflow-wrap:anywhere}
+.bq-question-scene .bq-question-body{
+  flex:1 1 0;min-height:0;min-width:0;display:flex;flex-direction:column;gap:7px;
+}
+.bq-question-scene .bq-question-panel{
+  flex:1 1 0;min-height:0;min-width:0;width:100%;
+  padding:clamp(6px,.8vw,13px)!important;
+}
+.bq-question-scene .bq-scene-content{min-height:0;min-width:0}
+.bq-question-scene .bq-question-panel .stage{
+  flex:1 0 auto;min-width:0;min-height:100%;width:100%;
+  padding:clamp(14px,1.8vw,30px);
+}
+.bq-question-scene .bq-question-panel .stage h2{
+  max-width:none;font-size:clamp(23px,2.9vw,42px);
+}
+.bq-question-scene .bq-guest-compose{
+  flex:0 0 auto;max-height:min(30dvh,310px);width:100%;
+  overflow:auto;padding:clamp(9px,1vw,16px)!important;
+}
+.bq-question-scene .bq-guest-compose .formgrid{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:9px;
+}
+.bq-question-scene .bq-guest-compose .formgrid>.btn{
+  grid-column:2;grid-row:1 / span 4;align-self:end;min-width:170px;
+}
+.bq-question-scene .bq-guest-compose .field textarea{min-height:64px;max-height:110px}
+.bq-question-scene .bq-guest-compose .bq-guest-mode{gap:4px;padding:8px 12px}
+.bq-question-scene .bq-guest-compose .bq-guest-mode h3{font-size:17px}
+.bq-question-scene .bq-guest-compose .bq-guest-mode p{font-size:13px}
+.bq-question-scene .bq-host-visibility{padding:7px 10px!important}
+.bq-question-scene .bq-host-visibility .panelhead{margin-bottom:4px}
+.bq-question-scene .bq-host-visibility p{margin-bottom:0}
+.bq-question-scene .bq-host-main-status{padding:7px 12px}
+.bq-question-scene .bq-answer-review-body{
+  flex:1 1 0;min-height:0;display:grid;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr) minmax(180px,1.15fr);
+  gap:7px;
+}
+.bq-question-scene .bq-answers-panel{min-height:0;padding:10px!important}
+.bq-question-scene .bq-answers-panel .review-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;
+}
+.bq-question-scene .bq-answers-panel .review-card{
+  min-height:110px;max-height:none;overflow:visible;
+}
+.bq-question-scene .bq-answers-panel .review-card .review-value{max-height:180px}
+@media(max-width:780px){
+  .bq-question-scene .bq-guest-compose{max-height:min(39dvh,310px)}
+  .bq-question-scene .bq-answer-review-body{grid-template-rows:minmax(0,1fr) minmax(140px,1fr)}
+}
+@media(max-width:530px){
+  .bq-question-scene .bq-guest-compose .formgrid{grid-template-columns:minmax(0,1fr)}
+  .bq-question-scene .bq-guest-compose .formgrid>.btn{
+    grid-column:1;grid-row:auto;width:100%;min-width:0;
+  }
+  .bq-question-scene .bq-guest-compose{max-height:44dvh}
+  .bq-question-scene .bq-answers-panel .review-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-height:560px){
+  .bq-question-scene .bq-guest-compose{max-height:45dvh}
+  .bq-question-scene .bq-answer-review-body{grid-template-rows:minmax(0,1fr) minmax(110px,1fr)}
+}
+@media print{
+  body.bq-game-mode:has(.bq-question-scene) .shell{height:auto;overflow:visible}
+}
