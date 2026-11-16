@@ -275,7 +275,7 @@ test('Host can create teams directly; guest cannot bypass host rights, five-team
  assert.equal(Object.keys(host.data.roster).length,0,'Host must not occupy a player slot');
  const guest=new PeerGame();await guest.connect(room,'Guest');
  await assert.rejects(guest.hostCreateLobbyTeam(room,'Spoof'),/Host|host|nicht berechtigt/i);
- await assert.rejects(guest._rpc('hostCreateLobbyTeam',{name:'Spoof'}),/nicht erlaubt/);
+ await assert.rejects(guest._rpc('hostCreateLobbyTeam',{name:'Spoof'}),/Hostfreigabe erforderlich|nicht erlaubt/);
  await assert.rejects(host.hostCreateLobbyTeam(room,'gold'),/bereits/);
  await host.hostCreateLobbyTeam(room,'Violett');
  await host.hostCreateLobbyTeam(room,'Smaragd');
