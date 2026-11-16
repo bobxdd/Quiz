@@ -1,23 +1,24 @@
 /** Pure lobby rules for BrainQuiz Live. The host is NOT counted as a player. */
-export const MAX_PLAYERS=8;
+export const MAX_PLAYERS=10;
 export const validPlayerId=id=>/^[A-Za-z0-9_-]{2,128}$/.test(String(id||''))&&!['__proto__','prototype','constructor'].includes(String(id));
 export function approvedCount(roster){return Object.entries(roster||{}).filter(([id,p])=>validPlayerId(id)&&p&&typeof p==='object'&&typeof p.name==='string'&&p.name.trim()&&typeof p.team==='string'&&p.team.trim()).length;}
 export function freeSlots(roster){return Math.max(0,MAX_PLAYERS-approvedCount(roster));}
 export function approval(roster,id,player,team){
  if(!validPlayerId(id))throw Error('Ungültige Spieler-ID.');
  if(!player||typeof player.name!=='string'||!player.name.trim())throw Error('Spielername fehlt.');
- if(!/^t[1-6]$/.test(String(team)))throw Error('Ungültiges Team.');
+ if(!validTeamId(team))throw Error('Ungültiges Team.');
  const current={...(roster||{})};
- if(!Object.hasOwn(current,id)&&freeSlots(current)===0)return {accepted:false,roster:current,reason:'Alle 8 Spielerplätze sind belegt.'};
+ if(!Object.hasOwn(current,id)&&freeSlots(current)===0)return {accepted:false,roster:current,reason:`Alle ${MAX_PLAYERS} Spielerplätze sind belegt.`};
  current[id]={name:player.name.trim().slice(0,28),team};
  return {accepted:true,roster:current};
 }
 export function participantLabels(roster){return Object.entries(roster||{}).filter(([id,p])=>validPlayerId(id)&&p?.name&&p?.team).slice(0,MAX_PLAYERS).map(([id,p])=>({id,name:String(p.name).slice(0,28),team:p.team}));}
 
 /** Step 4: stable, accessible and distinct team palette (colors are IDs, never guest CSS). */
-export const MAX_TEAMS=6;
+export const MAX_TEAMS=5;
 export const TEAM_PALETTE=Object.freeze(['#85bde4','#e3a09e','#a7c989','#c2a4e5','#e4bd72','#74c8be']);
-export const teamColor=id=>/^t[1-6]$/.test(String(id||''))?TEAM_PALETTE[Number(id.slice(1))-1]:'#aab6bf';
+export const teamColor=id=>validTeamId(id)?TEAM_PALETTE[Number(id.slice(1))-1]:'#aab6bf';
+// An existing sixth team stays readable in older quizboards. New rooms can create at most five.
 export const validTeamId=id=>/^t[1-6]$/.test(String(id||''));
 export const canArrangeLobby=state=>state?.phase==='board'&&Number(state?.round||0)===0&&!Object.entries(state?.used||{}).some(([id,v])=>id!=='_empty'&&v===true);
 export function cleanTeamName(value){
@@ -30,13 +31,14 @@ export function addLobbyTeam(current,name){
  const teams=current&&typeof current==='object'&&!Array.isArray(current)?current:{};
  const cleaned=cleanTeamName(name);
  if(Object.values(teams).some(v=>String(v||'').trim().toLocaleLowerCase('de')===cleaned.toLocaleLowerCase('de')))throw Error('Diesen Teamnamen gibt es bereits.');
- const free=Array.from({length:MAX_TEAMS},(_,i)=>'t'+(i+1)).find(id=>!Object.hasOwn(teams,id));
- if(!free)throw Error('Maximal sechs Teams möglich.');
+ const count=Object.keys(teams).filter(validTeamId).length;
+ const free=count<MAX_TEAMS?Array.from({length:MAX_TEAMS},(_,i)=>'t'+(i+1)).find(id=>!Object.hasOwn(teams,id)):null;
+ if(!free)throw Error(`Maximal ${MAX_TEAMS} Teams möglich.`);
  return {teams:{...teams,[free]:cleaned},id:free,color:teamColor(free)};
 }
 export function lobbySnapshot(data){
  const pub=data?.public||{},teams=pub.teams||{},roster=data?.roster||{},members=data?.members||{},presence=data?.presence||{};
- const safeTeams=Object.fromEntries(Object.entries(teams).filter(([id,name])=>validTeamId(id)&&typeof name==='string').slice(0,MAX_TEAMS));
+ const safeTeams=Object.fromEntries(Object.entries(teams).filter(([id,name])=>validTeamId(id)&&typeof name==='string').slice(0,TEAM_PALETTE.length));
  const players=Object.entries(roster).filter(([id,v])=>validPlayerId(id)&&v?.name&&safeTeams[v.team]).slice(0,MAX_PLAYERS).map(([id,player])=>({
   name:String(player.name).slice(0,28),team:player.team,ready:members[id]?.ready===true,online:!!presence[id]
  }));
