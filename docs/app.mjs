@@ -94,6 +94,13 @@ function saveCurrentBoard(){
  if(!saveLocal())throw Error('Quiz konnte nicht gespeichert werden. Speicherplatz oder Konflikt prüfen; alternativ Backup exportieren.');
  schedule();notice('Quiz „'+quiz.title+'“ gespeichert. Du kannst jetzt eine Lobby damit hosten.');
 }
+function backToSavedQuizzes(){
+ if(!isOffline())throw Error('Die Quizbibliothek ist während einer laufenden Lobby nicht verfügbar.');
+ studio.flush?.();
+ if(!saveLocal())throw Error('Das Quiz konnte nicht gespeichert werden. Du bleibst im Editor, damit keine Änderungen verloren gehen.');
+ room='';role='landing';view='start';publicState=null;
+ history.replaceState(null,'',location.pathname);schedule();
+}
 function createNewLocalQuiz(){
  if(role!=='landing'&&!isOffline())throw Error('Ein neues Quiz kann nur außerhalb eines laufenden Spielraums erstellt werden.');
  if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das bisherige Quiz konnte nicht gespeichert werden.');}
@@ -638,6 +645,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'create-offline':startOffline();return;
  case 'create-new-quiz':createNewLocalQuiz();return;
  case 'save-board':saveCurrentBoard();return;
+ case 'back-to-quizzes':backToSavedQuizzes();return;
  case 'host-current-board':await hostSavedQuiz(boardId);return;
  case 'host-saved-board':await hostSavedQuiz(button.dataset.boardId);return;
  case 'open-landing-board':startOffline(button.dataset.boardId);return;
