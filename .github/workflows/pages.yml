@@ -2,13 +2,15 @@ name: BrainQuiz Studio — Test & Publish GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
 concurrency:
-  group: github-pages
+  group: github-pages-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   check:
@@ -35,6 +37,7 @@ jobs:
           python tests/features-3_4-browser.py
           python tests/team-lobby-step4-browser.py
           python tests/ui-step3-layout-browser.py
+          python tests/step5-characters-browser.py
           python tests/editor-3_1-browser.py
           python tests/categories-3_0-browser.py
       - name: Preserve layout screenshots and measurements for review
@@ -50,6 +53,7 @@ jobs:
         run: |
           ! find . -type f \( -name '*.brainquiz.json' -o -name '*.brainplay.json' -o -name '*.exe' -o -name '*.bat' -o -name '*service-account*.json' -o -name '.env' -o -name '.env.*' \) | grep .
   deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
