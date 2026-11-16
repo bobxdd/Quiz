@@ -88,9 +88,15 @@ async def main():
   await host.locator('[data-se-scoremode]').select_option('individual')
   await expect(host.locator('[data-se-scoremode]')).to_have_value('individual')
   await host.locator('[data-se-scoremode]').select_option('team')
+  # The editor commits a new DOM in the next animation frame when a setting changes.
+  # Wait for that frame before typing into the newly mounted title input.
+  await host.wait_for_timeout(75)
   await host.locator('.bq-editor-main-info [data-se-quiztitle]').fill('UI-Audit Quiz')
+  before_save=await host.evaluate('window.__probe.getQuiz().title')
+  assert before_save=='UI-Audit Quiz',('Title input failed to update model',before_save)
   await host.locator('[data-action="save-board"]').click()
-  assert (await host.evaluate('window.__probe.getQuiz()'))['title']=='UI-Audit Quiz'
+  after_save=await host.evaluate('window.__probe.getQuiz().title')
+  assert after_save=='UI-Audit Quiz',('Save overwrote or reverted title',before_save,after_save)
   await host.screenshot(path=str(OUT/'audit-editor-toolbar-390.png'),full_page=True,animations='disabled')
   print('PASS audit editor: responsive toolbar, tools, score setting and saved title',flush=True)
 
