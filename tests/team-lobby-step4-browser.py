@@ -28,6 +28,7 @@ async def main():
   host=await ctx.new_page();host.on('pageerror',lambda e:errors.append('Host: '+str(e)))
   host.on('dialog',lambda d:asyncio.create_task(d.accept()))
   await install(host)
+  await host.locator('.bq-legacy-options>summary').click()
   await host.get_by_role('button',name='Online-Raum erstellen').click()
   await host.locator('.se-studio').wait_for()
   code=await host.evaluate('window.__probe.room()')
