@@ -73,17 +73,20 @@ async def main():
    original=await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)
    assert original=='Geändert im zweiten Tab',original
    assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==3
+   await page.locator('.se-board-conflict').wait_for(state='detached',timeout=8000)
+   await page.wait_for_timeout(120)  # ensure rescue's scheduled editor redraw cannot replace the import input
    print('PASS: stale-tab change detection, no overwrite, rescue as copy')
 
    # Import must always make a separate board and leave the originals intact.
    payload=json.dumps({'version':1,'title':'Importiert','questions':[],'teams':['A','B']}).encode()
+   await page.evaluate("() => {window.__importEvents=0;document.addEventListener('change',e=>{if(e.target.id==='import-quiz')window.__importEvents++},true)}")
    await page.locator('#import-quiz').set_input_files({'name':'probe.brainquiz.json','mimeType':'application/json','buffer':payload})
    try: await page.locator('.se-board-context>strong').get_by_text('Importiert').wait_for(timeout=8000)
    except Exception:
     print('DIAG import',{'title':await page.locator('.se-board-context>strong').all_inner_texts(),
                           'toaster':await page.locator('#toaster').all_inner_texts(),
                           'errors':errors,
-                          'file':await page.locator('#import-quiz').count()})
+                          'file':await page.locator('#import-quiz').count(), 'changeEvents':await page.evaluate('window.__importEvents'), 'workspace':await page.evaluate('JSON.parse(localStorage.getItem("bq-board-workspaces-v1"))?.map(x=>x.title)')})
     raise
    assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==4
    assert await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)==original
