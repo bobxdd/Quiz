@@ -79,7 +79,7 @@ async def main():
   assert await page.get_by_role('button',name='Zurück zum Editor').count()==0
   await page.get_by_role('button',name='Zurück zum Quizbrett').click()
   await page.locator('.bq-board-scene').wait_for()
-  await page.get_by_role('button',name='Spielraum schließen').click()
+  await page.get_by_role('button',name='Lobby schließen').click()
   await page.locator('.bq-legacy-options>summary').wait_for(timeout=12000)
   assert await page.evaluate('window.__probe.room()')==''
   assert await page.evaluate('(r)=>localStorage.getItem("bq-published-"+r)',new_room) is None
