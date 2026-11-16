@@ -33,6 +33,7 @@ jobs:
           python -m playwright install --with-deps chromium
           python tests/board-workspace-browser.py
           python tests/map-step3-browser.py
+          python tests/publish-lock-lobby-exit-browser.py
           python tests/map-step3-peer-browser.py
           python tests/features-3_4-browser.py
           python tests/team-lobby-step4-browser.py

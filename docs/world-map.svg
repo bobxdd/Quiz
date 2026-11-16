@@ -1,17 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" role="img" aria-label="Graue Weltkarte mit deutlich getrennten Ländern" preserveAspectRatio="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" role="img" aria-label="Stilisierte Weltkarte mit klar abgegrenzten Ländern" preserveAspectRatio="xMidYMid meet">
 <!-- Data: Natural Earth 1:110m admin-0 countries (public domain)
      https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/
      Countries are generalized; political boundaries represent Natural Earth's de-facto convention.
      Projection: equirectangular, matching BrainQuiz world-coordinate pin system. -->
-<rect x="0" y="0" width="1000" height="500" fill="#edf1f3"/>
+<rect x="0" y="0" width="1000" height="500" fill="#1e303b"/>
+<!-- Restrained graticule: the equirectangular answer-coordinate system is unchanged. -->
+<g aria-hidden="true" stroke="#7895a0" stroke-opacity=".20" stroke-width=".65" fill="none">
+ <path d="M125 0V500 M250 0V500 M375 0V500 M500 0V500 M625 0V500 M750 0V500 M875 0V500"/>
+ <path d="M0 125H1000 M0 250H1000 M0 375H1000"/>
+</g>
 <style>
- .country{stroke:#566571;stroke-width:0.85;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
- .tone-0{fill:#c4ced3}
- .tone-1{fill:#d5dce0}
- .tone-2{fill:#b8c4cb}
- .tone-3{fill:#e1e6e9}
- .tone-4{fill:#cbd4d9}
- .tone-5{fill:#bcc8cf}
+ .country{stroke:#24343c;stroke-width:0.95;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
+ .tone-0{fill:#869ba0}
+ .tone-1{fill:#9caaad}
+ .tone-2{fill:#788e93}
+ .tone-3{fill:#a9b5b3}
+ .tone-4{fill:#8b9f9e}
+ .tone-5{fill:#82989c}
 </style>
 <g id="countries" aria-hidden="true"><path class="country tone-0" data-name="Fiji" d="M1000 294.63 L1000 295.99 L998.23 296.67 L996.46 297.26 L996.1 296.22 L997.49 295.65 L998.37 295.5 L1000 294.63ZM994.79 298.62 L995.48 298.17 L996.44 298.97 L995.98 300.42 L994.26 300.8 L992.73 300.46 L992.46 299.24 L993.53 298.28 L994.79 298.62ZM0.57 294.5 L0.23 295.84 L0 295.99 L0 294.63 L0.57 294.5Z"/>
 <path class="country tone-5" data-name="United Republic of Tanzania" d="M594.18 252.64 L594.65 252.94 L604.72 258.6 L604.91 260.21 L608.9 262.99 L607.61 266.41 L607.78 267.99 L609.56 269 L609.64 269.72 L608.87 271.4 L609.03 272.24 L608.85 273.57 L609.82 275.31 L610.97 278.05 L611.99 278.66 L609.78 280.27 L606.74 281.35 L605.08 281.3 L604.09 282.14 L602.15 282.21 L601.43 282.56 L598.09 281.78 L596 282 L595.22 278.22 L594.28 276.93 L593.72 276.16 L591 275.64 L589.42 274.81 L587.66 274.34 L586.55 273.87 L585.39 273.17 L583.89 269.67 L582.28 268.11 L581.72 266.5 L582 265.06 L581.5 262.5 L582.65 262.37 L583.66 261.36 L584.74 259.91 L585.42 259.33 L585.4 258.43 L584.8 257.8 L584.64 256.71 L585.44 256.35 L585.6 254.72 L584.5 253.15 L585.47 252.82 L588.52 252.85 L594.18 252.64Z"/>

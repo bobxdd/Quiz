@@ -156,7 +156,8 @@ async def main():
        ['.bq-map-viewport','.bq-map-title h2'])
     mapRect=next(b for b in report['boxes'] if b['selector']=='.bq-map-viewport')
     assert mapRect['w']>=min(width-26,220),f'map too narrow at {width}: {mapRect}'
-    assert mapRect['h']>=280,f'map too short at {height}: {mapRect}'
+    assert mapRect['h']>=min(280,mapRect['w']/2-4),f'map unexpectedly short at {height}: {mapRect}'
+    assert abs(mapRect['w']/mapRect['h']-2)<.04,f'world-map projection distorted at {width}×{height}: {mapRect}'
     if width in [320,390,1440]:
      await clickability(page,f'map-editor-{width}',[
       '.bq-map-controls [data-map-zoom="in"]','.bq-map-controls [data-map-zoom="out"]'
