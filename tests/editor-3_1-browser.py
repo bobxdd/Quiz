@@ -15,6 +15,7 @@ async def main():
   context=await browser.new_context(viewport={'width':1440,'height':900},reduced_motion='reduce')
   page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await install(page)
+  await page.locator('.bq-legacy-options>summary').click()
   await page.get_by_role('button',name='Online-Raum erstellen').click()
   await page.locator('.se-category-overview').wait_for(timeout=12000)
   await page.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
@@ -34,7 +35,9 @@ async def main():
   await page.wait_for_timeout(100)
   after=await page.evaluate('window.__probe.getQuiz()')
   assert [q['points'] for q in after['questions']]==[400,400],after
-  await page.locator('[data-se-action="undo"]').click();await page.wait_for_timeout(100)
+  if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
+    await page.locator('.bq-editor-extras>summary').click()
+   await page.locator('[data-se-action="undo"]').click();await page.wait_for_timeout(100)
   undo=await page.evaluate('window.__probe.getQuiz()')
   assert [q['points'] for q in undo['questions']]==[100,100],undo
   await page.locator('[data-se-action="redo"]').click();await page.wait_for_timeout(100)
@@ -53,7 +56,9 @@ async def main():
   await page.locator('.se-audience-preview').wait_for();assert await page.locator('.se-audience-label').count()==1
   await page.locator('[data-se-action="preview-device"]').click();await page.locator('.se-audience-mobile').wait_for()
   await page.locator('[data-se-action="toggle-preview"]').click()
-  await page.locator('[data-se-action="audit"]').click();await page.locator('.se-audit').wait_for()
+  if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
+    await page.locator('.bq-editor-extras>summary').click()
+   await page.locator('[data-se-action="audit"]').click();await page.locator('.se-audit').wait_for()
   assert await page.locator('.se-audit').get_by_text('Fehler',exact=False).count()>=1
   assert not (await page.locator('.se-save-badge').inner_text()).startswith('●')
   (root/'screenshots').mkdir(exist_ok=True)
