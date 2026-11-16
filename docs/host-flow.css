@@ -149,3 +149,18 @@ body:has(.bq-host-lobby-page) .topbar .header-primary{align-items:center;gap:9px
  body:has(.bq-host-lobby-page) .topbar .brand strong{font-size:13px}
  body:has(.bq-host-lobby-page) .topbar .nav{min-height:36px}
 }
+
+/* Mobile Chromium can fail to paint a nested frosted .glass card in a
+   vertically scrolled host lobby. Use an opaque panel for stable painting. */
+@media(max-width:600px){
+ .bq-host-lobby-team-section{position:relative;z-index:1;min-width:0}
+ .bq-host-lobby-team-section .bq-host-lobby-summary{
+  display:block!important;position:relative;z-index:1;
+  background:#252d33!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  border:1px solid #63767b!important;opacity:1!important;visibility:visible!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.05),0 6px 17px rgba(0,0,0,.22)!important
+ }
+ .bq-host-lobby-team-section .bq-host-lobby-summary::before,
+ .bq-host-lobby-team-section .bq-host-lobby-summary::after{display:none!important}
+}
