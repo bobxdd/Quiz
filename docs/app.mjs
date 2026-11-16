@@ -342,6 +342,29 @@ function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';c
  }
  maybeAnimateMapDagger();
 }
+function savedQuizzesStart(drafts,workspaceError,hostCode){
+ const rows=drafts.map(b=>`<article class="bq-saved-quiz" data-saved-quiz-id="${e(b.id)}">
+  <div class="bq-saved-quiz-info"><strong>${e(b.title)}</strong>
+   <small>${b.updatedAt?'Gespeichert: '+new Date(b.updatedAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Lokal gespeichert'}</small></div>
+  <div class="bq-saved-quiz-actions">
+   ${btn('Bearbeiten','open-landing-board','small',`data-board-id="${e(b.id)}"`)}
+   ${btn('Lobby hosten','host-saved-board','primary small',`data-board-id="${e(b.id)}" title="${e(b.title)} als Lobby hosten"`)}
+  </div>
+ </article>`).join('');
+ return `<section class="glass panel start-card bq-saved-quiz-home">
+  <div class="bq-saved-quiz-home-head"><div><h2>Meine Quizze</h2><p class="small muted">Erstellen, speichern und das gewünschte Quiz direkt als Lobby starten.</p></div>
+   ${btn('+ Neues Quiz erstellen','create-new-quiz','primary')}</div>
+  ${workspaceError?`<p class="small muted" role="alert">${e(workspaceError)}</p>`:''}
+  ${drafts.length?`<details class="bq-landing-boards" open><summary>Gespeicherte Quizze (${drafts.length})</summary><div class="bq-landing-boards-list">${rows}</div></details>`:
+   '<p class="small muted">Noch kein Quiz gespeichert. Erstelle dein erstes Quiz und klicke im Editor auf „Quiz speichern“.</p>'}
+  <div class="bq-saved-quiz-secondary">
+   ${btn('Quizbrett bearbeiten','create-offline','small')}
+   ${hostCode?btn('Live-Raum fortsetzen','resume','small'):''}
+   ${btn('Online-Raum erstellen','create','small')}
+  </div>
+  <p class="small muted">„Online-Raum erstellen“ bleibt für ältere Entwurfsabläufe verfügbar. Einfacher: Ein gespeichertes Quiz auswählen und „Lobby hosten“ anklicken.</p>
+ </section>`;
+}
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
  let drafts=[],workspaceError='';try{drafts=boardList(localStorage);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
@@ -350,8 +373,8 @@ function landing(){
  <main class="start-main"><h1>${invite?'Quiz beitreten':'BrainQuiz Online'}</h1>
  ${invite?`<p class="small muted">Raum ${e(roomFromLink)} · Gib deinen Namen ein, um dem Quiz beizutreten.</p>`:'<p class="small muted">Ein Link für alle. Quiz erstellen und direkt mit bis zu zehn Freunden im Browser spielen.</p>'}
  <div class="start-grid ${invite?'bq-invite-landing':''}">
- ${!invite?`<section class="glass panel start-card"><h2>Quiz hosten</h2><div class="row">${btn('Quizbrett bearbeiten','create-offline','primary')}${btn('Online-Raum erstellen','create','small',configured?'':'disabled')}${hostCode?btn('Live-Raum fortsetzen','resume','small',configured?'':'disabled'):''}</div><p class="small muted">${workspaceError?e(workspaceError):drafts.length?drafts.length+' lokal gespeicherte Quizbretter · Das zuletzt geöffnete wird fortgesetzt.':'Dein Quizbrett wird in diesem Browser gespeichert.'} Ein Live-Raum ist unabhängig vom lokalen Entwurf. Zum Spielen eines vorhandenen Bretts zuerst „Quizbrett bearbeiten“ und dort „Live-Raum starten“ wählen.</p>${drafts.length?`<details class="bq-landing-boards"><summary>Gespeicherte Quizbretter (${drafts.length})</summary><div class="bq-landing-boards-list">${drafts.map(b=>`<button type="button" class="btn small" data-action="open-landing-board" data-board-id="${e(b.id)}">${e(b.title)} <small>· ${e(b.id.slice(1,7).toUpperCase())}</small></button>`).join('')}</div></details>`:''}</section>`:''}
- <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
+ ${!invite?savedQuizzesStart(drafts,workspaceError,hostCode):''}
+  <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
  </div>
  <section class="glass panel bq-online-setup"><h3>PeerJS / WebRTC</h3><p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></section></main></div>`;
 }
@@ -613,6 +636,10 @@ const studio=createStudioEditor({
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
  case 'create-offline':startOffline();return;
+ case 'create-new-quiz':createNewLocalQuiz();return;
+ case 'save-board':saveCurrentBoard();return;
+ case 'host-current-board':await hostSavedQuiz(boardId);return;
+ case 'host-saved-board':await hostSavedQuiz(button.dataset.boardId);return;
  case 'open-landing-board':startOffline(button.dataset.boardId);return;
  case 'new-board':newStoredBoard();return;
  case 'open-board':openStoredBoard(button.dataset.boardId);return;
