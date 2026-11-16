@@ -57,7 +57,7 @@ test('zoom clamps to 1–16 and never exposes empty map edges',()=>{
   assert.ok(c.left+c.width>=100-.00001&&c.top+c.height>=100-.00001);
  }
 });
-test('map scene uses spacious grey country SVG, defined borders and no premature dagger',()=>{
+test('map scene uses a proportional dark atlas with 177 countries and hidden guest solution',()=>{
  const scene=templateScene('map',{prompt:'Wo?'});
  const edit=renderScene(scene,{editing:true,mapCanEdit:true,mapEditorPoint:{x:60,y:40}});
  assert.match(edit,/bq-map-viewport/);assert.match(edit,/data-map-choice="true"/);
@@ -67,21 +67,21 @@ test('map scene uses spacious grey country SVG, defined borders and no premature
  assert.doesNotMatch(guest,/mapTargetX|mapTargetSet/);
  const reveal=renderScene(scene,{revealed:true,mapSolution:{x:60,y:40}});
  assert.match(reveal,/dagger-pin\.svg/);
- const gray=source('world-map.svg');
- assert.match(gray,/fill="#edf1f3"/);
- assert.match(gray,/id="countries"/);
- assert.match(gray,/stroke:#566571/);
- assert.match(gray,/tone-0/);
- assert.match(gray,/tone-5/);
- assert.equal((gray.match(/class="country tone-/g)||[]).length,177);
- assert.match(gray,/preserveAspectRatio="none"/);
+ const atlas=source('world-map.svg');
+ assert.match(atlas,/fill="#1e303b"/);
+ assert.match(atlas,/id="countries"/);
+ assert.match(atlas,/stroke:#24343c/);
+ assert.match(atlas,/tone-0/);
+ assert.match(atlas,/tone-5/);
+ assert.equal((atlas.match(/class="country tone-/g)||[]).length,177);
+ assert.match(atlas,/preserveAspectRatio="xMidYMid meet"/);
  const colorLuma=hex=>{
   const values=hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255);
   const [red,green,blue]=values.map(v=>v<=0.04045?v/12.92:((v+.055)/1.055)**2.4);
   return red*.2126+green*.7152+blue*.0722;
  };
- const borderLuma=colorLuma('#566571');
- for(const fill of ['#c4ced3','#d5dce0','#b8c4cb','#e1e6e9','#cbd4d9','#bcc8cf'])assert.ok((colorLuma(fill)+.05)/(borderLuma+.05)>3,'Border contrast too low for '+fill);
+ const borderLuma=colorLuma('#24343c');
+ for(const fill of ['#869ba0','#9caaad','#788e93','#a9b5b3','#8b9f9e','#82989c'])assert.ok((colorLuma(fill)+.05)/(borderLuma+.05)>3,'Border contrast too low for '+fill);
  const view=source('map-viewport.mjs');
  assert.match(view,/pointercancel/);assert.match(view,/wheel/);
  assert.match(view,/mapZoomAt/);assert.match(view,/setPointerCapture/);
