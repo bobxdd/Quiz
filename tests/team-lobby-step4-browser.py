@@ -82,10 +82,12 @@ async def main():
 
   c=await spawn(ctx,host,code,'Charlie',errors)
   await c.locator('[data-action="lobby-join"][data-team="t3"]').click()
+  await host.locator('.bq-lobby-request').filter(has_text='Gewünscht: Aurora & Wald').wait_for(timeout=10000)
   await host.locator('[data-action="approve"]').first.click()
   await c.wait_for_function("() => window.__probe.info().member?.status==='approved'")
   assert (await c.evaluate('window.__probe.info().member.team'))=='t3'
-  await host.locator('.bq-host-lobby-summary').get_by_text('2/2 bereit').count()>=0  # readiness is individual, not inferred
+  team_stats=await host.locator('.bq-host-team-row').filter(has_text='Aurora & Wald').inner_text()
+  assert '1/2 bereit' in team_stats,team_stats  # Charlie has not pressed ready
   print('PASS: subsequent players can join a team created in this room',flush=True)
 
   # A team change automatically cancels an earlier ready signal.
