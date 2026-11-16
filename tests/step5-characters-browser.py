@@ -33,6 +33,7 @@ async def main():
    await page.goto(f'http://127.0.0.1:{server.server_port}/')
    await page.get_by_role('button',name='Quizbrett bearbeiten').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos,.bq-action-actor').count()==0
+   await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos').count()==0,'Editor must remain clear'
