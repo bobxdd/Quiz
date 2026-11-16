@@ -85,7 +85,63 @@ function hasValidRoom(value){return /^[A-HJ-NP-Z2-9]{16}$/.test(value);}
 async function initialize(){if(game)return game;const module=await import('./peer-client.mjs');game=new module.PeerGame();await game.init();return game;}
 function saveLocal(){try{if(isOffline()){if(!boardId)throw Error('Kein Quizbrett geöffnet.');if(boardConflict)throw Error('Ein anderer Tab hat dieses Brett verändert. Bitte Änderungen als Kopie sichern oder gespeicherte Version laden.');boardRevision=persistBoard(localStorage,boardId,boardRevision,normalizedQuiz(quiz));}else{localStorage.setItem('bq-quiz-'+room,JSON.stringify(quiz));queueHostCloudSave();}saveState=isOffline()?'Lokal gesichert':'Im Host-Browser gesichert';return true}catch(err){const message=String(err?.message||'Quizbrett konnte nicht gespeichert werden.');if(/anderen Tab|anderer Tab/.test(message))boardConflict=true;saveState=boardConflict?'KONFLIKT – als Kopie sichern!':'SPEICHERFEHLER – Backup exportieren!';notice(message.slice(0,220));return false;}}
 function loadLocal(){try{const val=localStorage.getItem('bq-quiz-'+room);quiz=val?normalizedQuiz(JSON.parse(val)):emptyQuiz()}catch{quiz=emptyQuiz()}selected=quiz.questions[0]?.id||''}
-async function promoteOnline(){if(!isOffline())return;await initialize();const source=normalizedQuiz(quiz);const code=roomCode();await game.create(code,source);await game.saveHostQuiz(code,source);room=code;quiz=source;hostCloudReady=true;saveLocal();localStorage.setItem('bq-last-host',room);history.replaceState(null,'',location.pathname+'?room='+room);view='editor';listenRoom();notice('PeerJS-Raum erstellt. Das Hostfenster während des Spielens geöffnet lassen.');}
+/* The saved board is the only source of truth for a newly hosted quiz.
+ * Never replace the local board with an empty online draft or edit it from the lobby. */
+let hostingSavedBoard=false;
+function saveCurrentBoard(){
+ if(!isOffline()||!boardId)throw Error('Quiz speichern ist nur im lokalen Frageneditor möglich.');
+ studio.flush?.();
+ if(!saveLocal())throw Error('Quiz konnte nicht gespeichert werden. Speicherplatz oder Konflikt prüfen; alternativ Backup exportieren.');
+ schedule();notice('Quiz „'+quiz.title+'“ gespeichert. Du kannst jetzt eine Lobby damit hosten.');
+}
+function createNewLocalQuiz(){
+ if(role!=='landing'&&!isOffline())throw Error('Ein neues Quiz kann nur außerhalb eines laufenden Spielraums erstellt werden.');
+ if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das bisherige Quiz konnte nicht gespeichert werden.');}
+ const created=createBoard(localStorage,emptyQuiz(),makeBoardId);
+ room='LOCAL';role='host';view='editor';
+ applyBoardWorkspace(created);loadOfflineBoardState();
+ history.replaceState(null,'',location.pathname);schedule();notice('Neues Quiz angelegt. Fragen erstellen und anschließend speichern.');
+}
+async function hostSavedQuiz(id){
+ if(hostingSavedBoard)return;
+ if(role!=='landing'&&!isOffline())throw Error('Ein weiterer Raum kann erst nach Schließen des laufenden Spielraums gestartet werden.');
+ hostingSavedBoard=true;
+ try{
+  if(isOffline()){
+   studio.flush?.();
+   if(!saveLocal())throw Error('Das Quiz konnte nicht sicher gespeichert werden. Lobby wurde nicht erstellt.');
+  }
+  // loadBoard validates the selected stable id, directory and revision. Do not
+  // silently host the last edited quiz if the requested saved board is missing.
+  const record=loadBoard(localStorage,id);
+  const source=normalizedQuiz(record.quiz);
+  for(const question of source.questions){if(question.scene)reconcileQuestion(question);}
+  const audit=quizAudit(source);
+  if(!audit.ready)throw Error('Quiz „'+source.title+'“ ist noch nicht bereit: '+audit.errors.slice(0,3).map(x=>x.label+': '+x.reason).join(' | ')+'. Bitte zuerst bearbeiten und speichern.');
+  if(audit.warnings.length&&!confirm(audit.warnings.length+' Hinweise bei „'+source.title+'“. Trotzdem mit diesem Quiz eine Lobby hosten?'))return;
+  await initialize();
+  const code=roomCode();
+  let created=false;
+  try{
+   // The very first room snapshot already owns the published board. Guests can
+   // join the team lobby without ever seeing unpublished/editable question data.
+   await game.create(code,source,{published:true});created=true;
+   await game.saveHostQuiz(code,source);
+   localStorage.setItem('bq-last-host',code);
+   localStorage.setItem('bq-published-'+code,'1');
+  }catch(err){
+   try{if(created)await game.deleteRoom(code);else game.shutdown();}catch{}
+   try{if(localStorage.getItem('bq-last-host')===code)localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+code);}catch{}
+   game=null;
+   throw err;
+  }
+  room=code;role='host';view='teams';quiz=source;selected=source.questions[0]?.id||'';
+  hostCloudReady=true;cloudDirty=false;clearTimeout(cloudTimer);
+  history.replaceState(null,'',location.pathname+'?room='+room);
+  listenRoom();notice('Lobby für „'+source.title+'“ gestartet. Lade deine Mitspieler ein.');
+ }finally{hostingSavedBoard=false;}
+}
+async function promoteOnline(){if(!isOffline())return;await hostSavedQuiz(boardId);}
 function backupFilename(prefix='BrainQuiz_Host'){
  const title=String(quiz?.title||'Quizbrett').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48)||'Quizbrett';
  const location=isOffline()?boardId.slice(1,8):room;
