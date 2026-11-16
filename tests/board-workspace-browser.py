@@ -64,6 +64,7 @@ async def main():
    other=await ctx.new_page()
    other.on('pageerror',lambda err:errors.append(str(err)))
    await other.goto(url)
+   await other.locator('.bq-legacy-options>summary').click()
    await other.get_by_role('button',name='Quizbrett bearbeiten').click()
    await other.locator('.se-board-context>strong').get_by_text('Waldquiz').wait_for()
    await other.locator('[data-se-quiztitle]').fill('Geändert im zweiten Tab')
@@ -95,6 +96,8 @@ async def main():
    assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==4
    assert await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)==original
    print('PASS: non-destructive imported board')
+   if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
+    await page.locator('.bq-editor-extras>summary').click()
    await page.locator('.se-file-actions>summary').click()
    async with page.expect_download(timeout=8000) as download_info:
     await page.locator('.se-file-menu [data-action="export"]').click()
