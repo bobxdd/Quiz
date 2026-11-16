@@ -68,3 +68,14 @@
  .bq-lobby-create-row>button{width:100%}
 }
 @media(prefers-reduced-motion:reduce){.bq-lobby *,.bq-host-lobby-summary *{animation:none!important;transition:none!important}}
+
+/* Lobby chat stays in the document flow so it cannot overlay the team cards. */
+.bq-lobby-session>.bq-shared-team-chat,
+.bq-session-scene.bq-lobby-session>.bq-auxiliary.bq-shared-team-chat,
+.bq-session-scene.bq-lobby-session>.bq-auxiliary.bq-shared-team-chat[open]{
+ position:relative!important;inset:auto!important;top:auto!important;right:auto!important;
+ margin:8px auto 24px!important;max-width:min(1200px,100%)!important;
+ width:min(1200px,100%)!important;z-index:auto!important;box-shadow:none;
+}
+.bq-lobby-session>.bq-shared-team-chat[open]{max-height:none!important;overflow:visible!important}
+.bq-lobby-session>.bq-shared-team-chat .chatfeed{max-height:260px}
