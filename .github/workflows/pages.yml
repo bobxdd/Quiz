@@ -32,8 +32,17 @@ jobs:
           python tests/board-workspace-browser.py
           python tests/map-step3-browser.py
           python tests/map-step3-peer-browser.py
+          python tests/ui-step3-layout-browser.py
           python tests/editor-3_1-browser.py
           python tests/categories-3_0-browser.py
+      - name: Preserve layout screenshots and measurements for review
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: brainquiz-layout-audit
+          path: qa-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: No private quiz files, passwords or Windows packages in repository
         shell: bash
         run: |
