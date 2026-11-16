@@ -29,7 +29,7 @@ test('Step 4 team creation: deterministic IDs, unique case-insensitive names, si
 });
 test('Step 4 lobby snapshots: pending people never receive hidden game questions or private answers',()=>{
  const data=base();data.public.current={id:'secret',answer:'PRIVATE-ANSWER',mapTargetX:75};
- data.responses={'1':{user_x:{text:'SECRET SUBMISSION'}};data.messages={t1:{m1:{text:'Private chat'}}};
+ data.responses={'1':{user_x:{text:'SECRET SUBMISSION'}}};data.messages={t1:{m1:{text:'Private chat'}}};
  data.members={user_a:{status:'approved',name:'Alice',team:'t1',ready:true},user_b:{status:'pending',name:'Bob',teamRequest:{kind:'create',name:'Foxes'},ready:true}};
  data.roster={user_a:{name:'Alice',team:'t1'}};data.presence={user_a:{connectedAt:1}};
  const s=lobbySnapshot(data),json=JSON.stringify(s);
