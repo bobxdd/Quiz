@@ -136,6 +136,8 @@ async def main():
   # Only this guest uses normal motion: all earlier privacy/layout checks keep the
   # existing reduced-motion baseline, but the live reveal must show the throw.
   await guest.emulate_media(reduced_motion='no-preference')
+  await second.set_viewport_size({'width':390,'height':844})
+  await second.emulate_media(reduced_motion='no-preference')
   await host.locator('[data-action="reveal"]').first.click()
   await expect(guest.locator('.bq-map-throw-layer')).to_have_count(1,timeout=12000)
   await expect(guest.locator('.bq-map-throw-actor')).to_have_count(1)
@@ -165,8 +167,6 @@ async def main():
   intersects=lambda p,q:p['l']<q['r']-1 and p['r']>q['l']+1 and p['t']<q['b']-1 and p['b']>q['t']+1
   assert a['r']<=m['l']+2 and not intersects(a,t) and not intersects(a,z),actor_layout
   # Same exact class pose on a narrow real guest viewport.
-  await second.set_viewport_size({'width':390,'height':844})
-  await second.emulate_media(reduced_motion='no-preference')
   await expect(second.locator('.bq-map-throw-actor')).to_have_count(1,timeout=12000)
   small=await second.evaluate("""() => {
    const a=document.querySelector('.bq-map-throw-actor')?.getBoundingClientRect();
