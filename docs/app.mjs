@@ -208,12 +208,16 @@ function maybeAnimateQuestion(){
  lastAnimatedQuestion=key;
  if(reducedCharacterMotion())return;
  const direction=questionMotion(publicState.round,current.id);
- const curtain=document.createElement('div');curtain.className='bq-question-curtain bq-swipe-'+direction;
+ const who=CHARACTER_IDS[Math.abs(Number(publicState.round)||0)%CHARACTER_IDS.length];
+ const curtain=document.createElement('div');
+ curtain.className='bq-question-curtain bq-swipe-'+direction;
  curtain.setAttribute('aria-hidden','true');
- const grip=document.createElement('span');grip.className='bq-veil-handle';grip.setAttribute('aria-hidden','true');
- curtain.append(grip);stage.append(curtain);
+ const handle=document.createElement('span');handle.className='bq-veil-handle';
+ const actor=document.createElement('span');actor.className='bq-curtain-helper bq-actor bq-actor--'+who;
+ const glove=document.createElement('span');glove.className='bq-curtain-glove';
+ curtain.append(handle,actor,glove);stage.append(curtain);
  curtain.addEventListener('animationend',event=>{if(event.target===curtain)curtain.remove()},{once:true});
- setTimeout(()=>curtain.remove(),1600);
+ setTimeout(()=>curtain.remove(),3500);
 }
 /** The only world-map animation: the actor visibly throws at solution release. */
 function maybeAnimateMapDagger(){
