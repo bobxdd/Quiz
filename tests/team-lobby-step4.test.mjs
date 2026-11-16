@@ -4,13 +4,14 @@ import {readFileSync} from 'node:fs';
 import {MAX_PLAYERS,MAX_TEAMS,TEAM_PALETTE,teamColor,validTeamId,canArrangeLobby,cleanTeamName,addLobbyTeam,lobbySnapshot,approval} from '../docs/lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from '../docs/lobby-view.mjs';
 const base=()=>({public:{title:'Demo',phase:'board',round:0,used:{},teams:{t1:'Rot',t2:'Blau'},scores:{t1:0,t2:0}},members:{},roster:{},presence:{}});
-test('Step 4 palette: six different predefined team identities, no user-controlled color injection',()=>{
- assert.equal(MAX_TEAMS,6);assert.equal(MAX_PLAYERS,8);
+test('Step 4 palette: five new teams, ten players, six-team legacy compatibility',()=>{
+ assert.equal(MAX_TEAMS,5);assert.equal(MAX_PLAYERS,10);
  assert.equal(new Set(TEAM_PALETTE).size,6);
- for(let i=1;i<=6;i++){const id='t'+i;assert.equal(validTeamId(id),true);assert.match(teamColor(id),/^#[0-9a-f]{6}$/);}
+ for(let i=1;i<=5;i++){const id='t'+i;assert.equal(validTeamId(id),true);assert.match(teamColor(id),/^#[0-9a-f]{6}$/);}
+ assert.equal(validTeamId('t6'),true,'Old sixth teams must remain readable');
  for(const id of ['t0','t7','__proto__','t1;--team-color:red','constructor'])assert.equal(validTeamId(id),false);
 });
-test('Step 4 team creation: deterministic IDs, unique case-insensitive names, six-team upper limit',()=>{
+test('Step 4 team creation: deterministic IDs, unique names, strict five-new-team cap',()=>{
  let teams=base().public.teams;
  const created=addLobbyTeam(teams,'  Die Krähen  ');
  assert.equal(created.id,'t3');
@@ -20,11 +21,10 @@ test('Step 4 team creation: deterministic IDs, unique case-insensitive names, si
  assert.throws(()=>addLobbyTeam(teams,'Rot'),/bereits/);
  assert.throws(()=>addLobbyTeam(teams,'A'),/2 bis 28/);
  assert.throws(()=>addLobbyTeam(teams,'X'.repeat(29)),/2 bis 28/);
- for(const name of ['Nebel','Komet','Sonne'])teams=addLobbyTeam(teams,name).teams;
+ for(const name of ['Nebel','Komet'])teams=addLobbyTeam(teams,name).teams;
  assert.equal(Object.keys(teams).length,5);
- teams=addLobbyTeam(teams,'Mond').teams;
- assert.equal(Object.keys(teams).length,6);
- assert.throws(()=>addLobbyTeam(teams,'Weitere'),/sechs Teams/);
+ assert.throws(()=>addLobbyTeam(teams,'Sonne'),/5 Teams/);
+ assert.throws(()=>addLobbyTeam({...teams,t6:'Legacy'},'Noch Eins'),/5 Teams/);
  assert.equal(cleanTeamName('  Foo\nBar  '),'FooBar'); // controls stripped, whitespace compact
 });
 test('Step 4 lobby snapshots: pending people never receive hidden game questions or private answers',()=>{
@@ -47,6 +47,8 @@ test('Step 4 guest lobby: every team is legible and user-supplied names are safe
  assert.match(html,/aria-pressed="true"/);
  assert.match(html,/data-team="t1"/);
  assert.match(hostLobbySummary(l),/0 \/ 0/);
+ assert.match(hostLobbySummary(l),/id="host-team-create-form"/);
+ assert.doesNotMatch(hostLobbySummary({...l,open:false}),/id="host-team-create-form"/);
 });
 test('Step 4 readiness and team selection locked after first question even after returning to board',()=>{
  assert.equal(canArrangeLobby(base().public),true);
@@ -64,4 +66,32 @@ test('Step 4 assets are shipped through the offline cache and HTML',()=>{
  const sw=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
  assert.match(idx,/lobby-ui\.css/);assert.match(sw,/lobby-view\.mjs/);assert.match(sw,/lobby-ui\.css/);
  assert.match(sw,/brainquiz-shell-3\.6\.4/);
+});
+
+test('Host team creation appears for fewer than five teams and never for a filled room',()=>{
+ let current={t1:'Rot',t2:'Blau'};
+ let state=base();state.public.teams=current;
+ let lobby=lobbySnapshot(state);
+ assert.match(hostLobbySummary(lobby),/id="host-team-create-form"/);
+ assert.match(hostLobbySummary(lobby),/Team anlegen/);
+ for(const name of ['Gelb','Lila','Grün'])current=addLobbyTeam(current,name).teams;
+ state.public.teams=current;
+ lobby=lobbySnapshot(state);
+ assert.equal(Object.keys(lobby.teams).length,5);
+ assert.doesNotMatch(hostLobbySummary(lobby),/id="host-team-create-form"/);
+ assert.doesNotMatch(lobbyGuestHTML(lobby,{status:'pending'}),/id="lobby-create-form"/);
+});
+test('Ten participants are preserved in lobby and in secret-answer review',()=>{
+ const state=base();
+ for(let i=1;i<=10;i++){
+  const id='user_'+i;
+  state.roster[id]={name:'Person '+i,team:i<=5?'t1':'t2'};
+  state.members[id]={status:'approved',ready:i%2===0};
+  state.presence[id]={connectedAt:i};
+ }
+ const lobby=lobbySnapshot(state);
+ assert.equal(lobby.players.length,10);
+ assert.equal(lobby.ready,5);
+ assert.equal(lobby.approved,10);
+ assert.match(hostLobbySummary(lobby),/5 \/ 10/);
 });
