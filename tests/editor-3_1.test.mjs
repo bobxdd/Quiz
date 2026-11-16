@@ -52,6 +52,6 @@ test('3.1 Editor zeigt Quizcheck und Fragenbank nur im privaten Editor',()=>{
 });
 test('3.1 Service Worker enthält vollständige neue Shell und kein privates Quiz',()=>{
  const sw=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
- assert.match(sw,/brainquiz-shell-3\.6\.3/);assert.match(sw,/editor-workflows\.mjs/);assert.match(sw,/editor-31\.css/);
+ assert.match(sw,/brainquiz-shell-3\.6\.4/);assert.match(sw,/editor-workflows\.mjs/);assert.match(sw,/editor-31\.css/);
  assert.doesNotMatch(sw,/brainquiz\.json|answers\/private/);
 });
