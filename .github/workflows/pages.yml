@@ -38,6 +38,7 @@ jobs:
           python tests/team-lobby-step4-browser.py
           python tests/ui-step3-layout-browser.py
           python tests/step5-characters-browser.py
+          python tests/step6-question-cover-browser.py
           python tests/editor-3_1-browser.py
           python tests/categories-3_0-browser.py
       - name: Preserve layout screenshots and measurements for review
