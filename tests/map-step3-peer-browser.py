@@ -38,10 +38,10 @@ async def main():
   await install(guest)
   await guest.locator('#join-room').fill(code);await guest.locator('#join-name').fill('Alice')
   await guest.locator('button[type="submit"]').first.click()
-  await guest.get_by_text('FREIGABE AUSSTEHEND').wait_for(timeout=12000)
+  await guest.locator('.bq-lobby-notice').wait_for(timeout=12000)
   await host.locator('.top-nav [data-view="teams"]').click()
   await host.locator('[data-action="approve"]').first.click()
-  await guest.locator('.bq-board-scene').wait_for(timeout=12000)
+  await guest.locator('.bq-lobby').wait_for(timeout=12000)
   # A second approved guest deliberately does not submit. Their answer card
   # must be 'no answer', never a misleading frosted/hidden answer.
   async with ctx.expect_page() as second_open:
@@ -51,9 +51,9 @@ async def main():
   await install(second)
   await second.locator('#join-room').fill(code);await second.locator('#join-name').fill('Bob')
   await second.locator('button[type="submit"]').first.click()
-  await second.get_by_text('FREIGABE AUSSTEHEND').wait_for(timeout=12000)
+  await second.locator('.bq-lobby-notice').wait_for(timeout=12000)
   await host.locator('[data-action="approve"]').first.click()
-  await second.locator('.bq-board-scene').wait_for(timeout=12000)
+  await second.locator('.bq-lobby').wait_for(timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await guest.locator('.bq-map-viewport').wait_for(timeout=12000)
