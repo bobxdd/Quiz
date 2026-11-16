@@ -58,7 +58,7 @@ test('Step 6: once at map reveal, hidden until impact, respects reduced motion a
  assert.match(sw,/map-dagger-animation\.mjs/);
  assert.match(sw,/map-dagger-animation\.css/);
  assert.match(html,/map-dagger-animation\.css/);
- assert.match(sw,/brainquiz-shell-3\.6\.7/);
+ assert.match(sw,/brainquiz-shell-3\.6\.8/);
 });
 
 test('Step 6: question cover shows one character moving one panel with four slow directions',()=>{
