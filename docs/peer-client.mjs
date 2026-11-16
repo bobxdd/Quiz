@@ -6,7 +6,7 @@
 import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,updatePlayerScore} from './core.mjs';
-import {approval} from './lobby-model.mjs';
+import {approval,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges} from './question-flow.mjs';
 
 const HOST_PREFIX='brainquiz27-';
@@ -127,7 +127,7 @@ export class PeerGame{
   if(!this.reconnectTimer)this.reconnectTimer=setTimeout(()=>{this.reconnectTimer=null;try{this.peer?.destroy()}catch{}this._connectGuestOnce().catch(()=>{if(!this.quitting)this._guestLost()})},3500);
  }
  _applySnapshot(payload){if(!payload||typeof payload!=='object')return;this.guestData={
-  public:payload.public||null,roster:payload.roster||{},presence:payload.presence||{},buzzers:payload.buzzers||{},
+  public:payload.public||null,lobby:payload.lobby||null,roster:payload.roster||{},presence:payload.presence||{},buzzers:payload.buzzers||{},
   members:payload.member?{[this.uid]:payload.member}:{},responses:payload.ownResponse?{[String(payload.public?.round||0)]:{[this.uid]:payload.ownResponse}}:{},
   messages:payload.messages||{}
  };this._emit();}
@@ -139,7 +139,7 @@ export class PeerGame{
  _snapshotFor(ctx){const member=this.data.members?.[ctx.uid]||null,approved=member?.status==='approved',publicState=approved?this.data.public:null;
   const round=String(this.data.public?.round||0),ownResponse=approved?this.data.responses?.[round]?.[ctx.uid]||null:null;
   const msgs=approved&&member.team?{[member.team]:this.data.messages?.[member.team]||{}}:{};
-  return {member:clone(member),public:clone(publicState),roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs)};
+  return {member:clone(member),lobby:lobbySnapshot(this.data),public:clone(publicState),roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs)};
  }
  _sendSnapshot(ctx){if(!ctx?.ready||!ctx.conn?.open)return;try{ctx.conn.send({t:'snapshot',state:this._snapshotFor(ctx)})}catch(error){console.warn('[BrainQuiz] Snapshot nicht übertragbar:',error)}}
  _disconnectGuest(ctx){if(!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
@@ -159,11 +159,48 @@ export class PeerGame{
    ctx.conn.send({t:'welcome',state:this._snapshotFor(ctx)});this._changed();return;
   }
   if(ctx.ready&&msg.t==='action'&&typeof msg.id==='string'&&msg.id.length<=90){
+   if(this.guestConnections.get(ctx.uid)!==ctx)return; // A replaced/reconnected data channel cannot issue actions.
    let ok=true,result=null,error='';try{result=this._handleGuestAction(ctx,msg.action,msg.payload||{})}catch(e){ok=false;error=String(e?.message||'Aktion nicht erlaubt.').slice(0,200)}
    try{ctx.conn.send({t:'ack',id:msg.id,ok,result,error})}catch{};
   }
  }
- _handleGuestAction(ctx,action,payload){const member=this.data.members?.[ctx.uid];if(member?.status!=='approved'||this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Hostfreigabe erforderlich.');const pub=this.data.public,round=String(pub?.round||0),now=Date.now();
+ _handleGuestAction(ctx,action,payload){
+  const member=this.data.members?.[ctx.uid],pub=this.data.public,round=String(pub?.round||0),now=Date.now();
+  // Lobby requests are deliberately available BEFORE approval. They never grant
+  // access to the quiz, to another player's private team chat, or to host actions.
+  if(['lobby-join','lobby-create','lobby-ready'].includes(action)){
+   if(!member||!['pending','approved'].includes(member.status))throw Error('Diese Person darf die Lobby nicht verändern.');
+   if(!canArrangeLobby(pub))throw Error('Die Teamaufstellung ist nach Spielbeginn gesperrt.');
+   if(now-(ctx.lastLobbyChange||0)<160)throw Error('Bitte vor der nächsten Änderung kurz warten.');
+   if(action==='lobby-join'){
+    const id=payload.team;
+    if(!validTeamId(id)||!Object.hasOwn(pub.teams||{},id))throw Error('Dieses Team existiert nicht.');
+    if(member.status==='approved'){
+     if(this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Teamzuordnung nicht bestätigt.');
+     this.data.roster[ctx.uid].team=id;member.team=id;
+    }else member.teamRequest={kind:'join',id};
+    member.ready=false;
+   }else if(action==='lobby-create'){
+    if(member.createdTeam)throw Error('Du hast bereits ein eigenes Team erstellt.');
+    const name=cleanTeamName(payload.name);
+    const addition=addLobbyTeam(pub.teams,name);
+    if(member.status==='approved'){
+     if(this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Teamzuordnung nicht bestätigt.');
+     pub.teams=addition.teams;pub.scores[addition.id]=0;this.data.roster[ctx.uid].team=addition.id;
+     member.team=addition.id;member.createdTeam=true;
+    }else member.teamRequest={kind:'create',name};
+    member.ready=false;
+   }else{
+    if(typeof payload.ready!=='boolean')throw Error('Ungültiger Bereitschaftsstatus.');
+    if(member.status==='approved'&&!this.data.roster?.[ctx.uid]?.team)throw Error('Bitte zuerst ein Team wählen.');
+    if(member.status==='pending'&&!member.teamRequest)throw Error('Bitte zuerst ein Team wählen.');
+    member.ready=payload.ready;
+   }
+   ctx.lastLobbyChange=now;
+   this._changed();
+   return true;
+  }
+  if(member?.status!=='approved'||this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Hostfreigabe erforderlich.');
   switch(action){
    case 'pick':{const qid=safeText(payload.qid,80);if(!Object.hasOwn(pub?.board||{},qid)||pub.board[qid].used||pub.phase!=='board')throw Error('Frage nicht mehr verfügbar.');this.data.picks[ctx.uid]={uid:ctx.uid,qid,name:member.name,at:now};this._changed();return true}
    case 'buzz':{if(this.data.buzzers[round])return false;if(round!==String(payload.round)||!canBuzz(pub,this.data.buzzers,ctx.uid,member.team,now))throw Error('Buzzer ist belegt oder du bist für diese Runde gesperrt.');this.data.buzzers[round]={uid:ctx.uid,team:member.team,name:member.name,at:now};this._changed();return true}
@@ -175,8 +212,23 @@ export class PeerGame{
  _rpc(action,payload={}){this._ensureGuest(this.room);const id='r'+(++this.requestNo)+'_'+randomHex(4);return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('Antwort des Hosts ausgeblieben.'))},9000);this.pending.set(id,{timer,resolve,reject});try{this.conn.send({t:'action',id,action,payload})}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e)}})}
  _getHostData(room){this._assertHost(room);return this.data;}
  async join(room,name){this._ensureGuest(room);return clone(this.guestData.members?.[this.uid]||null)}
- async hostAssign(room,uid,player,team){const d=this._getHostData(room);const next=approval(d.roster,uid,player,team);if(!next.accepted)throw Error(next.reason);d.roster=next.roster;d.members[uid]={...player,team,status:'approved'};this._changed()}
- async hostRemove(room,uid,player){const d=this._getHostData(room);d.members[uid]={...player,status:'removed',team:''};delete d.roster[uid];delete d.presence[uid];this._changed();}
+ async hostAssign(room,uid,player,team){
+  const d=this._getHostData(room),member=d.members?.[uid];
+  if(!member||member.status==='removed')throw Error('Diese Beitrittsanfrage existiert nicht.');
+  if(member.status==='pending'&&!canArrangeLobby(d.public))throw Error('Neue Teamaufnahmen sind nach Spielbeginn gesperrt.');
+  let destination=team,addition=null;
+  if(member.status==='pending'&&member.teamRequest?.kind==='create'&&!team){
+   addition=addLobbyTeam(d.public.teams,member.teamRequest.name);
+   destination=addition.id;
+  }else if(!destination&&member.teamRequest?.kind==='join')destination=member.teamRequest.id;
+  if(!destination||!d.public.teams?.[destination]&&!addition)throw Error('Bitte ein vorhandenes Team auswählen.');
+  const next=approval(d.roster,uid,member,destination);if(!next.accepted)throw Error(next.reason);
+  if(addition){d.public.teams=addition.teams;d.public.scores[addition.id]=0;}
+  d.roster=next.roster;
+  d.members[uid]={...member,team:destination,status:'approved',teamRequest:null,createdTeam:member.createdTeam===true||!!addition,ready:member.ready===true};
+  this._changed();
+ }
+ async hostRemove(room,uid,player){const d=this._getHostData(room);d.members[uid]={...player,status:'removed',team:'',teamRequest:null,ready:false};delete d.roster[uid];delete d.presence[uid];this._changed();}
  async enterPresence(room){if(this.mode==='host'){this._assertHost(room);this.data.presence[this.uid]={connectedAt:Date.now()};this._changed();}else this._ensureGuest(room)}
  async buzzer(room,round,team,name){if(this.mode==='guest')return this._rpc('buzz',{round});throw Error('Buzzer nur für Teilnehmer.')}
  async answer(room,round,team,text){if(this.mode==='guest')return this._rpc('answer',{round,text});throw Error('Antworten nur für Teilnehmer.')}
@@ -186,6 +238,9 @@ export class PeerGame{
  async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
  async recordQuestion(room,round,entry){const d=this._getHostData(room);d.questionHistory[String(round)]=clone(entry);this._changed()}
  async replacePublic(room,state){const d=this._getHostData(room);d.public=clone(state);this._changed()}
+ async chooseLobbyTeam(room,team){if(this.mode==='guest')return this._rpc('lobby-join',{team});throw Error('Teamwahl nur für Teilnehmer.')}
+ async createLobbyTeam(room,name){if(this.mode==='guest')return this._rpc('lobby-create',{name});throw Error('Teamerstellung nur für Teilnehmer.')}
+ async setLobbyReady(room,ready){if(this.mode==='guest')return this._rpc('lobby-ready',{ready});throw Error('Bereitschaft nur für Teilnehmer.')}
  async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid});throw Error('Nur Teilnehmer können Fragen wünschen.')}
  async clearPicks(room){const d=this._getHostData(room);d.picks={};this._changed()}
  async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');d.public.playerScores??={};const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;this._changed();return clone(result)}
