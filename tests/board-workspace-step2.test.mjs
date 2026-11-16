@@ -156,3 +156,18 @@ test('duplicate and invalid board library records fail closed',()=>{
  assert.throws(()=>boardList(store),/ungültige/);
  assert.equal(store.getItem('bq-board-workspace-'+a.id)!==null,true);
 });
+
+test('every board export contains a distinct title and board identifier',async()=>{
+ const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ assert.match(app,/function backupFilename\(/);
+ assert.match(app,/location=isOffline\(\)\?boardId\.slice\(1,8\):room/);
+ assert.match(app,/case 'export':safeDownload\(backupFilename\(\)/);
+ assert.match(app,/backup:()=>safeDownload\(backupFilename\('BrainQuiz_Backup'\)/);
+ assert.match(app,/safeDownload\(backupFilename\('BrainQuiz_Autosicherung'\)/);
+});
+test('destructive live room import first exports a private backup',async()=>{
+ const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ const section=app.slice(app.indexOf('async function handleImport('),app.indexOf('function updateClock()'));
+ assert.match(section,/safeDownload\(backupFilename\('BrainQuiz_Vor_Import'\)/);
+ assert.ok(section.indexOf("safeDownload(backupFilename('BrainQuiz_Vor_Import')")<section.indexOf('snapshotLayout();quiz=imported;'));
+});
