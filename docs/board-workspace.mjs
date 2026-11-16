@@ -5,7 +5,7 @@ const key=id=>'bq-board-workspace-'+id;
 const validId=id=>typeof id==='string'&&/^b[0-9a-f]{32}$/.test(id);
 const parse=(raw,fallback)=>{try{return raw?JSON.parse(raw):fallback;}catch{return fallback;}};
 const clean=(items)=>Array.isArray(items)?items.filter(x=>validId(x?.id)).slice(0,100).map(x=>({id:x.id,title:String(x.title||'Unbenanntes Quizbrett').slice(0,100),updatedAt:Math.max(0,Number(x.updatedAt)||0)})):[];
-export function boardList(store){return clean(parse(store.getItem(INDEX),[]));}
+export function boardList(store){const raw=store.getItem(INDEX);if(!raw)return [];let data;try{data=JSON.parse(raw);}catch{throw Error('Quizbrett-Verzeichnis beschädigt. Vorhandene Quizbretter wurden nicht verändert.');}if(!Array.isArray(data))throw Error('Quizbrett-Verzeichnis ungültig. Vorhandene Quizbretter wurden nicht verändert.');return clean(data);}
 export function activeBoard(store){return store.getItem(ACTIVE)||'';}
 export function createBoard(store,quiz,makeId,{activate=true}={}){
  const existing=boardList(store);if(existing.length>=100)throw Error('Maximal 100 lokale Quizbretter. Bitte zuerst bestehende Bretter als Backup exportieren.');
