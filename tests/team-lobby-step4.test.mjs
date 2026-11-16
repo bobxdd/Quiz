@@ -69,6 +69,13 @@ test('Step 4 assets are shipped through the offline cache and HTML',()=>{
  assert.match(sw,/brainquiz-shell-3\.6\.5/);
 });
 
+test('Host team form preserves open state during live redraw, then clears and collapses after submission',()=>{
+ const l=lobbySnapshot(base());
+ assert.match(hostLobbySummary(l),/data-bq-persist="hostteamcreate"/);
+ const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ assert.match(app,/input\.closest\('details'\)\?\.removeAttribute\('open'\)/);
+ assert.match(app,/input\.value=''/);
+});
 test('Host team creation appears for fewer than five teams and never for a filled room',()=>{
  let current={t1:'Rot',t2:'Blau'};
  let state=base();state.public.teams=current;
