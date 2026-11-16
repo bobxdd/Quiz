@@ -66,6 +66,9 @@ async def audit(page,label,selectors,groups=(),require_visible=()):
  await page.screenshot(path=str(EVIDENCE/(name+'.png')),full_page=True,animations='disabled')
  for sel in require_visible:
   assert any(b['selector']==sel and b['w']>15 and b['h']>15 for b in report['boxes']),f'{label}: missing {sel}'
+ if report['viewport']['scrollWidth']>report['viewport']['width']+8:
+  offenders=await page.evaluate("""() => [...document.querySelectorAll('body *')].map(el=>({name:el.tagName.toLowerCase(),className:String(el.className||'').slice(0,100),text:(el.innerText||'').slice(0,45),r:el.getBoundingClientRect()})).filter(x=>x.r.width>3&&x.r.height>3&&x.r.right>innerWidth+4).sort((a,b)=>b.r.right-a.r.right).slice(0,15).map(x=>({...x,right:Math.round(x.r.right),left:Math.round(x.r.left),width:Math.round(x.r.width),r:undefined}))""")
+  print('OVERFLOW DETAIL',label,offenders,flush=True)
  assert report['viewport']['scrollWidth']<=report['viewport']['width']+8,f'{label}: horizontal viewport overflow {report["viewport"]}'
  assert not report['duplicateIds'],f'{label}: duplicate HTML ids {report["duplicateIds"][:8]}'
  assert not report['overlaps'],f'{label}: overlapping sibling controls {report["overlaps"][:8]}'
