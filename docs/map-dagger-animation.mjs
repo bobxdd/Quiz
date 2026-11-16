@@ -21,9 +21,12 @@ export function mapThrowTarget(viewport,marker){
  * The character stands just ABOVE the map: the body never blocks a map answer. */
 export function mapThrowOrigin(viewport,width=innerWidth,height=innerHeight){
  const r=viewport.getBoundingClientRect();
- const actorX=clamp(r.left+Math.min(24,r.width*.04),4,Math.max(4,width-146));
- const actorY=clamp(r.top-142,4,Math.max(4,height-146));
- return {actorX,actorY,handX:actorX+111,handY:actorY+53};
+ const rail=Number.parseFloat(getComputedStyle(viewport.closest('.bq-map-question')||viewport).getPropertyValue('--bq-map-throw-rail'))||146;
+ const scale=Math.min(1,Math.max(.5,(rail-10)/142));
+ const actorWidth=142*scale;
+ const actorX=clamp(r.left-rail+Math.max(0,(rail-actorWidth)/2),4,Math.max(4,width-actorWidth-4));
+ const actorY=clamp(r.top+Math.min(18,r.height*.05),4,Math.max(4,height-142*scale-4));
+ return {actorX,actorY,scale,handX:actorX+111*scale,handY:actorY+53*scale};
 }
 
 /** A self-contained animation that survives app.innerHTML rerenders.
@@ -46,6 +49,7 @@ export function startMapDaggerThrow({viewport,marker,actor='rogue',onLand=()=>{}
  let mutation=null;
  const origin=mapThrowOrigin(viewport);
  body.style.left=origin.actorX+'px';body.style.top=origin.actorY+'px';
+ body.style.setProperty('--bq-actor-scale',String(origin.scale));
  flight.style.left=(origin.handX-16)+'px';flight.style.top=(origin.handY-46)+'px';
  const refresh=()=>{
   if(stopped)return;
