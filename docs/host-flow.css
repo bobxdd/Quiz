@@ -133,3 +133,19 @@
  .bq-host-code-actions{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.bq-host-lobby-page *,.bq-editor-toolbar *{scroll-behavior:auto!important;transition:none!important}}
+
+/* During hosting the actual lobby banner owns the code and title. Avoid a
+   second tiny duplicate at the top, especially in the first phone viewport. */
+body:has(.bq-host-lobby-page) .topbar{min-height:0;padding:10px 13px;margin-bottom:8px}
+body:has(.bq-host-lobby-page) .topbar .header-secondary{display:none!important}
+body:has(.bq-host-lobby-page) .topbar .brand small{display:none}
+body:has(.bq-host-lobby-page) .header-state .role-caption{display:none}
+body:has(.bq-host-lobby-page) .topbar .header-primary{align-items:center;gap:9px}
+@media(max-width:600px){
+ body:has(.bq-host-lobby-page) .topbar{padding:9px!important}
+ body:has(.bq-host-lobby-page) .topbar .header-state{flex:0 0 auto}
+ body:has(.bq-host-lobby-page) .topbar .status{font-size:11px}
+ body:has(.bq-host-lobby-page) .topbar .brand{min-width:120px}
+ body:has(.bq-host-lobby-page) .topbar .brand strong{font-size:13px}
+ body:has(.bq-host-lobby-page) .topbar .nav{min-height:36px}
+}
