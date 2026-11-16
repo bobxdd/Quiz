@@ -327,26 +327,6 @@ body:has(.board) .bq-pixel-mascot{display:none}
 /* Pixel cutout characters sit in a dedicated strip AFTER all game content.
  * The dock never overlays the board, answer grid, forms or navigation. */
 .bq-game-mode .bq-pixel-scene{display:none!important}
-.bq-character-dock{
- display:flex;align-items:flex-end;justify-content:space-around;gap:clamp(10px,4vw,68px);
- min-height:100px;margin:10px auto 6px;padding:4px clamp(10px,4vw,40px) 0;max-width:1100px;
- border-top:2px solid rgba(159,126,149,.28);position:relative;isolation:isolate;
- background:linear-gradient(180deg,rgba(91,73,89,.12),rgba(27,35,32,.02) 74%);
-}
-.bq-character-dock::before,.bq-character-dock::after{content:"";position:absolute;top:-5px;width:6px;height:6px;background:var(--pixel-spark);box-shadow:6px 0 rgba(175,134,156,.72),0 6px rgba(149,181,160,.66);pointer-events:none}
-.bq-character-dock::before{left:0}.bq-character-dock::after{right:12px}
-.bq-character-dock img{
- flex:0 1 auto;display:block;object-fit:contain;object-position:center bottom;
- width:clamp(53px,7vw,95px);height:clamp(71px,9vw,113px);image-rendering:pixelated;
- filter:drop-shadow(0 5px 8px rgba(0,0,0,.44));transform:translateY(0);transform-origin:center bottom;
- transition:transform 210ms steps(4,end),filter 210ms ease;pointer-events:auto;
-}
-.bq-character-dock img:nth-of-type(2){width:clamp(62px,8vw,106px)}
-.bq-character-dock img:nth-of-type(3){width:clamp(48px,6vw,89px)}
-.bq-character-dock img:nth-of-type(4){width:clamp(67px,8vw,112px)}
-.bq-character-dock img:hover{transform:translateY(-9px);filter:drop-shadow(0 9px 10px rgba(0,0,0,.5))}
-.bq-character-dock img.bq-happy-reaction{animation:bq-mascot-pop 900ms steps(6,end) 1}
-@keyframes bq-mascot-pop{0%,100%{transform:translateY(0)}30%{transform:translateY(-15px)}55%{transform:translateY(-4px)}78%{transform:translateY(-10px)}}
 /* One-time question-curtain. DOM inserts it only for a NEW published round.
  * No secret answer payload is ever embedded in the curtain. */
 .page-live .stage{position:relative;overflow:hidden}
@@ -357,9 +337,6 @@ body:has(.board) .bq-pixel-mascot{display:none}
  will-change:transform;
 }
 .bq-question-curtain::after{content:"";position:absolute;inset:12px;border:1px dashed rgba(192,174,184,.21);pointer-events:none}
-.bq-curtain-actor{position:absolute;z-index:1;bottom:0;left:0;width:clamp(60px,10vw,102px);height:clamp(70px,12vw,114px);object-fit:contain;object-position:center bottom;image-rendering:pixelated;filter:drop-shadow(0 5px 12px rgba(0,0,0,.4));pointer-events:none}
-.bq-question-curtain.bq-swipe-right .bq-curtain-actor{left:auto;right:0}
-.bq-question-curtain.bq-swipe-down .bq-curtain-actor{bottom:auto;top:0}
 .bq-question-curtain.bq-swipe-left{animation:bq-curtain-left 930ms cubic-bezier(.54,0,.32,1) forwards}
 .bq-question-curtain.bq-swipe-right{animation:bq-curtain-right 930ms cubic-bezier(.54,0,.32,1) forwards}
 .bq-question-curtain.bq-swipe-up{animation:bq-curtain-up 930ms cubic-bezier(.54,0,.32,1) forwards}
@@ -368,19 +345,10 @@ body:has(.board) .bq-pixel-mascot{display:none}
 @keyframes bq-curtain-right{to{transform:translateX(105%)}}
 @keyframes bq-curtain-up{to{transform:translateY(-105%)}}
 @keyframes bq-curtain-down{to{transform:translateY(105%)}}
-@media(max-width:680px){.bq-character-dock{min-height:66px;padding:3px 10px 0;gap:6px}.bq-character-dock img,.bq-character-dock img:nth-of-type(n){width:clamp(45px,16vw,67px);height:77px}.bq-curtain-actor{width:64px;height:76px}}
-@media(prefers-reduced-motion:reduce){.bq-character-dock img,.bq-character-dock img:hover{transition:none;transform:none}.bq-character-dock img.bq-happy-reaction{animation:none}.bq-question-curtain{display:none!important}}
+@media(prefers-reduced-motion:reduce){.bq-question-curtain{display:none!important}}
 @media(prefers-reduced-transparency:reduce){.bq-game-mode .page-live .glass{backdrop-filter:none;background:#292d32}.bq-question-curtain{background:#34313a}}
-@media(forced-colors:active){.bq-character-dock,.bq-question-curtain{display:none}.bq-game-mode .page-live .tile,.bq-game-mode .page-live .review-card{clip-path:none;border:2px solid CanvasText}}
-@media print{.bq-character-dock,.bq-question-curtain{display:none}}
-/* Keep the complete four-character dock visible on an ordinary laptop screen
- * in the compact answer-gallery state; the gallery still expands for content. */
-@media(min-width:1100px){.bq-game-mode .review-main{min-height:calc(100dvh - 276px);padding-bottom:20px}}
-.bq-game-mode .review-layout{min-height:0}
-@media(min-width:1100px) and (min-height:820px){
- .bq-game-mode .bq-character-dock{min-height:90px;max-height:90px;margin-top:5px}
- .bq-game-mode .bq-character-dock img:nth-of-type(n){width:clamp(48px,5.6vw,79px);height:88px}
-}
+@media(forced-colors:active){.bq-question-curtain{display:none}.bq-game-mode .page-live .tile,.bq-game-mode .page-live .review-card{clip-path:none;border:2px solid CanvasText}}
+@media print{.bq-question-curtain{display:none}}
 /* In game view a revealed question spans the presentation width; do not leave
  * a narrow floating stage in the left corner of a wide participant screen. */
 .bq-game-mode .guest-focus.has-question>.guest-question{width:100%;max-width:none;align-self:stretch}
