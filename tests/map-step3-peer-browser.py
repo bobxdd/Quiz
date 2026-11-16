@@ -42,6 +42,18 @@ async def main():
   await host.locator('.top-nav [data-view="teams"]').click()
   await host.locator('[data-action="approve"]').first.click()
   await guest.locator('.bq-board-scene').wait_for(timeout=12000)
+  # A second approved guest deliberately does not submit. Their answer card
+  # must be 'no answer', never a misleading frosted/hidden answer.
+  async with ctx.expect_page() as second_open:
+   await host.evaluate("window.open('about:blank','_blank')")
+  second=await second_open.value
+  second.on('pageerror',lambda err:errors.append('Guest2: '+str(err)))
+  await install(second)
+  await second.locator('#join-room').fill(code);await second.locator('#join-name').fill('Bob')
+  await second.locator('button[type="submit"]').first.click()
+  await second.get_by_text('FREIGABE AUSSTEHEND').wait_for(timeout=12000)
+  await host.locator('[data-action="approve"]').first.click()
+  await second.locator('.bq-board-scene').wait_for(timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await guest.locator('.bq-map-viewport').wait_for(timeout=12000)
@@ -107,6 +119,14 @@ async def main():
   print('PASS: guest can move and re-send their private pin until map round closes')
   await host.locator('[data-action="start-review"]').first.click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
+  await guest.locator('.review-card.is-missing').first.wait_for(timeout=12000)
+  assert await guest.locator('.review-card.is-hidden').count()==1
+  assert await guest.locator('.review-card.is-missing').count()==1
+  assert 'Keine Antwort abgegeben' in await guest.locator('.review-card.is-missing').inner_text()
+  assert await guest.locator('.review-card.is-missing .frosted-shield').count()==0
+  assert await second.locator('.review-card.is-hidden').count()==1
+  assert '@map:39' not in await second.locator('.bq-question-scene').inner_text()
+  print('PASS: review separates absent responses from private submitted answers for two guests',flush=True)
   await host.locator('[data-action="reveal"]').first.click()
   await guest.locator('.bq-map-pin.is-solution img').wait_for(timeout=12000)
   assert await guest.locator('.bq-map-pin.is-solution img').evaluate('(img)=>img.complete&&img.naturalWidth>0'),'Pixel dagger missing in two-client view'
