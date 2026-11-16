@@ -38,3 +38,9 @@ test('Part 2: background transport separates private host state from public part
  assert.match(guestActions,/Hostfreigabe erforderlich/);
  assert.doesNotMatch(guestActions,/case 'score':|case 'publish':|case 'reveal':/);
 });
+
+test('Part 2 UX: the scoreboard correctly identifies teams versus individual players',()=>{
+ const app=read('app.mjs');
+ assert.match(app,/const unit=scoreMode\(publicState\)==='team'\?'Teams':'Personen'/);
+ assert.doesNotMatch(app,/list\.length\+' Teilnehmer'/);
+});
