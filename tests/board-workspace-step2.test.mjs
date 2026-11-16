@@ -162,7 +162,7 @@ test('every board export contains a distinct title and board identifier',async()
  assert.match(app,/function backupFilename\(/);
  assert.match(app,/location=isOffline\(\)\?boardId\.slice\(1,8\):room/);
  assert.match(app,/case 'export':safeDownload\(backupFilename\(\)/);
- assert.match(app,/backup:()=>safeDownload\(backupFilename\('BrainQuiz_Backup'\)/);
+ assert.ok(app.includes("backup:()=>safeDownload(backupFilename('BrainQuiz_Backup')"));
  assert.match(app,/safeDownload\(backupFilename\('BrainQuiz_Autosicherung'\)/);
 });
 test('destructive live room import first exports a private backup',async()=>{
