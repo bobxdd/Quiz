@@ -43,3 +43,19 @@
  .se-board-switch-items{left:0;right:auto;width:min(100%,350px)}
 }
 @media(forced-colors:active){.se-editor-v3 .se-board-context,.se-board-switch-items{border:2px solid CanvasText}}
+
+/* Recoverability is visible only on failures; ordinary editing stays minimal. */
+.se-editor-v3 .se-board-conflict{
+ display:grid;gap:7px;margin-bottom:10px;padding:13px 15px;
+ border:2px solid #c3a46e;border-radius:10px;
+ background:#332d27;color:#f8edda;
+}
+.se-board-conflict strong{font-size:15px;color:#fff2dc}
+.se-board-conflict p{font-size:13px;margin:0;color:#f2dec1;line-height:1.45}
+.se-board-conflict .se-inline{display:flex;flex-wrap:wrap;gap:8px}
+.se-board-conflict button{min-height:42px;padding:8px 12px;border:1px solid #b2a084;border-radius:8px;background:#413930;color:#fff7ed;cursor:pointer}
+.se-board-conflict button:focus-visible{outline:3px solid #fff1bd;outline-offset:2px}
+.se-board-switch-items .se-board-storage-hint{font-size:12px;line-height:1.4;color:#bed2cb;margin:7px 0 0}
+.se-board-context-lock{overflow-wrap:anywhere}
+@media(max-width:580px){.se-board-conflict .se-inline{flex-direction:column}.se-board-conflict button{width:100%}}
+@media(forced-colors:active){.se-board-conflict{border:2px solid CanvasText}}
