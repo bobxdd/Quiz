@@ -153,6 +153,28 @@ async def main():
   }''')
   assert abs(geometry['x']-geometry['expectedX'])<1 and abs(geometry['y']-geometry['expectedY'])<1,geometry
   assert geometry['pointer']=='none',geometry
+  # Real layout assertions: the casting figure must stay in its OWN rail,
+  # not cover the map surface, the question title, or the zoom controls.
+  actor_layout=await guest.evaluate("""() => {
+   const actor=document.querySelector('.bq-map-throw-actor'),map=document.querySelector('.bq-map-viewport');
+   const title=document.querySelector('.bq-map-title'),controls=document.querySelector('.bq-map-controls');
+   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,t:r.top,r:r.right,b:r.bottom}};
+   return {actor:rect(actor),map:rect(map),title:rect(title),controls:rect(controls)};
+  }""")
+  a=actor_layout['actor'];m=actor_layout['map'];t=actor_layout['title'];z=actor_layout['controls']
+  intersects=lambda p,q:p['l']<q['r']-1 and p['r']>q['l']+1 and p['t']<q['b']-1 and p['b']>q['t']+1
+  assert a['r']<=m['l']+2 and not intersects(a,t) and not intersects(a,z),actor_layout
+  # Same exact class pose on a narrow real guest viewport.
+  await second.set_viewport_size({'width':390,'height':844})
+  await second.emulate_media(reduced_motion='no-preference')
+  await expect(second.locator('.bq-map-throw-actor')).to_have_count(1,timeout=12000)
+  small=await second.evaluate("""() => {
+   const a=document.querySelector('.bq-map-throw-actor')?.getBoundingClientRect();
+   const m=document.querySelector('.bq-map-viewport')?.getBoundingClientRect();
+   return a&&m?{right:a.right,mapLeft:m.left,actorWidth:a.width,viewportWidth:innerWidth}:null;
+  }""")
+  assert small and small['right']<=small['mapLeft']+2 and small['actorWidth']<=105 and small['right']<=small['viewportWidth']+2,small
+  await second.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-mobile-windup.png'),animations='allow')
   await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-windup.png'),animations='allow')
   await guest.wait_for_timeout(2400)
   assert await guest.locator('.bq-map-throw-flight').count()==1,'Flying dagger missing'
