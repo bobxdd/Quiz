@@ -1,6 +1,6 @@
 /** BrainQuiz Step 4: one focused lobby view for pending and approved guests.
  * Team colors are server-known palette values; every name is HTML-escaped. */
-import {teamColor,validTeamId,canArrangeLobby} from './lobby-model.mjs';
+import {teamColor,validTeamId,MAX_TEAMS} from './lobby-model.mjs';
 import {escapeHTML as e} from './core.mjs';
 const safeTeams=value=>Object.entries(value||{}).filter(([id,name])=>validTeamId(id)&&typeof name==='string').slice(0,6);
 const dot=id=>`<span class="bq-team-swatch" aria-hidden="true" style="--bq-team-color:${teamColor(id)}"></span>`;
@@ -30,7 +30,7 @@ export function lobbyGuestHTML(lobby,member){
      ${canSelect?`<button type="button" class="btn ${chosen?'bq-lobby-selected':'primary'}" data-action="lobby-join" data-team="${id}" ${chosen?'disabled aria-pressed="true"':''}>${chosen?'✓ Ausgewählt':'Diesem Team beitreten'}</button>`:''}
    </article>`;
   }).join('')}</div>
-  ${phaseOpen&&teams.length<6&&!member?.createdTeam?`<form class="bq-lobby-create" id="lobby-create-form"><label for="bq-new-team"><strong>Eigenes Team erstellen</strong><span>Der nächste freie Teamfarbton wird automatisch vergeben.</span></label><div class="bq-lobby-create-row"><input id="bq-new-team" name="teamname" maxlength="28" minlength="2" autocomplete="off" required placeholder="Teamname" value="${e(proposed)}"><button class="btn small" type="submit">Team erstellen</button></div></form>`:''}
+  ${phaseOpen&&teams.length<MAX_TEAMS&&!member?.createdTeam?`<form class="bq-lobby-create" id="lobby-create-form"><label for="bq-new-team"><strong>Eigenes Team erstellen</strong><span>Der nächste freie Teamfarbton wird automatisch vergeben.</span></label><div class="bq-lobby-create-row"><input id="bq-new-team" name="teamname" maxlength="28" minlength="2" autocomplete="off" required placeholder="Teamname" value="${e(proposed)}"><button class="btn small" type="submit">Team erstellen</button></div></form>`:''}
   ${proposed?`<p class="bq-lobby-proposal" role="status">Neues Team „${e(proposed)}“ wird mit deiner Freigabe erstellt. Die Farbe wird automatisch vergeben.</p>`:''}
   <div class="bq-lobby-ready-bar">
    <div><strong>2. Fertig?</strong><p>${!hasTeam?'Wähle zuerst ein Team aus.':pending?'Deine Auswahl wartet auf Freigabe.':'Der Host sieht deinen Bereitschaftsstatus sofort.'}</p></div>
@@ -47,6 +47,7 @@ export function hostLobbySummary(lobby){
     const group=players.filter(p=>p.team===id),ready=group.filter(p=>p.ready).length;
     return `<div class="bq-host-team-row" style="--bq-team-color:${teamColor(id)}"><strong>${teamLabel(id,name)}</strong><span>${ready}/${group.length} bereit</span><small>${group.map(p=>e(p.name)+(p.ready?' ✓':'')).join(', ')||'Noch keine Mitglieder'}</small></div>`;
   }).join('')}</div>
-  <p class="small muted">Der Host bestätigt die Aufnahme. Bereit ist ein Signal, keine automatische Startfreigabe.</p>
+  ${lobby?.open&&teams.length<MAX_TEAMS?`<details class="bq-host-team-create"><summary>+ Team erstellen</summary><form id="host-team-create-form" class="bq-lobby-create"><label for="bq-host-team-name"><strong>Neues Team benennen</strong><span>Die Farbe wird automatisch vergeben. Bis zu ${MAX_TEAMS} Teams.</span></label><div class="bq-lobby-create-row"><input type="text" id="bq-host-team-name" name="teamname" required minlength="2" maxlength="28" autocomplete="off" placeholder="Teamname"><button class="btn primary" type="submit">Team anlegen</button></div></form></details>`:''}
+  <p class="small muted">Bis zu 10 Teilnehmer · maximal ${MAX_TEAMS} neue Teams · Der Host bestätigt die Aufnahme. Bereit ist ein Signal, keine automatische Startfreigabe.</p>
  </section>`;
 }
