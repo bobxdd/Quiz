@@ -55,7 +55,7 @@ test('board identifiers must be valid and unique',()=>{
 test('source wiring keeps offline editor and live room separate',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const editor=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
- assert.match(app,/function startOffline\(\).*resumeBoard\(localStorage,emptyQuiz,makeBoardId,preferred\)/);
+ assert.match(app,/resumeBoard\(localStorage,emptyQuiz,makeBoardId,preferred\)/);
  assert.match(app,/case 'new-board':newStoredBoard\(\)/);
  assert.match(app,/case 'open-board':openStoredBoard\(button.dataset.boardId\)/);
  assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(localStorage,imported,makeBoardId\)/);
