@@ -57,7 +57,11 @@ body:not(:has(.review-main)){padding-bottom:0!important}
  .bq-game-mode .bq-character-dock .bq-actor{width:clamp(58px,20vw,88px);height:clamp(58px,20vw,88px)}
  .bq-question-curtain .bq-curtain-actor{width:76px;height:76px}
 }
-@media(max-width:360px){.bq-game-mode .bq-character-dock .bq-actor{width:56px;height:56px}}
+@media(max-width:360px){
+ .bq-landing-cast{width:100%;max-width:100%;box-sizing:border-box;gap:0;justify-content:space-around;padding-inline:0}
+ .bq-landing-cast .bq-actor{width:clamp(44px,15vw,54px);height:clamp(44px,15vw,54px)}
+ .bq-game-mode .bq-character-dock .bq-actor{width:56px;height:56px}
+}
 @media(prefers-reduced-motion:reduce){
  .bq-question-curtain{display:none!important}
  .bq-game-mode .bq-character-dock .bq-actor[class*="bq-actor--"]{animation:none!important;transform:none!important}
