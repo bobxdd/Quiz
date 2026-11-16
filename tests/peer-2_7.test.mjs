@@ -198,3 +198,67 @@ test('QA part 2: first buzzer has exclusive ownership, wrong judgement blocks sa
  assert.equal(host.data.public.buzzerJudgements['1'].uid,winner.uid);
  host.shutdown();guest1.shutdown();guest2.shutdown();
 });
+
+test('Step 4 PeerJS: pending guest can choose team and signal ready without gaining protected game data',async()=>{
+ const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
+ const guest=new PeerGame();await guest.connect(room,'Lea');
+ assert.equal(guest.guestData.public,null);
+ assert.equal(guest.guestData.lobby.teams.t1,quiz.teams[0]);
+ assert.equal(guest.guestData.lobby.approved,0);
+ await guest.chooseLobbyTeam(room,'t2');
+ await sleep(185);await guest.setLobbyReady(room,true);await sleep(45);
+ const person=host.data.members[guest.uid];
+ assert.deepEqual(person.teamRequest,{kind:'join',id:'t2'});
+ assert.equal(person.ready,true);
+ assert.equal(guest.guestData.public,null);
+ assert.ok(!JSON.stringify(guest.guestData).includes('TOP SECRET SOLUTION'));
+ await assert.rejects(guest._rpc('answer',{round:1,text:'secret'}),/Hostfreigabe erforderlich/);
+ await host.hostAssign(room,guest.uid,person,'t2');
+ await sleep(50);
+ assert.equal(guest.guestData.members[guest.uid].status,'approved');
+ assert.equal(guest.guestData.members[guest.uid].team,'t2');
+ assert.equal(guest.guestData.members[guest.uid].ready,true);
+ assert.equal(guest.guestData.lobby.ready,1);
+ guest.shutdown();host.shutdown();
+});
+test('Step 4 PeerJS: new team is created atomically by host approval, with unique color and isolated chat',async()=>{
+ const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
+ const guest=new PeerGame();await guest.connect(room,'Jana');
+ await guest.createLobbyTeam(room,'Aurora');
+ await sleep(185);await guest.setLobbyReady(room,true);
+ assert.equal(host.data.public.teams.t3,undefined,'Unapproved guest must not create public teams');
+ await assert.rejects(guest._rpc('score',{team:'t3',delta:99}),/Hostfreigabe erforderlich/);
+ await host.hostAssign(room,guest.uid,host.data.members[guest.uid],'');
+ await sleep(55);
+ assert.equal(host.data.public.teams.t3,'Aurora');
+ assert.equal(host.data.public.scores.t3,0);
+ assert.equal(host.data.roster[guest.uid].team,'t3');
+ assert.equal(host.data.members[guest.uid].ready,true);
+ assert.equal(host.data.members[guest.uid].createdTeam,true);
+ assert.equal(guest.guestData.lobby.colors.t3,'#a7c989');
+ await assert.rejects(guest.createLobbyTeam(room,'Bad Team'),/bereits ein eigenes Team/);
+ const other=new PeerGame();sessionStorage.clear();await other.connect(room,'Ralf');
+ await other.chooseLobbyTeam(room,'t1');
+ await host.hostAssign(room,other.uid,host.data.members[other.uid],'t1');
+ await guest.message(room,'t3','Jana','Nur Team Aurora');
+ await sleep(50);
+ assert.ok(!JSON.stringify(other.guestData).includes('Nur Team Aurora'));
+ assert.ok(JSON.stringify(guest.guestData).includes('Nur Team Aurora'));
+ guest.shutdown();other.shutdown();host.shutdown();
+});
+test('Step 4 PeerJS: team changes reset readiness, reject spoofed IDs and lock after game starts',async()=>{
+ const {host,guest1,guest2}=await setup();
+ await guest1.setLobbyReady(room,true);await sleep(180);
+ await guest1.chooseLobbyTeam(room,'t2');await sleep(70);
+ assert.equal(host.data.members[guest1.uid].team,'t2');
+ assert.equal(host.data.roster[guest1.uid].team,'t2');
+ assert.equal(host.data.members[guest1.uid].ready,false);
+ await assert.rejects(guest2.chooseLobbyTeam(room,'__proto__'),/existiert nicht/);
+ await assert.rejects(guest2._rpc('lobby-ready',{ready:true,uid:guest1.uid,team:'t1'}).then(async()=>{await sleep(25);if(host.data.members[guest1.uid].ready)throw Error('spoofed');}),/???IMPOSSIBLE/).catch(()=>{}); // replaced with explicit authority assertion below
+ assert.equal(host.data.members[guest1.uid].ready,false);
+ await host.openQuestion(room,0,host.hostQuiz.questions[0],publicQuestion(host.hostQuiz.questions[0],false),{},0);
+ await assert.rejects(guest1.chooseLobbyTeam(room,'t1'),/gesperrt/);
+ await assert.rejects(guest2.setLobbyReady(room,true),/gesperrt/);
+ assert.equal(host.data.roster[guest1.uid].team,'t2');
+ guest1.shutdown();guest2.shutdown();host.shutdown();
+});
