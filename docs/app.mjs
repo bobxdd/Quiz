@@ -294,7 +294,7 @@ function guestPage(){
  if(member?.status==='removed')return `<section class="glass panel"><h2>Du wurdest aus dem Raum entfernt.</h2><p>Wende dich für eine erneute Freigabe an den Host.</p></section>`;
  if(!member||member.status==='pending')return lobbyGuestHTML(guestLobby,member);
  if(!publicState)return `<section class="glass panel"><div class="empty">Synchronisiere Live-Spielstand …</div></section>`;
- if(publicState.phase==='board'&&Number(publicState.round||0)===0)return lobbyGuestHTML(guestLobby,member);
+ if(publicState.phase==='board'&&Number(publicState.round||0)===0)return `<section class="bq-session-scene bq-lobby-session">${lobbyGuestHTML(guestLobby,member)}<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Privater Teamchat</summary>${renderChat()}</details></section>`;
  if(view==='teams')return renderTeams();if(view==='setup')return renderSetup();return renderGuestLive();
 }
 function renderHistory(){
