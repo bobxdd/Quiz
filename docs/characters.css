@@ -1,71 +1,7 @@
-/* BrainQuiz Studio 2.8: exact user-supplied characters. The PNG originals
-   are included in artwork/originals; these WebP images are cutouts from them. */
+/* Four exact user-supplied originals; no emotion variants or reaction loops. */
 .bq-pixel-scene,.bq-pixel-mascot{display:none!important}
-body:not(:has(.review-main)){padding-bottom:0!important}
-.bq-actor{
- display:block;flex:0 0 auto;width:108px;height:108px;aspect-ratio:1/1;
- background-repeat:no-repeat;background-position:center;background-size:contain;
- image-rendering:pixelated;pointer-events:none;user-select:none;
- transform-origin:50% 84%;filter:drop-shadow(0 4px 6px rgba(0,0,0,.27));
-}
+.bq-actor{display:block;flex:0 0 auto;width:108px;height:108px;aspect-ratio:1/1;background-repeat:no-repeat;background-position:center;background-size:contain;image-rendering:pixelated;pointer-events:none;user-select:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.28))}
 .bq-actor--rogue{background-image:url('./characters/rogue.webp')}
 .bq-actor--blades{background-image:url('./characters/blades.webp')}
 .bq-actor--mage{background-image:url('./characters/mage.webp')}
 .bq-actor--druid{background-image:url('./characters/druid.webp')}
-.bq-landing-cast{display:flex;justify-content:center;align-items:end;flex-wrap:wrap;gap:clamp(8px,2vw,25px);margin:18px auto 0;padding:10px 8px 0;max-width:570px;border-top:1px solid rgba(167,145,168,.2);overflow:visible}
-.bq-landing-cast .bq-actor{width:clamp(66px,10vw,100px);height:clamp(66px,10vw,100px)}
-.bq-game-mode .bq-character-dock{
- display:grid;grid-template-columns:repeat(4,minmax(0,1fr));justify-items:center;align-items:end;
- gap:clamp(4px,1.8vw,24px);width:min(100%,690px);max-width:690px;
- height:auto;min-height:107px;max-height:none;overflow:visible;
- margin:12px auto 6px;padding:9px 8px 0;
- border-top:1px solid rgba(175,147,169,.32);background:transparent;
-}
-.bq-game-mode .bq-character-dock .bq-actor{width:clamp(68px,8vw,112px);height:clamp(68px,8vw,112px);filter:drop-shadow(0 4px 6px rgba(0,0,0,.24))}
-.bq-game-mode .bq-character-dock::before,.bq-game-mode .bq-character-dock::after{display:none}
-/* In a question curtain, the current round's character pushes/slides the veil. */
-.bq-question-curtain .bq-curtain-actor{position:absolute;z-index:2;bottom:0;left:clamp(6px,6%,40px);width:clamp(74px,12vw,132px);height:clamp(74px,12vw,132px);animation:bq-actor-question 930ms steps(10,end) both;pointer-events:none}
-.bq-question-curtain.bq-swipe-right .bq-curtain-actor{left:auto;right:clamp(6px,6%,40px)}
-.bq-question-curtain.bq-swipe-down .bq-curtain-actor{bottom:auto;top:0}
-.bq-game-mode .bq-character-dock .bq-actor.bq-actor--review{animation:bq-actor-review 840ms steps(9,end)}
-.bq-game-mode .bq-character-dock .bq-actor.bq-actor--answer{animation:bq-actor-answer 760ms steps(8,end)}
-.bq-game-mode .bq-character-dock .bq-actor.bq-actor--solution{animation:bq-actor-solution 930ms steps(9,end)}
-.bq-game-mode .bq-character-dock .bq-actor.bq-actor--buzzer{animation:bq-actor-buzzer 550ms steps(7,end)}
-.bq-game-mode .bq-character-dock .bq-actor.bq-actor--points{animation:bq-actor-points 850ms steps(9,end)}
-@keyframes bq-actor-question{0%{transform:translateY(28px) rotate(-11deg);opacity:.4}35%{transform:translateY(-8px) rotate(8deg);opacity:1}70%{transform:translateY(-2px) rotate(-7deg)}100%{transform:translateY(0) rotate(0)}}
-@keyframes bq-actor-review{0%,100%{transform:translateY(0)}25%{transform:translateY(-18px) rotate(-7deg)}52%{transform:translateY(-6px) rotate(5deg)}77%{transform:translateY(-12px) rotate(-3deg)}}
-@keyframes bq-actor-answer{0%,100%{transform:translateY(0) rotate(0)}42%{transform:translateY(-13px) rotate(11deg)}72%{transform:translateY(-5px) rotate(-5deg)}}
-@keyframes bq-actor-solution{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-13px) scale(1.09) rotate(-6deg)}65%{transform:translateY(-6px) scale(1.04) rotate(8deg)}}
-@keyframes bq-actor-buzzer{0%,100%{transform:translateX(0)}15%{transform:translateX(-9px) rotate(-8deg)}42%{transform:translateX(10px) rotate(7deg)}69%{transform:translateX(-5px) rotate(-3deg)}}
-@keyframes bq-actor-points{0%,100%{transform:scale(1)}32%{transform:translateY(-12px) scale(1.12)}67%{transform:translateY(-5px) scale(1.05)}}
-/* Effects are drawn around the original image; the sprite pixels never change. */
-.bq-question-curtain .bq-curtain-actor::after,
-.bq-character-dock .bq-actor.bq-actor--answer::after,
-.bq-character-dock .bq-actor.bq-actor--solution::after,
-.bq-character-dock .bq-actor.bq-actor--buzzer::after{
- content:'✦';position:absolute;top:6%;right:-6%;font-size:clamp(15px,2vw,24px);
- color:#f5dba0;text-shadow:0 0 8px rgba(235,182,138,.6);animation:bq-actor-flash 780ms steps(7,end) both;
-}
-.bq-actor--mage.bq-actor--answer::after,.bq-actor--mage.bq-actor--solution::after{color:#bdabf3}
-.bq-actor--druid.bq-actor--answer::after,.bq-actor--druid.bq-actor--solution::after{color:#a8bb73}
-.bq-actor--blades.bq-actor--answer::after,.bq-actor--blades.bq-actor--solution::after{color:#e9ad8e}
-@keyframes bq-actor-flash{0%{opacity:0;transform:translate(-10px,12px) scale(.2)}25%,65%{opacity:1;transform:translate(4px,-10px) scale(1.15)}100%{opacity:0;transform:translate(13px,-27px) scale(.6)}}
-@media(max-width:680px){
- .bq-landing-cast{width:100%;max-width:100%;box-sizing:border-box;gap:0;justify-content:space-around;padding:6px 0 0}
- .bq-landing-cast .bq-actor{width:clamp(48px,16vw,72px);height:clamp(48px,16vw,72px)}
- .bq-game-mode .bq-character-dock{min-height:76px;gap:0;margin:7px auto 2px;padding:6px 0 0;max-width:100%}
- .bq-game-mode .bq-character-dock .bq-actor{width:clamp(58px,20vw,88px);height:clamp(58px,20vw,88px)}
- .bq-question-curtain .bq-curtain-actor{width:76px;height:76px}
-}
-@media(max-width:360px){
- .bq-landing-cast{width:100%;max-width:100%;box-sizing:border-box;gap:0;justify-content:space-around;padding-inline:0}
- .bq-landing-cast .bq-actor{width:clamp(44px,15vw,54px);height:clamp(44px,15vw,54px)}
- .bq-game-mode .bq-character-dock .bq-actor{width:56px;height:56px}
-}
-@media(prefers-reduced-motion:reduce){
- .bq-question-curtain{display:none!important}
- .bq-game-mode .bq-character-dock .bq-actor[class*="bq-actor--"]{animation:none!important;transform:none!important}
- .bq-actor::after{display:none!important}
-}
-@media(forced-colors:active){.bq-actor{filter:none}}
-@media print{.bq-landing-cast,.bq-character-dock,.bq-question-curtain{display:none!important}}

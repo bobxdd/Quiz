@@ -126,8 +126,8 @@ async def main():
   await host.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal-answer"]').first.click()
   await guest.locator('.review-grid').get_by_text('Sivir').wait_for(timeout=12000)
-  assert await guest.locator('.bq-scene-cameos .bq-actor').count()>=1
-  assert await guest.locator('.bq-scene-cameos .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))'), 'Original character sprites were not loaded'
+  assert await guest.locator('.bq-scene-cameos').count()==0, 'No decorative cameo during review'
+  assert await guest.locator('.bq-action-actor').count()==0, 'No old emotion overlay'
   assert 'Anivia' not in await guest.locator('.review-grid').inner_text()
   assert await guest.locator('.bq-board-scene').count()==0, 'No board behind the review'
   await host.screenshot(path=str(root/'screenshots/Vorschau_2_9_P2P_Host.png'),full_page=False)
