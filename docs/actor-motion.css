@@ -23,7 +23,7 @@
 .bq-question-curtain{z-index:11!important;overflow:visible;transform-origin:50% 40%;background:linear-gradient(144deg,#423745,#252b35 64%,#1c2229)!important;border:4px solid #9f8194!important;box-shadow:inset 0 4px #ffffff12,inset 0 -6px #03050959,0 10px 18px #0007!important;pointer-events:none!important}
 .bq-question-curtain::after{border-color:#ded1b23c!important}
 .bq-question-curtain .bq-veil-handle{position:absolute;z-index:2;width:34px;height:14px;right:9px;bottom:42px;border:3px solid #cbb593;border-radius:4px;background:#55445f;box-shadow:inset 2px 2px #fff4,0 3px 0 #0006;pointer-events:none}
-.bq-question-curtain .bq-curtain-helper.bq-actor{position:absolute;z-index:3;right:-18px;bottom:-14px;width:clamp(94px,11vw,136px);height:clamp(94px,11vw,136px);filter:drop-shadow(0 5px 5px #0008);animation:bq-curtain-actor-assist 2900ms steps(18,end) both}
+.bq-question-curtain .bq-curtain-helper.bq-actor{position:absolute;z-index:3;right:-18px;bottom:-14px;width:clamp(94px,11vw,136px);height:clamp(94px,11vw,136px);filter:drop-shadow(0 5px 5px #0008);animation:bq-curtain-helper-motion 2900ms steps(18,end) both}
 .bq-question-curtain .bq-curtain-glove{position:absolute;right:16px;bottom:44px;width:17px;height:11px;background:#a98472;border:3px solid #483a42;z-index:4;box-shadow:inset 1px 1px #e3cbb0;animation:bq-curtain-grip 2900ms steps(14,end) both}
 .bq-question-curtain.bq-swipe-left{animation:bq-curtain-push-left 2900ms steps(30,end) forwards!important}
 .bq-question-curtain.bq-swipe-right{animation:bq-curtain-push-right 2900ms steps(30,end) forwards!important}
@@ -36,7 +36,7 @@
 .bq-question-curtain.bq-swipe-up .bq-curtain-helper{bottom:-14px;right:6%}
 .bq-question-curtain.bq-swipe-down .bq-curtain-helper{bottom:auto;top:-18px;right:6%}
 .bq-question-curtain.bq-swipe-down .bq-curtain-glove{bottom:auto;top:16px;right:12%}
-@keyframes bq-curtain-actor-assist{0%{opacity:0;translate:14px 0}15%,35%{opacity:1;translate:0 0}48%{opacity:1;translate:-7px 2px}76%{opacity:1;translate:8px -3px}94%{opacity:.85;translate:0 0}100%{opacity:0}}
+@keyframes bq-curtain-helper-motion{0%{opacity:0;translate:14px 0}15%,35%{opacity:1;translate:0 0}48%{opacity:1;translate:-7px 2px}76%{opacity:1;translate:8px -3px}94%{opacity:.85;translate:0 0}100%{opacity:0}}
 @keyframes bq-curtain-grip{0%,10%{opacity:0}19%,81%{opacity:1}95%,100%{opacity:0}}
 @keyframes bq-curtain-push-left{0%,23%{transform:translate3d(0,0,0)}35%{transform:translate3d(8px,0,0)}47%{transform:translate3d(-6%,0,0)}100%{transform:translate3d(-116%,0,0)}}
 @keyframes bq-curtain-push-right{0%,23%{transform:translate3d(0,0,0)}35%{transform:translate3d(-8px,0,0)}47%{transform:translate3d(6%,0,0)}100%{transform:translate3d(116%,0,0)}}
