@@ -63,3 +63,14 @@ test('source wiring keeps offline editor and live room separate',async()=>{
  assert.match(editor,/data-action="new-board"/);
  assert.match(editor,/data-action="open-board"/);
 });
+
+test('corrupted board index is never silently replaced with an empty library',()=>{
+ const store=new Store();store.setItem('bq-board-workspaces-v1','{corrupt');
+ assert.throws(()=>resumeBoard(store,()=>draft('Wrong'),()=>ids[2]),/Verzeichnis beschädigt/);
+ assert.equal(store.getItem('bq-board-workspaces-v1'),'{corrupt');
+});
+test('editing a board updates its library label without changing identity',()=>{
+ const store=new Store();const a=createBoard(store,draft('Before'),()=>ids[0]);
+ persistBoard(store,a.id,a.revision,draft('After'));
+ assert.deepEqual(boardList(store).map(x=>[x.id,x.title]),[[ids[0],'After']]);
+});
