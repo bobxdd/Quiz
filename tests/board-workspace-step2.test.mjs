@@ -80,3 +80,55 @@ test('reset action uses per-board session key and cannot erase other boards',asy
  assert.match(app,/localStorage\.removeItem\('bq-session-LOCAL-'\+boardId\)/);
  assert.doesNotMatch(app,/localStorage\.removeItem\('bq-session-LOCAL'\)/);
 });
+
+test('saving unchanged board does not increment revision or cause false second-tab conflict',()=>{
+ const store=new Store(),a=createBoard(store,draft('A'),()=>ids[0]);
+ assert.equal(persistBoard(store,a.id,a.revision,draft('A')),a.revision);
+ assert.equal(persistBoard(store,a.id,a.revision,draft('A')),a.revision);
+ assert.equal(loadBoard(store,a.id).revision,1);
+});
+test('active pointer failure rolls back new board and leaves current unchanged',()=>{
+ const store=new Store(),a=createBoard(store,draft('Keep'),()=>ids[0]);
+ store.failKey='bq-board-active-v1';
+ assert.throws(()=>createBoard(store,draft('Not active'),()=>ids[1]),/quota/);
+ assert.equal(activeBoard(store),a.id);
+ assert.equal(boardList(store).length,1);
+ assert.equal(store.getItem('bq-board-workspace-'+ids[1]),null);
+});
+test('legacy round progress is copied, not deleted, on first migration',()=>{
+ const store=new Store();
+ store.setItem('bq-quiz-LOCAL',JSON.stringify(draft('Earlier')));
+ store.setItem('bq-session-LOCAL',JSON.stringify({round:5,used:{old:true}}));
+ const b=resumeBoard(store,()=>draft('Empty'),()=>ids[0]);
+ assert.deepEqual(JSON.parse(store.getItem('bq-session-LOCAL-'+b.id)),{round:5,used:{old:true}});
+ assert.ok(store.getItem('bq-session-LOCAL'));
+});
+test('corrupted legacy quiz is preserved and never silently replaced with blank',()=>{
+ const store=new Store();store.setItem('bq-quiz-LOCAL','{incomplete');
+ assert.throws(()=>resumeBoard(store,()=>draft('Blank'),()=>ids[0]),/beschädigt/);
+ assert.equal(boardList(store).length,0);
+ assert.equal(store.getItem('bq-quiz-LOCAL'),'{incomplete');
+});
+test('failed record update does not touch saved old revision or title index',()=>{
+ const store=new Store(),a=createBoard(store,draft('Good'),()=>ids[0]);
+ store.failKey='bq-board-workspace-'+a.id;
+ assert.throws(()=>persistBoard(store,a.id,a.revision,draft('Unsaved')),/quota/);
+ assert.equal(loadBoard(store,a.id).revision,a.revision);
+ assert.equal(loadBoard(store,a.id).quiz.title,'Good');
+ assert.equal(boardList(store)[0].title,'Good');
+});
+test('conflict recovery UX and original board load are present and reachable',async()=>{
+ const fs=await import('node:fs');
+ const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ const ui=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
+ assert.match(app,/function rescueStoredBoard\(/);
+ assert.match(app,/function reloadStoredBoard\(/);
+ assert.match(app,/case 'rescue-board':rescueStoredBoard\(\)/);
+ assert.match(app,/case 'reload-board':reloadStoredBoard\(\)/);
+ assert.match(app,/window\.addEventListener\('storage'/);
+ assert.match(app,/boardConflict=true/);
+ assert.match(ui,/data-action="rescue-board"/);
+ assert.match(ui,/data-action="reload-board"/);
+ assert.match(ui,/data-action="export"/);
+ assert.match(ui,/role="alert"/);
+});
