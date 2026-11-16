@@ -32,6 +32,7 @@ jobs:
           python tests/board-workspace-browser.py
           python tests/map-step3-browser.py
           python tests/map-step3-peer-browser.py
+          python tests/features-3_4-browser.py
           python tests/ui-step3-layout-browser.py
           python tests/editor-3_1-browser.py
           python tests/categories-3_0-browser.py
