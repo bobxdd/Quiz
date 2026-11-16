@@ -10,7 +10,7 @@
  <path d="M0 125H1000 M0 250H1000 M0 375H1000"/>
 </g>
 <style>
- .country{stroke:#344b54;stroke-width:0.95;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
+ .country{stroke:#24343c;stroke-width:0.95;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
  .tone-0{fill:#869ba0}
  .tone-1{fill:#9caaad}
  .tone-2{fill:#788e93}
