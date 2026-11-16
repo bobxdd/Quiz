@@ -70,6 +70,7 @@ test('map scene uses one clean full-screen surface, white SVG and dagger only wh
  const white=source('world-map.svg');
  assert.match(white,/fill="#f6f9fa"/);
  assert.match(white,/fill:#ffffff/);
+ assert.match(white,/preserveAspectRatio="none"/);
  const view=source('map-viewport.mjs');
  assert.match(view,/pointercancel/);assert.match(view,/wheel/);
  assert.match(view,/mapZoomAt/);assert.match(view,/setPointerCapture/);
