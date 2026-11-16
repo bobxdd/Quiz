@@ -1,4 +1,5 @@
 /* BrainQuiz 1.6: standalone question canvas schema. No HTML accepted, no secret answer sent before reveal. */
+import {mapMarkup} from './map-viewport.mjs';
 export const SCENE_WIDTH=1000,SCENE_HEIGHT=560;
 export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
 const TYPES=new Set(['text','image','shape','choice','order']);
@@ -60,8 +61,14 @@ export function publicScene(raw,step=0,showAnswers=false){const scene=normalizeS
  return {version:2,template:scene.template,elements:scene.elements.filter(el=>showAnswers||el.step<=step).map(el=>({...el})),step:showAnswers?6:num(step,0,5,0),...(showAnswers?{sortCorrect:scene.sortCorrect}: {})};
 }
 export function sceneHasStep(q,currentStep=0){return !!q?.scene?.elements?.some(x=>x.step>currentStep&&x.step<6);}
-export function renderScene(scene,{editing=false,selected='',revealed=false,interactive=false,canAnswer=false,picked=[] ,correctIndex=0}={}){
- if(!scene)return '';const content=scene.elements.map(el=>{
+export function renderScene(scene,{editing=false,selected='',revealed=false,interactive=false,canAnswer=false,picked=[],correctIndex=0,mapCanPick=false,mapCanEdit=false,mapPin=null,mapEditorPoint=null,mapSolution=null,mapPublicPins=[],mapView=null,mapPrompt=''}={}){
+ if(!scene)return '';
+ if(scene.template==='map'){
+  const heading=scene.elements.find(el=>el.kind==='text'&&el.role==='question')||scene.elements.find(el=>el.kind==='text'&&el.step===0);
+  const text=heading?.text||mapPrompt||'Frage eingeben';
+  return `<div class="se-scene bq-map-scene ${editing?'se-editing':''}" aria-label="Kartenfrage">${mapMarkup({prompt:text,view:mapView,point:editing?mapEditorPoint:mapPin,solution:mapSolution,otherPins:mapPublicPins,editable:!!(mapCanPick||mapCanEdit),editor:editing,visibleSolution:revealed})}</div>`;
+ }
+ const content=scene.elements.map(el=>{
   const style=`left:${el.x/10}%;top:${el.y/5.6}%;width:${el.w/10}%;height:${el.h/5.6}%;font-size:clamp(10px,${el.font/1000*100}cqw,${el.font}px);color:${el.fill};background:${el.kind==='image'||el.shape==='line'?'transparent':el.bg};text-align:${el.align};`;
   const n=el.kind==='choice'?Math.max(0,'ABCD'.indexOf(el.letter)):0;
   const correct=revealed&&el.kind==='choice'&&(n===correctIndex);
