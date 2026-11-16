@@ -39,8 +39,8 @@ test('P2P host confirms team membership; guest requests never directly grant acc
  assert.match(peer,/async hostAssign\(room,uid,player,team\)/);
  assert.match(peer,/approval\(d\.roster,uid,member,destination\)/);
  assert.match(peer,/member\?\.status!=='approved'/);
- assert.match(peer,/case 'lobby-join'/);
- assert.match(peer,/case 'lobby-create'/);
+ assert.match(peer,/action==='lobby-join'/);
+ assert.match(peer,/action==='lobby-create'/);
  assert.match(peer,/Hostfreigabe erforderlich/);
 });
 test('GitHub Pages workflow publishes the static PeerJS site after tests',()=>{
