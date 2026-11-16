@@ -96,3 +96,10 @@ test('Ten participants are preserved in lobby and in secret-answer review',()=>{
  assert.equal(lobby.approved,10);
  assert.match(hostLobbySummary(lobby),/5 \/ 10/);
 });
+
+test('Live reset zeroes all current host-created team scores instead of only original editor teams',()=>{
+ const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ const reset=app.slice(app.indexOf("case 'reset-questions':"),app.indexOf("case 'delete-room':"));
+ assert.match(reset,/scores:Object\.fromEntries\(Object\.keys\(publicState\?\.teams\|\|\{\}\)\.map\(id=>\[id,0\]\)\)/);
+ assert.doesNotMatch(reset,/scores:buildScores\(quiz\)/);
+});
