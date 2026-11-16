@@ -116,7 +116,7 @@ async def main():
     print(f'PASS landing {width}×{height}',flush=True)
    await page.set_viewport_size({'width':1440,'height':900})
    await page.locator('.bq-legacy-options>summary').click()
-    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
+   await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for()
    # Browser should never expose unopened disclosure controls as interactable elements.
    assert not await page.locator('.se-file-actions:not([open]) .se-file-menu button').first.is_visible()
