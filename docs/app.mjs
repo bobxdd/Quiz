@@ -77,7 +77,7 @@ function saveLocal(){try{if(isOffline()){if(!boardId)throw Error('Kein Quizbrett
 function loadLocal(){try{const val=localStorage.getItem('bq-quiz-'+room);quiz=val?normalizedQuiz(JSON.parse(val)):emptyQuiz()}catch{quiz=emptyQuiz()}selected=quiz.questions[0]?.id||''}
 async function promoteOnline(){if(!isOffline())return;await initialize();const source=normalizedQuiz(quiz);const code=roomCode();await game.create(code,source);await game.saveHostQuiz(code,source);room=code;quiz=source;hostCloudReady=true;saveLocal();localStorage.setItem('bq-last-host',room);history.replaceState(null,'',location.pathname+'?room='+room);view='editor';listenRoom();notice('PeerJS-Raum erstellt. Das Hostfenster während des Spielens geöffnet lassen.');}
 function backupFilename(prefix='BrainQuiz_Host'){
- const title=String(quiz?.title||'Quizbrett').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48)||'Quizbrett';
+ const title=String(quiz?.title||'Quizbrett').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48)||'Quizbrett';
  const location=isOffline()?boardId.slice(1,8):room;
  return prefix+'_'+title+'_'+(location||'LOKAL')+'.brainquiz.json';
 }
