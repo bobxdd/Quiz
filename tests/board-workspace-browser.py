@@ -45,6 +45,17 @@ async def main():
    await page.locator('.se-board-context>strong').get_by_text('Waldquiz').wait_for()
    print('PASS: new board, independent board, explicit selection, and tab-specific reload')
 
+   # Start-page quick selection must open exactly the chosen board, not the last-used board.
+   await page.goto(url)
+   await page.locator('.bq-landing-boards>summary').click()
+   await page.locator(f'[data-action="open-landing-board"][data-board-id="{second}"]').click()
+   await page.locator('.se-board-context>strong').get_by_text('Zweites Brett').wait_for()
+   await page.goto(url)
+   await page.locator('.bq-landing-boards>summary').click()
+   await page.locator(f'[data-action="open-landing-board"][data-board-id="{first}"]').click()
+   await page.locator('.se-board-context>strong').get_by_text('Waldquiz').wait_for()
+   print('PASS: explicit startup board picker preserves intended board identity')
+
    # A second editor modifies the same quiz; stale first tab must not overwrite it.
    other=await ctx.new_page()
    other.on('pageerror',lambda err:errors.append(str(err)))
