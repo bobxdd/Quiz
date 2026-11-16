@@ -42,6 +42,7 @@ async def main():
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await guest.locator('.bq-map-viewport').wait_for(timeout=12000)
+  await guest.wait_for_function("() => {const image=document.querySelector('.bq-map-layer img');return image?.complete && image.naturalWidth>0}",timeout=12000)
   qpublic=await guest.evaluate("window.__probe.info().publicState.current")
   assert 'mapTargetX' not in qpublic and 'mapTargetY' not in qpublic and 'mapTargetSet' not in qpublic,qpublic
   assert await guest.locator('.bq-map-pin.is-solution').count()==0
@@ -67,7 +68,8 @@ async def main():
   await host.locator('[data-action="start-review"]').first.click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await host.locator('[data-action="reveal"]').first.click()
-  await guest.locator('.bq-map-pin.is-solution img[src$="dagger-pin.svg"]').wait_for(timeout=12000)
+  await guest.locator('.bq-map-pin.is-solution img').wait_for(timeout=12000)
+  assert await guest.locator('.bq-map-pin.is-solution img').evaluate('(img)=>img.complete&&img.naturalWidth>0'),'Pixel dagger missing in two-client view'
   released=await guest.evaluate('window.__probe.info().publicState.current')
   assert abs(released['mapTargetX']-67.321)<.001
   assert abs(released['mapTargetY']-34.112)<.001
