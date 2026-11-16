@@ -63,9 +63,10 @@
 /* The held knife is a child of the same ORIGINAL arm rig and disappears at
    release. The separately flying copy then takes over without a pop-up hand. */
 .bq-map-throw-held{
- position:absolute;left:var(--bq-grip-x);top:calc(var(--bq-grip-y) - 33px);
+ position:absolute;left:calc(var(--bq-grip-x) - 9.5px);top:calc(var(--bq-grip-y) - 15px);
  width:19px;height:36px;object-fit:contain;image-rendering:pixelated;
- transform:rotate(34deg);transform-origin:50% 100%;
+ /* Pivot through the actual hilt, at the original hand: no floating blade. */
+ transform:rotate(-85deg);transform-origin:50% 42%;
  animation:bq-map-held-knife 4100ms steps(1,end) both;
  filter:drop-shadow(1px 2px 1px #0006);pointer-events:none
 }
