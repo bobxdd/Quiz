@@ -55,7 +55,7 @@ test('board identifiers must be valid and unique',()=>{
 test('source wiring keeps offline editor and live room separate',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const editor=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
- assert.match(app,/function startOffline\(\).*resumeBoard\(localStorage,emptyQuiz,makeBoardId\)/);
+ assert.match(app,/function startOffline\(\).*resumeBoard\(localStorage,emptyQuiz,makeBoardId,preferred\)/);
  assert.match(app,/case 'new-board':newStoredBoard\(\)/);
  assert.match(app,/case 'open-board':openStoredBoard\(button.dataset.boardId\)/);
  assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(localStorage,imported,makeBoardId\)/);
@@ -131,4 +131,28 @@ test('conflict recovery UX and original board load are present and reachable',as
  assert.match(ui,/data-action="reload-board"/);
  assert.match(ui,/data-action="export"/);
  assert.match(ui,/role="alert"/);
+});
+
+test('per-tab preference overrides global last-used board without rewriting global pointer',()=>{
+ const store=new Store();
+ const a=createBoard(store,draft('A'),()=>ids[0]);
+ const b=createBoard(store,draft('B'),()=>ids[1]);
+ assert.equal(activeBoard(store),b.id);
+ const tabA=resumeBoard(store,()=>draft('Empty'),()=>ids[2],a.id);
+ assert.equal(tabA.id,a.id);
+ assert.equal(activeBoard(store),b.id);
+});
+test('unknown global active board never silently switches to some other draft',()=>{
+ const store=new Store();createBoard(store,draft('A'),()=>ids[0]);
+ store.setItem('bq-board-active-v1',ids[2]);
+ assert.throws(()=>resumeBoard(store,()=>draft('Blank'),()=>ids[1]),/nicht auffindbar/);
+ assert.equal(boardList(store).length,1);
+});
+test('duplicate and invalid board library records fail closed',()=>{
+ const store=new Store();const a=createBoard(store,draft('A'),()=>ids[0]);
+ const x=boardList(store)[0];store.setItem('bq-board-workspaces-v1',JSON.stringify([x,x]));
+ assert.throws(()=>boardList(store),/doppelte Kennungen/);
+ store.setItem('bq-board-workspaces-v1',JSON.stringify([x,{id:'../../x',title:'Fake'}]));
+ assert.throws(()=>boardList(store),/ungültige/);
+ assert.equal(store.getItem('bq-board-workspace-'+a.id)!==null,true);
 });
