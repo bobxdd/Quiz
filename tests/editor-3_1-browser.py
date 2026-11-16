@@ -37,7 +37,7 @@ async def main():
   assert [q['points'] for q in after['questions']]==[400,400],after
   if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
     await page.locator('.bq-editor-extras>summary').click()
-   await page.locator('[data-se-action="undo"]').click();await page.wait_for_timeout(100)
+  await page.locator('[data-se-action="undo"]').click();await page.wait_for_timeout(100)
   undo=await page.evaluate('window.__probe.getQuiz()')
   assert [q['points'] for q in undo['questions']]==[100,100],undo
   await page.locator('[data-se-action="redo"]').click();await page.wait_for_timeout(100)
@@ -58,7 +58,7 @@ async def main():
   await page.locator('[data-se-action="toggle-preview"]').click()
   if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
     await page.locator('.bq-editor-extras>summary').click()
-   await page.locator('[data-se-action="audit"]').click();await page.locator('.se-audit').wait_for()
+  await page.locator('[data-se-action="audit"]').click();await page.locator('.se-audit').wait_for()
   assert await page.locator('.se-audit').get_by_text('Fehler',exact=False).count()>=1
   assert not (await page.locator('.se-save-badge').inner_text()).startswith('●')
   (root/'screenshots').mkdir(exist_ok=True)
