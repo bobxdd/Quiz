@@ -14,13 +14,19 @@ test('2.8: exactly four supplied characters, without old floating mascots',()=>{
  assert.doesNotMatch(html,/class="bq-pixel-scene"/);
  assert.match(app,/const CHARACTER_IDS=\['rogue','blades','mage','druid'\]/);
 });
-test('2.8: each animation uses the same original sprites',()=>{
- for(const action of ['question','review','answer','solution','buzzer','points']){
-  assert.match(css,new RegExp('bq-actor-'+action));
+test('Step 5: restrained and rare original characters, no reaction overlays',()=>{
+ const motion=get('../docs/actor-motion.css'),pixel=get('../docs/pixel-theme.css');
+ assert.match(app,/function boardPeekRound\(/);
+ assert.match(app,/round%7===3/);
+ assert.match(app,/function watcherMarkup\(/);
+ assert.match(app,/function sceneCameos\(/);
+ assert.match(app,/bq-peek-fingers/);
+ assert.match(motion,/\.bq-screen-watcher/);
+ assert.match(motion,/\.bq-scene-cameos/);
+ assert.match(motion,/pointer-events:none/);
+ assert.match(motion,/prefers-reduced-motion:reduce/);
+ for(const source of [app,motion,css,pixel]){
+  assert.doesNotMatch(source,/maybeAnimateGameplay|animateDock|bq-action-actor|bq-happy-reaction|bq-curtain-actor|bq-actor--(?:answer|review|points|buzzer|solution)/);
  }
- assert.match(app,/function maybeAnimateGameplay/);
- assert.match(app,/bq-scene-cameos/);
- assert.doesNotMatch(app,/CHARACTER_IDS.map\(\(_,i\)=>characterMarkup\(i\)\)/);
- assert.match(css,/prefers-reduced-motion:reduce/);
- assert.doesNotMatch(app,/mascot-ranger\.png|mascot-lantern\.png|mascot-alchemist\.png/);
+ assert.doesNotMatch(app,/bq-landing-cast|mascot-ranger\.png|mascot-lantern\.png|mascot-alchemist\.png/);
 });
