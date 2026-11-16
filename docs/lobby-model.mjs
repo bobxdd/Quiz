@@ -20,7 +20,7 @@ export const TEAM_PALETTE=Object.freeze(['#85bde4','#e3a09e','#a7c989','#c2a4e5'
 export const teamColor=id=>validTeamId(id)?TEAM_PALETTE[Number(id.slice(1))-1]:'#aab6bf';
 // An existing sixth team stays readable in older quizboards. New rooms can create at most five.
 export const validTeamId=id=>/^t[1-6]$/.test(String(id||''));
-export const canArrangeLobby=state=>state?.phase==='board'&&Number(state?.round||0)===0&&!Object.entries(state?.used||{}).some(([id,v])=>id!=='_empty'&&v===true);
+export const canArrangeLobby=state=>state?.started!==true&&state?.phase==='board'&&Number(state?.round||0)===0&&!Object.entries(state?.used||{}).some(([id,v])=>id!=='_empty'&&v===true);
 export function cleanTeamName(value){
  if(typeof value!=='string')throw Error('Teamname fehlt.');
  const result=value.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').replace(/\s+/g,' ').trim();

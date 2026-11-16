@@ -19,6 +19,8 @@ async def main():
   page.on('dialog',lambda dlg:asyncio.create_task(dlg.accept()))
   await install(page)
 
+  if not await page.locator('.bq-legacy-options').evaluate('(e)=>e.open'):
+   await page.locator('.bq-legacy-options>summary').click()
   await page.get_by_role('button',name='Online-Raum erstellen').click()
   await page.locator('.se-studio').wait_for(timeout=15000)
   old_room=await page.evaluate('window.__probe.room()')
@@ -26,12 +28,14 @@ async def main():
   await expect(page.get_by_role('button',name='Lobby schließen')).to_have_count(1)
   assert await page.locator('.top-nav [data-view="editor"]').count()==1
   await page.get_by_role('button',name='Lobby schließen').click()
-  await page.get_by_role('button',name='Online-Raum erstellen').wait_for(timeout=12000)
+  await page.locator('.bq-legacy-options>summary').wait_for(timeout=12000)
   assert await page.evaluate('window.__probe.room()')==''
   assert await page.evaluate('localStorage.getItem("bq-last-host")') is None
   assert await page.evaluate('location.search')==''
   print('PASS accidental host lobby closes, guest room destroyed and start page restored',flush=True)
 
+  if not await page.locator('.bq-legacy-options').evaluate('(e)=>e.open'):
+   await page.locator('.bq-legacy-options>summary').click()
   await page.get_by_role('button',name='Online-Raum erstellen').click()
   await page.locator('.se-studio').wait_for(timeout=15000)
   new_room=await page.evaluate('window.__probe.room()')
@@ -67,13 +71,16 @@ async def main():
   assert len(result['questions'])==1 and result['questions'][0]['id']=='q-lock'
   print('PASS hidden or injected editor actions cannot create questions after publication',flush=True)
 
-  await page.locator('.top-nav [data-view="present"]').click()
+  await page.evaluate("""()=>{
+   const btn=document.createElement('button');btn.dataset.action='view';btn.dataset.view='present';
+   document.body.append(btn);btn.click();btn.remove();
+  }""")
   await page.get_by_role('button',name='Zurück zum Quizbrett').wait_for()
   assert await page.get_by_role('button',name='Zurück zum Editor').count()==0
   await page.get_by_role('button',name='Zurück zum Quizbrett').click()
   await page.locator('.bq-board-scene').wait_for()
-  await page.get_by_role('button',name='Spielraum schließen').click()
-  await page.get_by_role('button',name='Online-Raum erstellen').wait_for(timeout=12000)
+  await page.get_by_role('button',name='Lobby schließen').click()
+  await page.locator('.bq-legacy-options>summary').wait_for(timeout=12000)
   assert await page.evaluate('window.__probe.room()')==''
   assert await page.evaluate('(r)=>localStorage.getItem("bq-published-"+r)',new_room) is None
   print('PASS published host game closes and a fresh lobby can be created',flush=True)

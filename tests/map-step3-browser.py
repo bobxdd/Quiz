@@ -21,6 +21,7 @@ async def run():
    ctx=await browser.new_context(viewport={'width':1440,'height':900},reduced_motion='reduce')
    page=await ctx.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
    await page.goto(url)
+   await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-category-overview').wait_for()
    await page.locator('.se-list [data-se-action="category-form"]').click()
@@ -72,6 +73,7 @@ async def run():
    assert (saved['mapTargetX'],saved['mapTargetY'])!=old,'keyboard placement did not update answer'
    print('PASS: map keyboard navigation and Enter place a new answer')
    await page.reload()
+   await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('[data-se-action="category-select"][data-category="Weltkarte"]').first.click()
    await page.locator('.bq-map-pin.is-host img').wait_for()

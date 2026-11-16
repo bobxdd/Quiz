@@ -1,0 +1,166 @@
+/* Task-first host workflow, 2026-11-16. No reaction/character changes. */
+.bq-host-lobby-page{width:min(100%,1260px);min-width:0;display:grid;gap:14px;margin:0 auto 28px}
+.bq-host-lobby-page>*,.bq-host-lobby-overview>*{min-width:0}
+.bq-host-code-banner{
+ padding:clamp(18px,2.5vw,30px)!important;
+ border-color:#88afa15a!important;
+ background:linear-gradient(137deg,#33423edb,#232d32f5 62%,#1d242bf0)!important;
+ box-shadow:inset 0 1px #edf8f30c,0 12px 32px #0003
+}
+.bq-host-code-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.bq-host-step,.bq-editor-step{display:block;font-size:11px;font-weight:800;letter-spacing:.105em;color:#bbd4cb}
+.bq-host-code-top h2{font-size:clamp(20px,2.2vw,27px);line-height:1.15;letter-spacing:-.02em;margin:6px 0}
+.bq-host-code-top p{font-size:14px;line-height:1.45;color:#c5d1d0;margin:3px 0 0}
+.bq-host-connection{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid #88909655;border-radius:999px;background:#17242899;color:#c8d3d5;font-size:12px}
+.bq-host-connection.is-online{color:#c7e9d7;border-color:#8cbaa262}
+.bq-host-code-line{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:19px 0 9px}
+.bq-host-code-value{min-width:0;display:flex;flex-direction:column;gap:6px;flex:1 1 280px}
+.bq-host-code-value>span{font-size:11px;letter-spacing:.11em;font-weight:750;color:#b3c8c3}
+.bq-host-code-value strong{
+ display:block;max-width:100%;font-size:clamp(23px,3.6vw,43px);font-weight:850;
+ letter-spacing:clamp(.07em,.65vw,.15em);line-height:1.28;color:#f4faf8;overflow-wrap:anywhere;
+ font-variant-numeric:tabular-nums;user-select:all
+}
+.bq-host-code-actions{display:flex;gap:8px;flex-wrap:wrap}
+.bq-host-code-actions>.btn{min-height:45px;white-space:normal;font-size:13px;padding:10px 15px}
+.bq-host-code-guide{margin:10px 0 0;color:#b5c6c5;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.bq-host-code-guide strong{font-weight:650;color:#e5eeee}
+.bq-host-lobby-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:13px;align-items:start}
+.bq-host-lobby-overview>.panel{padding:clamp(16px,2vw,23px)}
+.bq-host-lobby-overview .panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.bq-host-lobby-overview .panelhead h2{font-size:clamp(19px,1.7vw,22px);margin:0 0 5px}
+.bq-host-lobby-overview .panelhead p{margin:0;color:#aabbbd;font-size:12px;line-height:1.45}
+.bq-request-count,.bq-approved-count{font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums;padding:7px 11px;border:1px solid #83949950;border-radius:8px;color:#c8d7d4;background:#2b34376b}
+.bq-request-count.has-pending{background:#59432c80;border-color:#d1a87e7a;color:#ffe3b9;font-weight:760}
+.bq-host-request-list,.bq-host-approved-list{display:grid;gap:10px}
+.bq-host-empty-pending{display:flex;align-items:center;gap:13px;background:#23403661;border:1px solid #74ac8b42;padding:17px 15px;border-radius:11px;color:#d0e6d8;min-height:104px}
+.bq-host-empty-pending>span{display:flex;align-items:center;justify-content:center;flex:0 0 37px;height:37px;border-radius:50%;background:#456e5670;font-size:24px}
+.bq-host-empty-pending strong{font-size:15px}
+.bq-host-empty-pending p{margin:4px 0 0;font-size:12px;line-height:1.45;color:#b2c9be}
+.bq-host-empty-players{min-height:104px;display:flex;align-items:center;padding:14px;border:1px dashed #73818b60;border-radius:10px;color:#afbdc4;font-size:13px;line-height:1.55}
+.bq-host-join-request{padding:13px!important;min-width:0;display:grid!important;gap:11px!important;align-items:start;border:1px solid #cc9e6c66!important;border-left:3px solid #cfa777!important;border-radius:10px;background:#3b322b60}
+.bq-host-join-request .bq-lobby-request>b{font-size:16px;color:#f5f0e9}
+.bq-host-join-request .bq-lobby-request small{overflow-wrap:anywhere}
+.bq-host-join-actions{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+.bq-host-join-actions>.btn{min-height:42px}
+.bq-host-team-choice{display:flex;flex:1 1 150px;min-width:0;flex-direction:column;gap:5px;color:#becbca;font-size:11px}
+.bq-host-team-choice select{min-width:0!important;max-width:none!important;width:100%;height:43px;font-size:13px}
+.bq-host-approved-person{min-width:0;padding:10px 12px!important;display:flex!important;align-items:center;justify-content:space-between;gap:11px;flex-wrap:wrap;border:1px solid #81939a48;border-radius:10px;background:#2731368c}
+.bq-host-member-identity{display:flex;gap:10px;align-items:center;min-width:0}
+.bq-host-member-identity .dot{flex-shrink:0}
+.bq-host-member-identity>div{min-width:0;display:flex;gap:4px;flex-direction:column}
+.bq-host-member-identity strong{font-size:14px;color:#e3eff0;overflow-wrap:anywhere}
+.bq-host-member-identity small{display:flex;align-items:center;gap:7px;color:#b4c9cb;font-size:12px}
+.bq-host-member-identity .bq-team-swatch{width:10px;height:10px;min-width:10px;border-radius:3px}
+.bq-host-member-state{display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#baaca2;font-size:12px}
+.bq-host-member-state .is-ready{color:#b4e2c2}
+.bq-host-member-state .btn{min-height:34px!important}
+.bq-host-lobby-next{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;padding:17px 20px;border:1px solid #8aada17d;background:linear-gradient(105deg,#304139,#232f35);border-radius:13px}
+.bq-host-lobby-next strong{font-size:17px;color:#e4f1ec}
+.bq-host-lobby-next p{font-size:13px;margin:5px 0 0;color:#bdcdcb;line-height:1.4}
+.bq-host-lobby-next>div{flex:1 1 220px;min-width:0}
+.bq-host-lobby-next .bq-host-start{min-width:184px;min-height:48px;font-weight:800;box-shadow:0 3px 12px #0004}
+.bq-host-lobby-team-section .bq-host-lobby-summary{margin:0;padding:16px 20px}
+.bq-host-lobby-team-section .bq-host-lobby-summary>.panelhead{margin-bottom:12px}
+.bq-host-lobby-team-section .bq-host-lobby-summary .bq-host-team-row{padding:10px 12px}
+.bq-host-lobby-team-section .bq-host-lobby-summary>p{font-size:12px;color:#a7b9be}
+.bq-host-lobby-extra{border:1px solid #6d808b4a;border-radius:12px;overflow:visible}
+.bq-host-lobby-extra>summary{cursor:pointer;color:#bdcece;font-size:13px;min-height:44px;padding:12px 17px}
+.bq-host-lobby-extra>.panel{padding:15px;border-radius:0 0 12px 12px}
+.bq-host-lobby-extra>.panel .btn{margin:8px 8px 0 0}
+.bq-host-lobby-page :focus-visible{outline:2px solid #cde9df;outline-offset:3px}
+.bq-saved-quiz-home-head{align-items:center}
+.bq-saved-quiz-home-head>div{min-width:0;flex:1 1 200px}
+.bq-saved-quiz-home-head>.btn{min-height:48px;font-size:14px;padding-inline:18px}
+.bq-legacy-options{width:100%;margin-top:3px}
+.bq-legacy-options>summary{min-height:40px;cursor:pointer;padding:10px;color:#b2c0c4}
+.bq-legacy-options-content{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0}
+.bq-legacy-options-content p{width:100%;font-size:11px;margin:3px 0 0}
+.bq-start-connectivity{margin-top:20px;max-width:900px}
+.bq-start-connectivity>summary{cursor:pointer;color:#a5b2b8;padding:8px 3px;font-size:12px}
+.bq-start-connectivity>.panel{margin-top:7px}
+.se-studio .bq-editor-toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:clamp(13px,1.7vw,21px)!important;align-items:stretch!important}
+.bq-editor-main{display:flex;justify-content:space-between;gap:18px;align-items:end;flex-wrap:wrap;min-width:0}
+.bq-editor-main-info{display:flex;flex:1 1 300px;min-width:0;flex-direction:column;gap:7px}
+.se-studio .bq-editor-toolbar .se-title{width:min(100%,560px);max-width:none;min-width:0;flex:1}
+.se-studio .bq-editor-toolbar .se-title input{min-height:44px}
+.bq-editor-primary-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.bq-editor-primary-actions button{min-height:46px!important;padding:10px 16px!important;font-weight:730}
+.se-studio .bq-editor-toolbar .bq-editor-host-cta{background:#b4d7c8!important;color:#162922!important;border-color:#d8f3e7!important;font-size:15px!important;box-shadow:inset 0 1px #fff8,0 4px 13px #0006}
+.se-studio .bq-editor-toolbar .bq-editor-host-cta:hover{background:#d1e8db!important}
+.bq-editor-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0;padding-top:10px;border-top:1px solid #a5bac022}
+.se-studio .bq-editor-tools button{min-height:37px;font-size:12px;color:#c1cdd0}
+.se-studio .bq-editor-tools .bq-editor-library-btn{color:#d9e7e5}
+.bq-editor-tools>.se-score-mode{margin-left:auto;min-width:130px}
+.bq-editor-extras{position:relative;min-width:0}
+.bq-editor-extras>summary{min-height:38px;display:flex;align-items:center;cursor:pointer;border:1px solid #73848b64;border-radius:7px;padding:8px 10px;color:#becacd;font-size:12px;white-space:nowrap}
+.bq-editor-extras[open]>summary{background:#344149}
+.bq-editor-extras-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:120;display:flex;min-width:min(320px,calc(100vw - 32px));max-width:calc(100vw - 32px);flex-direction:column;gap:7px;padding:12px;border-radius:9px;background:#242e33;border:1px solid #9bb2ad69;box-shadow:0 12px 26px #0008}
+.bq-editor-extras-menu button{display:block;text-align:left;width:100%;white-space:normal}
+.bq-editor-extras-menu .se-file-actions{width:100%}
+.bq-editor-extras-menu .se-file-actions>summary{cursor:pointer;font-size:12px;white-space:normal;padding:8px;color:#d4e3df}
+.bq-editor-extras-menu .se-file-actions .se-file-menu{position:static!important;max-width:100%;box-shadow:none}
+@media(max-width:1000px){
+ .bq-host-lobby-overview{grid-template-columns:minmax(0,1fr)}
+ .bq-host-participants,.bq-host-requests{width:100%}
+}
+@media(max-width:600px){
+ .bq-host-lobby-page{gap:10px;padding:0 1px}
+ .bq-host-code-banner{padding:16px!important}
+ .bq-host-code-top h2{font-size:20px}
+ .bq-host-code-line{align-items:stretch}
+ .bq-host-code-value strong{font-size:clamp(22px,5.7vw,32px);letter-spacing:.09em}
+ .bq-host-code-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .bq-host-code-actions .btn{min-width:0;font-size:11px;padding:10px 7px;white-space:normal}
+ .bq-host-lobby-overview>.panel{padding:14px!important}
+ .bq-host-join-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto}
+ .bq-host-join-actions .btn{padding-inline:9px}
+ .bq-host-team-choice{min-width:0}
+ .bq-host-lobby-next{padding:15px}
+ .bq-host-lobby-next .bq-host-start{width:100%}
+ .bq-editor-main-info{flex-basis:100%}
+ .bq-editor-primary-actions{justify-content:flex-start;width:100%}
+ .bq-editor-primary-actions .se-save-badge{width:100%}
+ .bq-editor-primary-actions button{flex:1 1 125px}
+ .bq-editor-tools>.se-score-mode{order:2;margin-left:0;flex:1 1 120px}
+ .bq-editor-tools .bq-editor-extras{order:3}
+ .bq-editor-extras{flex:1 1 100%;min-width:0}
+ .bq-editor-extras-menu{position:relative!important;top:auto!important;right:auto!important;left:auto!important;min-width:0;max-width:100%;width:100%;margin-top:7px;box-shadow:0 5px 13px #0005}
+}
+@media(max-width:365px){
+ .bq-host-join-actions{grid-template-columns:1fr 1fr}
+ .bq-host-team-choice{grid-column:1/-1}
+ .bq-host-code-actions{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){.bq-host-lobby-page *,.bq-editor-toolbar *{scroll-behavior:auto!important;transition:none!important}}
+
+/* During hosting the actual lobby banner owns the code and title. Avoid a
+   second tiny duplicate at the top, especially in the first phone viewport. */
+body:has(.bq-host-lobby-page) .topbar{min-height:0;padding:10px 13px;margin-bottom:8px}
+body:has(.bq-host-lobby-page) .topbar .header-secondary{display:none!important}
+body:has(.bq-host-lobby-page) .topbar .brand small{display:none}
+body:has(.bq-host-lobby-page) .header-state .role-caption{display:none}
+body:has(.bq-host-lobby-page) .topbar .header-primary{align-items:center;gap:9px}
+@media(max-width:600px){
+ body:has(.bq-host-lobby-page) .topbar{padding:9px!important}
+ body:has(.bq-host-lobby-page) .topbar .header-state{flex:0 0 auto}
+ body:has(.bq-host-lobby-page) .topbar .status{font-size:11px}
+ body:has(.bq-host-lobby-page) .topbar .brand{min-width:120px}
+ body:has(.bq-host-lobby-page) .topbar .brand strong{font-size:13px}
+ body:has(.bq-host-lobby-page) .topbar .nav{min-height:36px}
+}
+
+/* Mobile Chromium can fail to paint a nested frosted .glass card in a
+   vertically scrolled host lobby. Use an opaque panel for stable painting. */
+@media(max-width:600px){
+ .bq-host-lobby-team-section{position:relative;z-index:1;min-width:0}
+ .bq-host-lobby-team-section .bq-host-lobby-summary{
+  display:block!important;position:relative;z-index:1;
+  background:#252d33!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  border:1px solid #63767b!important;opacity:1!important;visibility:visible!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.05),0 6px 17px rgba(0,0,0,.22)!important
+ }
+ .bq-host-lobby-team-section .bq-host-lobby-summary::before,
+ .bq-host-lobby-team-section .bq-host-lobby-summary::after{display:none!important}
+}
