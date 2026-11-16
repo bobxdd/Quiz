@@ -63,8 +63,13 @@ jobs:
       - name: Verify standalone PeerJS shell
         run: npm run build:pages
       - uses: actions/configure-pages@v5
+      # Artifact names must be unique across rerun attempts of the same workflow run.
+      # Otherwise deploy-pages sees duplicate "github-pages" artifacts and hard-fails.
       - uses: actions/upload-pages-artifact@v4
         with:
           path: ./docs
+          name: github-pages-${{ github.run_attempt }}
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
