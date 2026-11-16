@@ -24,6 +24,11 @@ METRICS=r"""(options) => {
  const allowed=options.allowed||[];
  const selectors=options.selectors||[];
  const visible=e=>{
+  // Closed <details> uses content-visibility:hidden in modern Chromium:
+  // getBoundingClientRect() may still return a rectangle even though it cannot paint or receive input.
+  // Skip the hidden content slot, but not its always-visible <summary>.
+  const parent=e.closest('details:not([open])');
+  if(parent && !e.closest('summary'))return false;
   const s=getComputedStyle(e),r=e.getBoundingClientRect();
   return s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0'&&r.width>3&&r.height>3;
  };
@@ -112,6 +117,10 @@ async def main():
    await page.set_viewport_size({'width':1440,'height':900})
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for()
+   # Browser should never expose unopened disclosure controls as interactable elements.
+   assert not await page.locator('.se-file-actions:not([open]) .se-file-menu button').first.is_visible()
+   assert not await page.locator('.se-board-switch:not([open]) .se-board-switch-items button').first.is_visible()
+   print('PASS closed disclosure controls are not visible or actionable',flush=True)
    for width,height in SIZES:
     await page.set_viewport_size({'width':width,'height':height})
     await audit(page,f'editor-home-{width}x{height}',[
