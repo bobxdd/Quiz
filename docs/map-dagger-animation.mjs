@@ -53,6 +53,10 @@ export function startMapDaggerThrow({viewport,marker,actor='rogue',onLand=()=>{}
   if(!p)return;
   flight.style.setProperty('--bq-flight-x',(p.x-origin.handX)+'px');
   flight.style.setProperty('--bq-flight-y',(p.y-origin.handY)+'px');
+  flight.style.setProperty('--bq-flight-mid-x',((p.x-origin.handX)*.44)+'px');
+  flight.style.setProperty('--bq-flight-mid-y',((p.y-origin.handY)*.40-33)+'px');
+  flight.style.setProperty('--bq-flight-late-x',((p.x-origin.handX)*.79)+'px');
+  flight.style.setProperty('--bq-flight-late-y',((p.y-origin.handY)*.80-13)+'px');
   impact.style.left=p.x+'px';impact.style.top=p.y+'px';
   root.dataset.targetX=p.x.toFixed(2);
   root.dataset.targetY=p.y.toFixed(2);
