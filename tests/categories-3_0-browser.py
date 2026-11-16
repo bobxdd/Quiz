@@ -64,6 +64,7 @@ async def run():
        page=await ctx.new_page()
        page.on('pageerror',lambda error:errors.append(str(error)))
        await install(page)
+       await page.locator('.bq-legacy-options>summary').click()
        await page.get_by_role('button',name='Online-Raum erstellen').click()
        await page.locator('.se-category-overview').wait_for(timeout=15000)
        assert await page.locator('.se-category-card').count()>=7
