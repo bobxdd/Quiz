@@ -81,10 +81,13 @@ async def run():
    print('PASS: removing marker reverts quiz question to incomplete')
    await page.set_viewport_size({'width':390,'height':800})
    await page.locator('[data-se-action="mobile-tab"][data-mobile-tab="canvas"]').click()
-   await page.locator('.bq-map-viewport').wait_for()
+   await page.locator('.se-editor-v3 .se-main').wait_for(state='visible')
+   await page.locator('.bq-map-viewport').wait_for(state='visible')
+   await page.wait_for_timeout(220)
    widths=await page.evaluate("() => ({w:document.documentElement.clientWidth,content:document.documentElement.scrollWidth})")
    assert widths['content']<=widths['w']+8,widths
-   assert (await page.locator('.bq-map-viewport').bounding_box())['height']>=300
+   rect=await page.locator('.bq-map-viewport').bounding_box()
+   assert rect and rect['height']>=300,rect
    print('PASS: full-height mobile map without horizontal overflow')
    assert not errors,errors
    await browser.close()
