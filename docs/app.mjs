@@ -6,6 +6,7 @@ import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName} from './category-model.mjs';
 import {openQuestionState,validQuestionPair,questionMotion} from './question-flow.mjs';
+import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
 import {createHistoryEntry,historyRows,responseStatus,historyCsv} from './history-model.mjs';
@@ -19,6 +20,7 @@ let service=null,game=null,room='',role='landing',view='start',member=null,guest
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let boardId='',boardRevision=0,boardConflict=false;
 let mapCamera={...DEFAULT_MAP_VIEW},mapCameraQuestion='';
+const consumedMapThrows=new Set();let activeMapThrow=null;
 const makeBoardId=()=>'b'+uid().slice(1);
 function applyBoardWorkspace(record){boardConflict=false;saveState='Lokal gesichert';boardId=record.id;boardRevision=record.revision;quiz=normalizedQuiz(record.quiz);selected=quiz.questions[0]?.id||'';undoStack=[];redoStack=[];editingBlock='';previewOpen=false;previewRevealed=false;mapPick=null;mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion='';pickedOrder=[];boardPage=0;scorePage=0;historyFilter='';try{sessionStorage.setItem('bq-board-current-tab',boardId);}catch{}studio?.reset?.();}
 function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');studio.flush?.();if(!saveLocal())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(localStorage,id);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
@@ -213,7 +215,39 @@ function maybeAnimateQuestion(){
  curtain.addEventListener('animationend',event=>{if(event.target===curtain)curtain.remove()},{once:true});
  setTimeout(()=>curtain.remove(),1600);
 }
-function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){app.innerHTML=landing();return;}
+/** The only world-map animation: the actor visibly throws at solution release. */
+function maybeAnimateMapDagger(){
+ const q=publicState?.current;
+ const key=q?.id&&publicState?.phase==='reveal'&&q.type==='map'&&['play','live'].includes(view)
+  ?room+':'+publicState.round+':'+q.id:null;
+ if(activeMapThrow&&activeMapThrow.key!==key){activeMapThrow.handle.cancel();activeMapThrow=null;}
+ if(!key)return;
+ const marker=document.querySelector('.bq-question-scene .bq-map-pin.is-solution');
+ const viewport=marker?.closest('.bq-map-viewport');
+ if(!viewport||!marker)return;
+ const previouslyShown=consumedMapThrows.has(key)||(()=>{try{return sessionStorage.getItem('bq-map-throw:'+key)==='1'}catch{return false}})();
+ if(previouslyShown&&!activeMapThrow){marker.classList.remove('bq-throw-waiting');return;}
+ if(activeMapThrow?.key===key){
+  if(!activeMapThrow.handle.landed)marker.classList.add('bq-throw-waiting');
+  activeMapThrow.handle.rebind(viewport,marker);return;
+ }
+ if(reducedCharacterMotion()||window.matchMedia?.('(forced-colors: active)')?.matches){consumedMapThrows.add(key);return;}
+ // Keep the real world-space answer unchanged. Only reset an off-screen camera.
+ if(marker.hidden)viewport.closest('.bq-map-question')?.querySelector('[data-map-zoom="reset"]')?.click();
+ if(marker.hidden)return;
+ marker.classList.add('bq-throw-waiting');
+ consumedMapThrows.add(key);
+ try{sessionStorage.setItem('bq-map-throw:'+key,'1')}catch{}
+ const actor=THROW_ACTORS[Math.abs(Number(publicState.round)||0)%THROW_ACTORS.length];
+ const handle=startMapDaggerThrow({viewport,marker,actor,
+  onLand:()=>{if(publicState?.phase==='reveal'&&publicState?.current?.id===q.id)
+   document.querySelector('.bq-question-scene .bq-map-pin.is-solution')?.classList.remove('bq-throw-waiting');},
+  onDone:()=>{if(activeMapThrow?.key===key)activeMapThrow=null}
+ });
+ if(handle)activeMapThrow={key,handle};
+ else marker.classList.remove('bq-throw-waiting');
+}
+function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}app.innerHTML=landing();return;}
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen'],['live','▦','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Vorschau']]:[['editor','✎','Fragen'],['live','◈','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Präsentation'],['teams','♙','Lobby'],['setup','⚙','Einstellungen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
  app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
@@ -227,6 +261,7 @@ function render(){const app=$('app');document.body.classList.toggle('bq-game-mod
    canPick:canMapPick(),onPick:point=>{if(!canMapPick())return;mapPick=point;schedule();}
   });
  }
+ maybeAnimateMapDagger();
 }
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
