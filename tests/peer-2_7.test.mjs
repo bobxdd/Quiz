@@ -101,15 +101,15 @@ test('P2P guest cannot send forbidden room actions, request an inherited fake qu
 });
 
 
-test('Eight distinct guest slots are accepted; a ninth cannot be approved',async()=>{
+test('Ten distinct guest slots are accepted; an eleventh cannot be approved',async()=>{
  const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
  const guests=[];
- for(let i=0;i<9;i++){sessionStorage.clear();const guest=new PeerGame();await guest.connect(room,'Teilnehmer '+(i+1));guests.push(guest);}
- for(const guest of guests.slice(0,8))await host.hostAssign(room,guest.uid,host.data.members[guest.uid],'t1');
- assert.equal(Object.keys(host.data.roster).length,8);
- await assert.rejects(()=>host.hostAssign(room,guests[8].uid,host.data.members[guests[8].uid],'t1'),/8|voll|limit|maximum|Platz|Teilnehmer/i);
- assert.equal(Object.keys(host.data.roster).length,8);
- await sleep(60);assert.equal(guests[8].guestData.members[guests[8].uid].status,'pending');
+ for(let i=0;i<11;i++){sessionStorage.clear();const guest=new PeerGame();await guest.connect(room,'Teilnehmer '+(i+1));guests.push(guest);}
+ for(const guest of guests.slice(0,10))await host.hostAssign(room,guest.uid,host.data.members[guest.uid],'t1');
+ assert.equal(Object.keys(host.data.roster).length,10);
+ await assert.rejects(()=>host.hostAssign(room,guests[10].uid,host.data.members[guests[10].uid],'t1'),/10|voll|limit|maximum|Platz|Teilnehmer/i);
+ assert.equal(Object.keys(host.data.roster).length,10);
+ await sleep(60);assert.equal(guests[10].guestData.members[guests[10].uid].status,'pending');
  guests.forEach(guest=>guest.shutdown());host.shutdown();
 });
 
@@ -264,4 +264,26 @@ test('Step 4 PeerJS: team changes reset readiness, reject spoofed IDs and lock a
  await assert.rejects(guest2.setLobbyReady(room,true),/gesperrt/);
  assert.equal(host.data.roster[guest1.uid].team,'t2');
  guest1.shutdown();guest2.shutdown();host.shutdown();
+});
+
+test('Host can create teams directly; guest cannot bypass host rights, five-team cap or round locks',async()=>{
+ const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
+ const extra=await host.hostCreateLobbyTeam(room,'Gold');
+ assert.deepEqual({id:extra.id,name:extra.name},{id:'t3',name:'Gold'});
+ assert.equal(host.data.public.teams.t3,'Gold');
+ assert.equal(host.data.public.scores.t3,0);
+ assert.equal(Object.keys(host.data.roster).length,0,'Host must not occupy a player slot');
+ const guest=new PeerGame();await guest.connect(room,'Guest');
+ await assert.rejects(guest.hostCreateLobbyTeam(room,'Spoof'),/this|function|hostCreateLobbyTeam|not a function/i);
+ await assert.rejects(guest._rpc('hostCreateLobbyTeam',{name:'Spoof'}),/nicht erlaubt/);
+ await assert.rejects(host.hostCreateLobbyTeam(room,'gold'),/bereits/);
+ await host.hostCreateLobbyTeam(room,'Violett');
+ await host.hostCreateLobbyTeam(room,'Smaragd');
+ assert.equal(Object.keys(host.data.public.teams).length,5);
+ await assert.rejects(host.hostCreateLobbyTeam(room,'Sechstes'),/5 Teams/);
+ await assert.rejects(guest.createLobbyTeam(room,'Sechstes'),/5 Teams/);
+ await host.openQuestion(room,0,host.hostQuiz.questions[0],publicQuestion(host.hostQuiz.questions[0],false),{},0);
+ await assert.rejects(host.hostCreateLobbyTeam(room,'Zu Spät'),/Spielbeginn/);
+ assert.equal(Object.keys(host.data.public.teams).length,5);
+ guest.shutdown();host.shutdown();
 });
