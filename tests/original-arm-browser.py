@@ -2,7 +2,7 @@
 Self-contained fixture exercises real production CSS/image sources at fixed instants.
 This test cannot by itself judge artistic quality, so it saves four-class screenshots.
 """
-import asyncio, importlib.util
+import asyncio, importlib.util,base64
 from pathlib import Path
 from playwright.async_api import async_playwright
 ROOT=Path(__file__).resolve().parents[1]
@@ -17,7 +17,8 @@ async def main():
   page=await browser.new_page(viewport={'width':1120,'height':700},reduced_motion='no-preference')
   errors=[];page.on('pageerror',lambda err:errors.append(str(err)))
   await fixture.install(page)
-  await page.evaluate("""actors=>{
+  dagger='data:image/svg+xml;base64,'+base64.b64encode((ROOT/'docs/dagger-pin.svg').read_bytes()).decode()
+  await page.evaluate("""({actors,dagger})=>{
    const stage=document.createElement('section');stage.id='bq-arm-audit';
    stage.style.cssText='position:relative;z-index:90;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;background:#222932;padding:24px;margin:20px auto;border-radius:12px;max-width:1080px';
    for(const actor of actors){
@@ -26,13 +27,13 @@ async def main():
      '<div class="bq-map-throw-actor bq-map-throw-actor--'+actor+'" style="position:relative;left:auto;top:auto;animation:none;scale:1">'+
      '<span class="bq-map-throw-body bq-actor bq-actor--'+actor+'"></span>'+
      '<span class="bq-map-throw-arm-rig"><span class="bq-map-throw-original-arm bq-actor--'+actor+'"></span>'+
-     '<img class="bq-map-throw-held" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 12 36%22%3E%3Cpath d=%22M4 0h4v23h3v3H8v10H4V26H1v-3h3Z%22 fill=%22%23bfd8d3%22/%3E%3C/svg%3E" alt=""></span>'+
+     '<img class="bq-map-throw-held" src="'+dagger+'" alt=""></span>'+
      '</div>';
     column.querySelector('.bq-map-throw-arm-rig').style.animationPlayState='paused';
     stage.appendChild(column);
    }
    document.body.prepend(stage);
-  }""",ACTORS)
+  }""",{'actors':ACTORS,'dagger':dagger})
   for moment,label in [(200,'resting'),(950,'lifting'),(1980,'raised'),(2670,'followthrough')]:
    result=await page.evaluate("""async ({moment,actors})=>{
     const cards=[...document.querySelectorAll('#bq-arm-audit>.bq-map-throw-actor')];
