@@ -142,7 +142,26 @@ async def main():
   await host.locator('[data-action="reveal"]').first.click()
   await expect(guest.locator('.bq-map-throw-layer')).to_have_count(1,timeout=12000)
   await expect(guest.locator('.bq-map-throw-actor')).to_have_count(1)
-  await expect(guest.locator('.bq-map-throw-arm')).to_have_count(1)
+  await expect(guest.locator('.bq-map-throw-arm-rig')).to_have_count(1)
+  await expect(guest.locator('.bq-map-throw-original-arm')).to_have_count(1)
+  # The moving arm is a real cutout of the SAME original WebP as the body.
+  # No synthetic rectangular sleeve or separately colored hand is allowed.
+  arm_integrity=await guest.locator('.bq-map-throw-actor').evaluate("""actor=>{
+    const body=actor.querySelector('.bq-map-throw-body');
+    const limb=actor.querySelector('.bq-map-throw-original-arm');
+    const rig=actor.querySelector('.bq-map-throw-arm-rig');
+    const weapon=actor.querySelector('.bq-map-throw-held');
+    const style=el=>getComputedStyle(el);
+    return {bodyTexture:style(body).backgroundImage,armTexture:style(limb).backgroundImage,
+      armCut:style(limb).clipPath,torsoCut:style(body).clipPath,
+      shoulder:style(rig).transformOrigin,animation:style(rig).animationName,
+      weaponInRig:rig.contains(weapon),fakeHands:actor.querySelectorAll('.bq-map-throw-hand,.bq-map-throw-arm:not(.bq-map-throw-arm-rig)').length,
+      limbPixels:limb.getBoundingClientRect().width};
+  }""")
+  assert arm_integrity['bodyTexture']==arm_integrity['armTexture'] and 'data:image/webp' in arm_integrity['armTexture'],arm_integrity
+  assert arm_integrity['armCut'].startswith('polygon(') and arm_integrity['torsoCut'].startswith('polygon('),arm_integrity
+  assert arm_integrity['animation']=='bq-map-original-arm-lift' and arm_integrity['weaponInRig'],arm_integrity
+  assert arm_integrity['fakeHands']==0 and arm_integrity['limbPixels']>0,arm_integrity
   assert not await guest.locator('.bq-map-pin.is-solution').is_visible(),'Solution marker leaked before dagger impact'
   geometry=await guest.locator('.bq-map-throw-layer').evaluate('''layer=>{
    const marker=document.querySelector('.bq-map-pin.is-solution');
