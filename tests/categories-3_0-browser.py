@@ -5,7 +5,7 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','board-workspace.mjs']
+files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','board-workspace.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -33,14 +33,14 @@ async def install(page):
   Object.defineProperty(window,'sessionStorage',{configurable:true,value:storage(session)});
   window.history.replaceState=()=>{};
   const blob=body=>URL.createObjectURL(new Blob([body],{type:'text/javascript'}));
-  const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const model=blob(src['studio-model.mjs']);const category=blob(src['category-model.mjs']);
+  const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));const category=blob(src['category-model.mjs']);
   const review=blob(src['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs']);
   const boardWorkspaces=blob(src['board-workspace.mjs']);
   const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const workflows=blob(src['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
-  const editor=blob(src['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`));
-  const map=blob(src['map-tools.mjs']);const rules=blob(src['round-rules.mjs'].replace("from './core.mjs'",`from '${core}'`));
+  const editor=blob(src['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`));
+  const rules=blob(src['round-rules.mjs'].replace("from './core.mjs'",`from '${core}'`));
   const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`));
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member})};`;
   const app=src['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(')
@@ -49,7 +49,7 @@ async def install(page):
    .replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`)
    .replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${history}'`)
    .replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`)
-   .replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './board-workspace.mjs'",`from '${boardWorkspaces}'`);
+   .replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`).replace("from './board-workspace.mjs'",`from '${boardWorkspaces}'`);
   await import(blob(app));
  }''',sources)
 
