@@ -213,10 +213,10 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
   overflow:auto;padding:clamp(9px,1vw,16px)!important;
 }
 .bq-question-scene .bq-guest-compose .formgrid{
-  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:9px;
+  display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:9px;
 }
 .bq-question-scene .bq-guest-compose .formgrid>.btn{
-  grid-column:2;grid-row:1 / span 4;align-self:end;min-width:170px;
+  grid-column:1;grid-row:auto;justify-self:stretch;min-width:0;
 }
 .bq-question-scene .bq-guest-compose .field textarea{min-height:64px;max-height:110px}
 .bq-question-scene .bq-guest-compose .bq-guest-mode{gap:4px;padding:8px 12px}
@@ -258,4 +258,55 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 @media print{
   body.bq-game-mode:has(.bq-question-scene) .shell{height:auto;overflow:visible}
+}
+
+/* 3.6.2 Step 1 hardening: long content, screen zoom and live response stability. */
+.bq-question-scene .bq-guest-compose .formgrid>.span2{grid-column:1}
+.bq-question-scene .bq-guest-compose .bq-big-buzzer{width:100%;min-height:54px!important}
+.bq-question-scene .bq-question-panel .stage,
+.bq-question-scene .bq-guest-compose,
+.bq-question-scene .bq-answers-panel{overflow-wrap:anywhere}
+.bq-question-scene .bq-scene-content,
+.bq-question-scene .bq-guest-compose,
+.bq-question-scene .bq-answers-panel .answer-review{
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.bq-question-scene .bq-answers-panel .answer-review{
+  flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;
+}
+.bq-question-scene .bq-answers-panel .review-card .review-value{
+  max-height:none;overflow-wrap:anywhere;
+}
+.bq-question-scene .bq-answers-panel .review-card .frosted-shield{min-height:65px}
+.bq-question-scene .bq-answers-panel .review-grid{padding:2px 4px 8px}
+.bq-question-scene .bq-action-bar{min-height:42px;max-height:min(25dvh,160px);overflow-y:auto;align-content:start}
+.bq-question-scene .bq-action-bar>.btn{min-height:40px}
+.bq-question-scene .bq-question-panel .stage :is(img,video,canvas){max-width:100%;height:auto}
+.bq-question-scene :is(.btn,summary,button):focus-visible{outline:3px solid #dce8de;outline-offset:2px}
+@media(max-width:780px){
+  .bq-question-scene .bq-answer-review-body .bq-answers-panel{
+    max-height:none;min-height:0;flex:1 1 0;
+  }
+  .bq-question-scene .bq-answer-review-body{
+    display:grid;grid-template-rows:minmax(0,1fr) minmax(0,1.2fr);
+  }
+  .bq-question-scene .bq-guest-compose{max-height:40dvh}
+  .bq-question-scene .bq-question-panel .stage h2{font-size:clamp(21px,4vw,30px)}
+}
+@media(max-width:470px){
+  .bq-question-scene .bq-scene-heading h2{font-size:17px}
+  .bq-question-scene .bq-guest-compose{max-height:43dvh}
+  .bq-question-scene .bq-action-bar>.btn{flex:1 1 auto}
+  .bq-question-scene .bq-answers-panel .review-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-height:480px){
+  .bq-question-scene .bq-scene-heading{min-height:28px}
+  .bq-question-scene .bq-guest-compose{max-height:52dvh}
+  .bq-question-scene .bq-question-panel .stage{padding:10px}
+}
+@media(forced-colors:active){
+  .bq-question-scene .bq-guest-compose,.bq-question-scene .bq-question-panel{
+    border:1px solid CanvasText;
+  }
 }
