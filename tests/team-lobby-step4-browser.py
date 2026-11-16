@@ -96,7 +96,7 @@ async def main():
     await creator.locator('summary').click()
    await host.locator('#bq-host-team-name').fill(team_name)
    await host.locator('#host-team-create-form button[type="submit"]').click()
-   await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',expected_count)
+   await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',arg=expected_count)
   assert await host.locator('.bq-host-team-create').count()==0
   await a.wait_for_function("() => Object.keys(window.__probe.info().guestLobby?.teams||{}).length===5")
   assert await a.locator('.bq-lobby-team').count()==5
