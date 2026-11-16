@@ -161,6 +161,7 @@ async def main():
   await host.locator('.bq-board-scene [data-action="open"]').first.click()
   await host.locator('.bq-question-scene').wait_for(timeout=12000)
   await host.locator('.bq-auxiliary>summary').click()
+  await host.screenshot(path=str(OUT/'audit-open-host-question-tools.png'),full_page=True,animations='disabled')
   await audit(host,'host-question-tools','.bq-host-detail button,.bq-host-detail input,.bq-host-detail select,.bq-host-detail summary',36)
   # Actual toggles should roundtrip in shared room state and remain accessible.
   before=(await host.evaluate('window.__probe.info().publicState.settings'))
