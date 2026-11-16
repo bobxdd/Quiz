@@ -26,7 +26,9 @@ export function mapThrowOrigin(viewport,width=innerWidth,height=innerHeight){
  const actorWidth=142*scale;
  const actorX=clamp(r.left-rail+Math.max(0,(rail-actorWidth)/2),4,Math.max(4,width-actorWidth-4));
  const actorY=clamp(r.top+Math.min(18,r.height*.05),4,Math.max(4,height-142*scale-4));
- return {actorX,actorY,scale,handX:actorX+111*scale,handY:actorY+53*scale};
+ // The projectile emerges where the raised ORIGINAL right hand releases it,
+ // rather than above the actor's head as in the old artificial-arm animation.
+ return {actorX,actorY,scale,handX:actorX+106*scale,handY:actorY+88*scale};
 }
 
 /** A self-contained animation that survives app.innerHTML rerenders.
@@ -38,7 +40,8 @@ export function startMapDaggerThrow({viewport,marker,actor='rogue',onLand=()=>{}
  root.setAttribute('aria-hidden','true');
  root.innerHTML=`<div class="bq-map-throw-actor bq-map-throw-actor--${actor}">
   <span class="bq-map-throw-body bq-actor bq-actor--${actor}"></span>
-  <span class="bq-map-throw-arm"><span class="bq-map-throw-hand"></span><img class="bq-map-throw-held" src="./dagger-pin.svg" alt="" draggable="false"></span>
+  <span class="bq-map-throw-arm-rig"><span class="bq-map-throw-original-arm bq-actor--${actor}"></span>
+   <img class="bq-map-throw-held" src="./dagger-pin.svg" alt="" draggable="false"></span>
  </div><img class="bq-map-throw-flight" src="./dagger-pin.svg" alt="" draggable="false">
  <span class="bq-map-throw-impact"></span>`;
  document.body.append(root);
