@@ -59,7 +59,7 @@ test('Step 4 readiness and team selection locked after first question even after
 test('Step 4 host approval still limits players and validates fixed team IDs',()=>{
  let roster={};
  for(let i=0;i<MAX_PLAYERS;i++)roster=approval(roster,'p_'+i,{name:'Player '+i},'t1').roster;
- assert.equal(approval(roster,'p_9',{name:'Last'},'t1').accepted,false);
+ assert.equal(approval(roster,'p_10',{name:'Last'},'t1').accepted,false);
  assert.throws(()=>approval(roster,'evil',{name:'X'},'__proto__'),/Ungültiges Team/);
 });
 test('Step 4 assets are shipped through the offline cache and HTML',()=>{
