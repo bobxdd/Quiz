@@ -46,7 +46,7 @@ async def main():
       const bodyURL=getComputedStyle(body).backgroundImage;
       const armURL=getComputedStyle(limb).backgroundImage;
       const armStyle=getComputedStyle(limb);
-      const parsed=armStyle.clipPath.matchAll(/([0-9.]+)%\\s+([0-9.]+)%/g);
+      const parsed=armStyle.clipPath.matchAll(/([0-9.]+)%\s+([0-9.]+)%/g);
       const polygon=[...parsed].map(m=>[Number(m[1])*3,Number(m[2])*3]);
       const image=new Image();
       image.src=armURL.slice(5,-2);await image.decode();
