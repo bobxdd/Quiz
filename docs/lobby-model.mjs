@@ -19,7 +19,7 @@ export const MAX_TEAMS=6;
 export const TEAM_PALETTE=Object.freeze(['#85bde4','#e3a09e','#a7c989','#c2a4e5','#e4bd72','#74c8be']);
 export const teamColor=id=>/^t[1-6]$/.test(String(id||''))?TEAM_PALETTE[Number(id.slice(1))-1]:'#aab6bf';
 export const validTeamId=id=>/^t[1-6]$/.test(String(id||''));
-export const canArrangeLobby=state=>state?.phase==='board'&&Number(state?.round||0)===0&&!Object.values(state?.used||{}).some(v=>v===true);
+export const canArrangeLobby=state=>state?.phase==='board'&&Number(state?.round||0)===0&&!Object.entries(state?.used||{}).some(([id,v])=>id!=='_empty'&&v===true);
 export function cleanTeamName(value){
  if(typeof value!=='string')throw Error('Teamname fehlt.');
  const result=value.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').replace(/\s+/g,' ').trim();
