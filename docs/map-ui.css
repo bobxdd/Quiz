@@ -185,3 +185,26 @@
   width:100%;min-width:0;
  }
 }
+
+/* QA regression: the world-map viewport must be IN normal document flow.
+   Previously its flex-grown 300px map overflowed a shorter parent and covered
+   host controls: the apparent buttons were real but not hit-testable.
+   A fixed-height map plus auto-height ancestors allows safe vertical scrolling. */
+.bq-question-scene:has(.bq-map-viewport) .bq-question-body,
+.bq-question-scene:has(.bq-map-viewport) .bq-question-panel,
+.bq-question-scene:has(.bq-map-viewport) .bq-scene-content,
+.bq-question-scene:has(.bq-map-viewport) .stage,
+.bq-question-scene:has(.bq-map-viewport) .bq-map-scene.se-scene{
+ flex:0 0 auto!important;
+ height:auto!important;
+ min-height:0!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-question{height:auto!important;min-height:0!important}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{
+ flex:none!important;
+ height:clamp(300px,39dvh,420px);
+ min-height:300px;
+}
+@media(max-width:680px){
+ .bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{height:310px;min-height:310px}
+}
