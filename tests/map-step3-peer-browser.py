@@ -3,7 +3,7 @@ Exercises actual host/guest UI and app state, not real network ICE/TURN.
 """
 import asyncio,importlib.util
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_categories',ROOT/'tests/categories-3_0-browser.py')
@@ -64,8 +64,8 @@ async def main():
   await guest.wait_for_function("() => {const image=document.querySelector('.bq-map-layer img');return image?.complete && image.naturalWidth>0}",timeout=12000)
   qpublic=await guest.evaluate("window.__probe.info().publicState.current")
   assert 'mapTargetX' not in qpublic and 'mapTargetY' not in qpublic and 'mapTargetSet' not in qpublic,qpublic
-  assert await guest.locator('.bq-map-pin.is-solution').count()==0
-  assert await guest.locator('.bq-map-pin.is-host').count()==0
+  await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(0)
+  await expect(guest.locator('.bq-map-pin.is-host')).to_have_count(0)
   assert '67.321' not in await guest.locator('.bq-question-scene').inner_text()
   print('PASS: host secret answer coordinates absent from guest state, markup, and visible text')
   # Visual geometry: no hidden solution, clipped controls, duplicate IDs, or horizontal overflow.
@@ -79,8 +79,8 @@ async def main():
    await audit(guest,f'participant-map-{width}x{height}',guestSelectors,
                ['.bq-map-controls button','.bq-guest-compose .formgrid>.btn'],
                ['.bq-map-viewport','.bq-map-title h2'])
-   assert await guest.locator('[data-action="reveal"],[data-action="publish"],[data-action="start-review"]').count()==0
-   assert await guest.locator('.bq-map-pin.is-solution').count()==0
+   await expect(guest.locator('[data-action="reveal"],[data-action="publish"],[data-action="start-review"]')).to_have_count(0)
+   await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(0)
    print('PASS participant map layout/permissions',width,height,flush=True)
   for width,height in [(390,844),(1366,850)]:
    await host.set_viewport_size({'width':width,'height':height})
@@ -109,26 +109,27 @@ async def main():
     bound:document.querySelector('.bq-map-viewport')?.dataset.mapBound,clickable:document.querySelector('.bq-map-viewport')?.dataset.mapChoice})""")
   print('MAP DIAG after click',after,flush=True)
   await guest.locator('.bq-map-pin.is-self').wait_for(timeout=5000)
-  assert await guest.locator('[data-action="submit-answer"]').is_enabled()
+  await expect(guest.locator('[data-action="submit-answer"]')).to_be_enabled()
   await guest.locator('[data-action="submit-answer"]').click()
   await guest.locator('[data-action="submit-answer"]').get_by_text('Pin aktualisieren').wait_for(timeout=12000)
   assert (await guest.evaluate('window.__probe.info().publicState.phase'))=='question'
-  assert await guest.locator('.bq-map-pin.is-solution').count()==0
+  await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(0)
   # Repositioning is allowed even after first submission while the round stays open.
   rect=await guest.locator('.bq-map-viewport').bounding_box()
   await guest.mouse.click(rect['x']+rect['width']*.39,rect['y']+rect['height']*.55)
   await guest.locator('[data-action="submit-answer"]').click()
+  await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.values(bucket).some(rec=>String(rec.text||'').includes('39')))",timeout=10000)
   answer=await host.evaluate("""() => Object.values(window.__probe.getGame().data.responses||{})""")
   assert any('39' in str(rec) for bucket in answer for rec in bucket.values()),answer
   print('PASS: guest can move and re-send their private pin until map round closes')
   await host.locator('[data-action="start-review"]').first.click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await guest.locator('.review-card.is-missing').first.wait_for(timeout=12000)
-  assert await guest.locator('.review-card.is-hidden').count()==1
-  assert await guest.locator('.review-card.is-missing').count()==1
+  await expect(guest.locator('.review-card.is-hidden')).to_have_count(1)
+  await expect(guest.locator('.review-card.is-missing')).to_have_count(1)
   assert 'Keine Antwort abgegeben' in await guest.locator('.review-card.is-missing').inner_text()
-  assert await guest.locator('.review-card.is-missing .frosted-shield').count()==0
-  assert await second.locator('.review-card.is-hidden').count()==1
+  await expect(guest.locator('.review-card.is-missing .frosted-shield')).to_have_count(0)
+  await expect(second.locator('.review-card.is-hidden')).to_have_count(1,timeout=12000)
   assert '@map:39' not in await second.locator('.bq-question-scene').inner_text()
   print('PASS: review separates absent responses from private submitted answers for two guests',flush=True)
   await host.locator('[data-action="reveal"]').first.click()
@@ -144,7 +145,7 @@ async def main():
    await audit(guest,f'participant-reveal-{width}x{height}',
                ['.bq-map-viewport','.bq-map-title h2','.bq-map-controls button','.bq-answer-review-body'],
                ['.bq-map-controls button'],['.bq-map-viewport'])
-   assert await guest.locator('[data-action="publish"],[data-action="reveal"]').count()==0
+   await expect(guest.locator('[data-action="publish"],[data-action="reveal"]')).to_have_count(0)
   print('PASS guest reveal geometry and host-control absence',flush=True)
   assert not errors,errors
   await browser.close()
