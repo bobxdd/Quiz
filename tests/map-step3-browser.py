@@ -39,9 +39,9 @@ async def run():
    await page.locator('.bq-map-title h2').get_by_text('Wo befindet sich diese Stadt?').wait_for()
    rect=await page.locator('.bq-map-viewport').bounding_box()
    assert rect['width']>=400 and rect['height']>=190,rect
-    assert abs(rect['width']/rect['height']-2)<.035,'World map is distorted: '+str(rect)
-    visual=await page.locator('.bq-map-viewport').evaluate('(e)=>({bg:getComputedStyle(e).backgroundColor,fit:getComputedStyle(e.querySelector(".bq-map-layer img")).objectFit})')
-    assert visual['fit']=='contain' and visual['bg']!='rgb(237, 241, 243)',visual
+   assert abs(rect['width']/rect['height']-2)<.035,'World map is distorted: '+str(rect)
+   visual=await page.locator('.bq-map-viewport').evaluate('(e)=>({bg:getComputedStyle(e).backgroundColor,fit:getComputedStyle(e.querySelector(".bq-map-layer img")).objectFit})')
+   assert visual['fit']=='contain' and visual['bg']!='rgb(237, 241, 243)',visual
    await page.mouse.click(rect['x']+rect['width']*.63,rect['y']+rect['height']*.42)
    await page.locator('.bq-map-valid').wait_for()
    assert await page.locator('.bq-map-pin.is-host img[src$="dagger-pin.svg"]').count()==1
