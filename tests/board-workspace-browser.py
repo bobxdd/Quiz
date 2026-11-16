@@ -71,6 +71,12 @@ async def main():
    assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==4
    assert await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)==original
    print('PASS: non-destructive imported board')
+   await page.locator('.se-file-actions>summary').click()
+   async with page.expect_download(timeout=8000) as download_info:
+    await page.locator('.se-file-menu [data-action="export"]').click()
+   download=await download_info.value
+   assert 'Importiert' in download.suggested_filename and download.suggested_filename.endswith('.brainquiz.json'),download.suggested_filename
+   print('PASS: identifiable per-board export filename')
 
    # XSS-style board labels must be displayed as text, never run as markup.
    await page.locator('[data-se-quiztitle]').fill('<img src=x onerror="window.__injected=true">')
@@ -86,6 +92,21 @@ async def main():
    assert dims['scroll']<=dims['client']+8,dims
    await page.locator('.se-board-switch-items [data-action="open-board"]').first.wait_for(state='visible')
    print('PASS: mobile workspace menu without horizontal overflow')
+
+   # Emulate a full browser storage: a visible backup option must appear.
+   await page.locator('.se-board-switch>summary').click()
+   await page.evaluate("""() => {
+     const original=Storage.prototype.setItem;
+     Storage.prototype.setItem=function(k,v){
+       if(k.startsWith('bq-board-workspace-b'))throw new DOMException('Storage full','QuotaExceededError');
+       return original.call(this,k,v);
+     };
+   }""")
+   await page.locator('[data-se-quiztitle]').fill('Kann nicht gespeichert werden')
+   await page.locator('[data-se-quiztitle]').blur()
+   await page.locator('.se-board-conflict [data-action="export"]').wait_for(timeout=8000)
+   assert 'SPEICHERFEHLER' in await page.locator('.se-board-conflict').inner_text()
+   print('PASS: quota failure visibly exposes backup recovery')
 
    assert not errors,errors
    await browser.close()
