@@ -31,3 +31,128 @@
 /* Unlike an auxiliary popover, the shared chat owns its in-panel content. */
 .bq-session-scene .bq-shared-team-chat[open]>.glass.panel{position:static;inset:auto;right:auto;bottom:auto;width:100%;max-height:none;overflow:visible;box-shadow:none;background:transparent;border:0;padding:8px}
 .bq-shared-team-chat[open]{max-height:min(70dvh,600px);overflow:auto}
+
+
+/* STEP 3 - one spacious, light map UI for host editor and players.
+   All markers overlay world coordinates and never scale with map camera. */
+.bq-map-scene.se-scene{
+ width:100%;height:100%;aspect-ratio:auto;min-height:420px;
+ padding:0;border:0;border-radius:14px;overflow:visible;background:transparent;
+}
+.bq-map-question{
+ display:flex;flex-direction:column;gap:9px;
+ width:100%;height:100%;min-height:inherit;color:#23323a;
+}
+.bq-map-title{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ flex-wrap:wrap;flex:0 0 auto;padding:6px 10px;
+ border-radius:10px;background:rgba(249,251,252,.98);
+}
+.bq-map-title h2{
+ margin:0!important;max-width:none!important;color:#1b3037!important;
+ font-size:clamp(20px,2.6vw,37px)!important;line-height:1.25;
+ overflow-wrap:anywhere;
+}
+.bq-map-required,.bq-map-valid{
+ font-size:clamp(12px,1vw,15px);font-weight:700;padding:7px 11px;border-radius:8px;
+}
+.bq-map-required{color:#713917;background:#ffebdc;border:1px solid #eec19c}
+.bq-map-valid{color:#1b5c42;background:#daf1e5;border:1px solid #a9d4bb}
+.bq-map-controls{
+ display:flex;gap:7px;align-items:center;justify-content:flex-end;
+ flex:0 0 auto;min-height:42px;
+}
+.bq-map-controls button{
+ border:1px solid #879fa6!important;background:#ffffff!important;
+ color:#24414b!important;border-radius:9px;min-width:44px;
+ min-height:42px;padding:7px 13px;cursor:pointer;font-size:18px;
+ box-shadow:0 2px 6px #2b4b5530;
+}
+.bq-map-controls .bq-map-reset{font-size:13px;font-weight:700}
+.bq-map-controls output{min-width:58px;text-align:center;color:#dbeae7;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.se-editor-v3 .bq-map-controls output{color:#d9ebe6}
+.bq-map-controls button:focus-visible,.bq-map-viewport:focus-visible{
+ outline:3px solid #daaa4e;outline-offset:3px;
+}
+.bq-map-viewport{
+ position:relative;isolation:isolate;overflow:hidden;
+ flex:1 1 0;min-height:300px;width:100%;
+ border:1px solid #adc0c6;border-radius:12px;
+ background:#f6f9fa;touch-action:none;
+ cursor:grab;user-select:none;
+ box-shadow:0 7px 22px rgba(15,36,43,.13);
+}
+.bq-map-viewport[data-map-choice="true"]{cursor:crosshair}
+.bq-map-viewport:active{cursor:grabbing}
+.bq-map-layer{
+ position:absolute;inset:auto;overflow:hidden;
+ pointer-events:none;user-select:none;
+}
+.bq-map-layer>img{
+ display:block;width:100%;height:100%;object-fit:fill;
+ pointer-events:none;user-select:none;-webkit-user-drag:none;
+}
+.bq-map-markers{position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+.bq-map-pin{
+ position:absolute;transform:translate(-50%,-100%);display:grid;
+ place-items:center;width:36px;height:46px;
+ filter:drop-shadow(0 2px 3px #20373c78);
+ font-size:12px;pointer-events:none;z-index:3;
+}
+.bq-map-pin[hidden]{display:none}
+.bq-map-pin img{width:32px;height:46px;image-rendering:pixelated;object-fit:contain}
+.bq-map-pin.is-solution{z-index:8;filter:drop-shadow(0 0 7px #c27b1a)}
+.bq-map-pin.is-host{z-index:7;filter:drop-shadow(0 0 4px #be8638)}
+.bq-map-pin-dot{
+ display:block;width:17px;height:17px;border:4px solid #f8ffff;border-radius:50%;
+ background:#3f77bb;box-shadow:0 1px 4px #153657a8;
+}
+.bq-map-pin.is-public .bq-map-pin-dot{background:#a26eb2}
+.bq-map-instruction{
+ color:#d9e2e2;margin:0!important;line-height:1.35;
+ font-size:clamp(11px,1vw,14px);flex:0 0 auto;
+}
+.se-editor-v3 .bq-map-instruction{color:#c5d7d1}
+.bq-question-scene:has(.bq-map-scene){
+ min-height:calc(100dvh - 125px);display:flex;flex-direction:column;
+}
+.bq-question-scene:has(.bq-map-scene) .bq-question-body{
+ flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+}
+.bq-question-scene:has(.bq-map-scene) .bq-question-panel{
+ flex:1 1 auto;min-height:0;display:flex;
+}
+.bq-question-scene:has(.bq-map-scene) .bq-scene-content{flex:1 1 0;min-height:0;display:flex}
+.bq-question-scene:has(.bq-map-scene) .stage{
+ display:flex;flex-direction:column;flex:1 1 auto;
+ min-height:0;width:100%;padding:4px!important;gap:5px;
+}
+.bq-question-scene:has(.bq-map-scene) .bq-map-scene{flex:1 1 auto;min-height:330px}
+.bq-question-scene:has(.bq-map-scene) .bq-guest-compose{flex:0 0 auto;max-height:min(28dvh,245px)}
+.se-editor-v3 .se-canvas-wrap:has(.bq-map-scene){
+ height:min(67dvh,760px);min-height:420px;width:100%;overflow:visible;
+}
+.se-editor-v3 .se-canvas-wrap .bq-map-scene{height:100%;min-height:100%}
+.se-editor-v3 .se-audience-preview:has(.bq-map-scene){max-width:none}
+.se-editor-v3 .se-stage-card:has(.bq-map-scene){min-width:0}
+.se-editor-v3 .se-main:has(.bq-map-scene){min-width:0}
+.se-editor-v3 .se-subpanel.bq-map-host-point{background:#29352f;border:1px solid #789a87}
+.se-editor-v3 .se-subpanel.bq-map-host-point h4{margin:0 0 7px}
+.se-editor-v3 .se-subpanel.bq-map-host-point p{font-size:13px;line-height:1.5;margin:5px 0}
+@media(max-width:680px){
+ .bq-map-title{padding:8px}
+ .bq-map-title h2{font-size:clamp(19px,5vw,25px)!important}
+ .bq-map-controls{justify-content:center}
+ .bq-map-viewport{min-height:310px}
+ .bq-question-scene:has(.bq-map-scene) .bq-map-scene{min-height:310px}
+ .bq-question-scene:has(.bq-map-scene) .bq-guest-compose{max-height:min(34dvh,230px)}
+ .se-editor-v3 .se-canvas-wrap:has(.bq-map-scene){height:64dvh;min-height:390px}
+ .bq-map-instruction{font-size:12px}
+}
+@media(max-height:580px){
+ .bq-question-scene:has(.bq-map-scene){min-height:650px;height:auto}
+ .bq-question-scene:has(.bq-map-scene) .bq-guest-compose{max-height:none}
+}
+@media(prefers-reduced-motion:reduce){
+ .bq-map-layer,.bq-map-pin{transition:none!important;animation:none!important}
+}
