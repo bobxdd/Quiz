@@ -38,6 +38,7 @@ jobs:
           python tests/saved-quiz-host-lobby-browser.py
           python tests/host-flow-clarity-browser.py
           python tests/map-step3-peer-browser.py
+          python tests/original-arm-browser.py
           python tests/features-3_4-browser.py
           python tests/team-lobby-step4-browser.py
           python tests/ui-step3-layout-browser.py
