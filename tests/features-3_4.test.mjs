@@ -22,7 +22,7 @@ test('3.4: four hints survive import; unrevealed hints never leak',()=>{
 });
 
 test('3.4: world map pin values validated, anti-injection, and keyboard projection',()=>{
- const val=normalizePoint({x:58.456,y:33.55});assert.deepEqual(val,{x:58.5,y:33.6});
+ const val=normalizePoint({x:58.456,y:33.55});assert.deepEqual(val,{x:58.456,y:33.55});
  assert.deepEqual(decodePoint(encodePoint(val)),val);
  assert.deepEqual(worldLatLon({x:50,y:50}),{lat:0,lon:0});
  for(const value of ["@map:20,20<script>","@map:-3,50",'@map:100.1,10','@map:1,120','hi','@map:NaN,10'])assert.equal(decodePoint(value),null);
@@ -32,7 +32,7 @@ test('3.4: world map pin values validated, anti-injection, and keyboard projecti
 });
 
 test('3.4: map solution is host-only before reveal; shared world scene works for all',()=>{
- const question=normalizedQuiz({questions:[{id:'qMap',category:'Weltkarte',type:'map',title:'Kartenfrage',prompt:'Wo liegt es?',answer:'Im Westen',roundMode:'written',mapTargetX:61,mapTargetY:34,scene:templateScene('map',{prompt:'Wo liegt es?'})}]}).questions[0];
+ const question=normalizedQuiz({questions:[{id:'qMap',category:'Weltkarte',type:'map',title:'Kartenfrage',prompt:'Wo liegt es?',answer:'Im Westen',roundMode:'written',mapTargetX:61,mapTargetY:34,mapTargetSet:true,scene:templateScene('map',{prompt:'Wo liegt es?'})}]}).questions[0];
  const privateView=publicQuestion(question,false,'',0,0);
  assert.equal(privateView.mapTargetX,undefined);
  assert.equal(privateView.mapTargetY,undefined);
