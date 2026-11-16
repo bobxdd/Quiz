@@ -50,6 +50,7 @@ test('Step 4 guest lobby: every team is legible and user-supplied names are safe
 });
 test('Step 4 readiness and team selection locked after first question even after returning to board',()=>{
  assert.equal(canArrangeLobby(base().public),true);
+ assert.equal(canArrangeLobby({...base().public,used:{_empty:true}}),true,'Published quiz placeholder must not lock lobby');
  for(const state of [{phase:'question',round:1},{phase:'board',round:1},{phase:'reveal',round:1},{phase:'board',round:0,used:{q:true}}])assert.equal(canArrangeLobby(state),false);
 });
 test('Step 4 host approval still limits players and validates fixed team IDs',()=>{
