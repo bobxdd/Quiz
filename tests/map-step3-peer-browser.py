@@ -9,6 +9,9 @@ ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_categories',ROOT/'tests/categories-3_0-browser.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 install=module.install
+layoutSpec=importlib.util.spec_from_file_location('bq_ui_layout',ROOT/'tests/ui-step3-layout-browser.py')
+layoutModule=importlib.util.module_from_spec(layoutSpec);layoutSpec.loader.exec_module(layoutModule)
+audit=layoutModule.audit
 
 async def main():
  async with async_playwright() as p:
@@ -49,6 +52,29 @@ async def main():
   assert await guest.locator('.bq-map-pin.is-host').count()==0
   assert '67.321' not in await guest.locator('.bq-question-scene').inner_text()
   print('PASS: host secret answer coordinates absent from guest state, markup, and visible text')
+  # Visual geometry: no hidden solution, clipped controls, duplicate IDs, or horizontal overflow.
+  hostSelectors=['.bq-map-viewport','.bq-map-title h2','.bq-map-controls button',
+                 '.bq-action-bar button','.bq-scene-heading h2']
+  guestSelectors=['.bq-map-viewport','.bq-map-title h2','.bq-map-controls button',
+                  '.bq-guest-compose .formgrid>.btn','.bq-map-instruction']
+  for width,height in [(320,720),(390,844),(768,1024),(1366,850)]:
+   await guest.set_viewport_size({'width':width,'height':height})
+   await guest.locator('.bq-map-viewport').wait_for(state='visible')
+   await audit(guest,f'participant-map-{width}x{height}',guestSelectors,
+               ['.bq-map-controls button','.bq-guest-compose .formgrid>.btn'],
+               ['.bq-map-viewport','.bq-map-title h2'])
+   assert await guest.locator('[data-action="reveal"],[data-action="publish"],[data-action="start-review"]').count()==0
+   assert await guest.locator('.bq-map-pin.is-solution').count()==0
+   print('PASS participant map layout/permissions',width,height,flush=True)
+  for width,height in [(390,844),(1366,850)]:
+   await host.set_viewport_size({'width':width,'height':height})
+   await host.locator('.bq-map-viewport').wait_for(state='visible')
+   await audit(host,f'host-map-{width}x{height}',hostSelectors,
+               ['.bq-map-controls button','.bq-action-bar>.btn'],
+               ['.bq-map-viewport','.bq-map-title h2'])
+   print('PASS host map layout',width,height,flush=True)
+  await guest.set_viewport_size({'width':1366,'height':850})
+  await host.set_viewport_size({'width':1366,'height':850})
   rect=await guest.locator('.bq-map-viewport').bounding_box()
   assert rect and rect['width']>=900 and rect['height']>=300,rect
   before=await guest.evaluate("""() => ({role:window.__probe.info().role,member:window.__probe.info().member,
@@ -88,6 +114,14 @@ async def main():
   assert abs(released['mapTargetX']-67.321)<.001
   assert abs(released['mapTargetY']-34.112)<.001
   print('PASS: solution dagger and exact host target appear only after host reveal')
+  for width,height in [(390,844),(1366,850)]:
+   await guest.set_viewport_size({'width':width,'height':height})
+   await guest.locator('.bq-map-pin.is-solution img').wait_for(state='visible')
+   await audit(guest,f'participant-reveal-{width}x{height}',
+               ['.bq-map-viewport','.bq-map-title h2','.bq-map-controls button','.bq-answer-review-body'],
+               ['.bq-map-controls button'],['.bq-map-viewport'])
+   assert await guest.locator('[data-action="publish"],[data-action="reveal"]').count()==0
+  print('PASS guest reveal geometry and host-control absence',flush=True)
   assert not errors,errors
   await browser.close()
 
