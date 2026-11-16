@@ -99,6 +99,7 @@ async def main():
    await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',arg=expected_count)
   assert await host.locator('.bq-host-team-create').count()==0
   await a.wait_for_function("() => Object.keys(window.__probe.info().guestLobby?.teams||{}).length===5")
+  await a.locator('.bq-lobby-team').nth(4).wait_for(state='visible',timeout=10000)
   assert await a.locator('.bq-lobby-team').count()==5
   assert await a.locator('#lobby-create-form').count()==0
   names=await host.evaluate("Object.values(window.__probe.info().publicState.teams)")
