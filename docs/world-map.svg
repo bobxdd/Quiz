@@ -5,7 +5,7 @@
      Projection: equirectangular, matching BrainQuiz world-coordinate pin system. -->
 <rect x="0" y="0" width="1000" height="500" fill="#edf1f3"/>
 <style>
- .country{stroke:#5f707c;stroke-width:0.85;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
+ .country{stroke:#566571;stroke-width:0.85;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;fill-rule:evenodd}
  .tone-0{fill:#c4ced3}
  .tone-1{fill:#d5dce0}
  .tone-2{fill:#b8c4cb}
