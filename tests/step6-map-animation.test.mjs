@@ -13,7 +13,10 @@ test('Step 6: all four original figure skins share one calm throw timeline',()=>
  assert.ok(MAP_FLIGHT_MS>=800 && MAP_FLIGHT_MS<=1800);
  assert.ok(MAP_FLIGHT_DELAY_MS>1500);
  for(const id of THROW_ACTORS)assert.match(css,new RegExp('bq-map-throw-actor--'+id));
- assert.match(css,/bq-map-throw-arm-lift/);
+ assert.match(css,/bq-map-original-arm-lift/);
+ for(const id of THROW_ACTORS)assert.match(css,new RegExp('\\.bq-map-throw-actor--'+id+'\\{[\\s\\S]*?--bq-arm-outline:polygon'));
+ assert.match(css,/bq-map-throw-original-arm/);
+ assert.doesNotMatch(css,/bq-map-throw-hand|bq-throw-sleeve|bq-throw-sleeve-highlight/);
  assert.match(css,/bq-map-dagger-flight/);
  assert.match(css,/bq-map-throw-impact/);
  assert.doesNotMatch(css,/infinite/);
@@ -36,9 +39,11 @@ test('Step 6: fixed character origin does not depend on the target',()=>{
  assert.equal(start.actorX,9);
  assert.equal(start.actorY,428);
  assert.ok(start.scale>.9&&start.scale<=1);
- assert.equal(start.handX,start.actorX+111*start.scale);
- assert.equal(start.handY,start.actorY+53*start.scale);
+ assert.equal(start.handX,start.actorX+106*start.scale);
+ assert.equal(start.handY,start.actorY+88*start.scale);
  assert.match(css,/\.bq-map-question\.bq-map-throw-active/);
+ assert.match(read('../docs/map-dagger-animation.mjs'),/bq-map-throw-original-arm bq-actor--/);
+ assert.doesNotMatch(read('../docs/map-dagger-animation.mjs'),/bq-map-throw-hand/);
  assert.match(app,/removeMapThrowRail\(\)/);
  const mobile=mapThrowOrigin(box,390,844);
  assert.ok(mobile.actorX>=4&&mobile.actorX<=244);
