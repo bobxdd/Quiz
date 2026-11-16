@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright, expect
 
 ROOT=Path(__file__).resolve().parents[1]
+(ROOT/'qa-artifacts').mkdir(exist_ok=True)
 spec=importlib.util.spec_from_file_location('bq_categories',ROOT/'tests/categories-3_0-browser.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 install=module.install
@@ -132,8 +133,58 @@ async def main():
   await expect(second.locator('.review-card.is-hidden')).to_have_count(1,timeout=12000)
   assert '@map:39' not in await second.locator('.bq-question-scene').inner_text()
   print('PASS: review separates absent responses from private submitted answers for two guests',flush=True)
+  # Only this guest uses normal motion: all earlier privacy/layout checks keep the
+  # existing reduced-motion baseline, but the live reveal must show the throw.
+  await guest.emulate_media(reduced_motion='no-preference')
+  await second.set_viewport_size({'width':390,'height':844})
+  await second.emulate_media(reduced_motion='no-preference')
   await host.locator('[data-action="reveal"]').first.click()
-  await guest.locator('.bq-map-pin.is-solution img').wait_for(timeout=12000)
+  await expect(guest.locator('.bq-map-throw-layer')).to_have_count(1,timeout=12000)
+  await expect(guest.locator('.bq-map-throw-actor')).to_have_count(1)
+  await expect(guest.locator('.bq-map-throw-arm')).to_have_count(1)
+  assert not await guest.locator('.bq-map-pin.is-solution').is_visible(),'Solution marker leaked before dagger impact'
+  geometry=await guest.locator('.bq-map-throw-layer').evaluate('''layer=>{
+   const marker=document.querySelector('.bq-map-pin.is-solution');
+   const viewport=marker.closest('.bq-map-viewport');
+   const box=viewport.getBoundingClientRect();
+   return {x:Number(layer.dataset.targetX),y:Number(layer.dataset.targetY),
+    expectedX:box.left+box.width*parseFloat(marker.style.left)/100,
+    expectedY:box.top+box.height*parseFloat(marker.style.top)/100,
+    actor:layer.querySelector('.bq-map-throw-actor')?.className,
+    pointer:getComputedStyle(layer).pointerEvents};
+  }''')
+  assert abs(geometry['x']-geometry['expectedX'])<1 and abs(geometry['y']-geometry['expectedY'])<1,geometry
+  assert geometry['pointer']=='none',geometry
+  # Real layout assertions: the casting figure must stay in its OWN rail,
+  # not cover the map surface, the question title, or the zoom controls.
+  actor_layout=await guest.evaluate("""() => {
+   const actor=document.querySelector('.bq-map-throw-actor'),map=document.querySelector('.bq-map-viewport');
+   const title=document.querySelector('.bq-map-title'),controls=document.querySelector('.bq-map-controls');
+   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,t:r.top,r:r.right,b:r.bottom}};
+   return {actor:rect(actor),map:rect(map),title:rect(title),controls:rect(controls)};
+  }""")
+  a=actor_layout['actor'];m=actor_layout['map'];t=actor_layout['title'];z=actor_layout['controls']
+  intersects=lambda p,q:p['l']<q['r']-1 and p['r']>q['l']+1 and p['t']<q['b']-1 and p['b']>q['t']+1
+  assert a['r']<=m['l']+2 and not intersects(a,t) and not intersects(a,z),actor_layout
+  # Same exact class pose on a narrow real guest viewport.
+  await expect(second.locator('.bq-map-throw-actor')).to_have_count(1,timeout=12000)
+  small=await second.evaluate("""() => {
+   const a=document.querySelector('.bq-map-throw-actor')?.getBoundingClientRect();
+   const m=document.querySelector('.bq-map-viewport')?.getBoundingClientRect();
+   const reset=document.querySelector('.bq-map-reset');
+   return a&&m&&reset?{right:a.right,mapLeft:m.left,actorWidth:a.width,viewportWidth:innerWidth,
+    resetNoWrap:getComputedStyle(reset).whiteSpace==='nowrap',resetFits:reset.scrollWidth<=reset.clientWidth+2}:null;
+  }""")
+  assert small and small['right']<=small['mapLeft']+2 and small['actorWidth']<=105 and small['right']<=small['viewportWidth']+2,small
+  assert small['resetNoWrap'] and small['resetFits'],'World overview label clipped/wrapped during mobile throw: '+str(small)
+  await second.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-mobile-windup.png'),animations='allow')
+  await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-windup.png'),animations='allow')
+  await guest.wait_for_timeout(2400)
+  assert await guest.locator('.bq-map-throw-flight').count()==1,'Flying dagger missing'
+  await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-flight.png'),animations='allow')
+  await guest.locator('.bq-map-pin.is-solution img').wait_for(state='visible',timeout=14000)
+  await expect(guest.locator('.bq-map-throw-layer')).to_have_count(0,timeout=10000)
+  print('PASS Step 6: visible character arm throw, flying dagger, accurate marker landing, no input obstruction',flush=True)
   assert await guest.locator('.bq-map-pin.is-solution img').evaluate('(img)=>img.complete&&img.naturalWidth>0'),'Pixel dagger missing in two-client view'
   released=await guest.evaluate('window.__probe.info().publicState.current')
   assert abs(released['mapTargetX']-67.321)<.001

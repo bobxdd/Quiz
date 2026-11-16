@@ -185,3 +185,61 @@
   width:100%;min-width:0;
  }
 }
+
+/* QA regression: the world-map viewport must be IN normal document flow.
+   Previously its flex-grown 300px map overflowed a shorter parent and covered
+   host controls: the apparent buttons were real but not hit-testable.
+   A fixed-height map plus auto-height ancestors allows safe vertical scrolling. */
+.bq-question-scene:has(.bq-map-viewport) .bq-question-body,
+.bq-question-scene:has(.bq-map-viewport) .bq-question-panel,
+.bq-question-scene:has(.bq-map-viewport) .bq-scene-content,
+.bq-question-scene:has(.bq-map-viewport) .stage,
+.bq-question-scene:has(.bq-map-viewport) .bq-map-scene.se-scene{
+ flex:0 0 auto!important;
+ height:auto!important;
+ min-height:0!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-question{height:auto!important;min-height:0!important}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{
+ flex:none!important;
+ height:clamp(300px,39dvh,420px);
+ min-height:300px;
+}
+@media(max-width:680px){
+ .bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{height:310px;min-height:310px}
+}
+
+/* Map answer review: auto-size its two content panels in document flow.
+   The old minmax(0,1fr) grid rows let the intrinsic 300px map and the
+   answer caption paint on top of the sticky host action bar. */
+.bq-game-mode .page-live.bq-session-page:has(.bq-answer-review-body .bq-map-viewport){
+ overflow-x:hidden;
+ overflow-y:auto;
+}
+.bq-question-scene:has(.bq-answer-review-body .bq-map-viewport){
+ flex:0 0 auto;
+ height:auto;
+ min-height:0;
+}
+.bq-question-scene:has(.bq-answer-review-body .bq-map-viewport) .bq-answer-review-body{
+ flex:0 0 auto;
+ display:flex;
+ flex-direction:column;
+ min-height:0;
+ height:auto;
+ overflow:visible;
+}
+.bq-question-scene:has(.bq-answer-review-body .bq-map-viewport) .bq-answer-review-body>.bq-question-panel,
+.bq-question-scene:has(.bq-answer-review-body .bq-map-viewport) .bq-answer-review-body>.bq-answers-panel{
+ flex:0 0 auto!important;
+ height:auto!important;
+ min-height:0!important;
+ max-height:none;
+ overflow:visible;
+}
+.bq-question-scene:has(.bq-answer-review-body .bq-map-viewport) .bq-answers-panel .answer-review{
+ flex:none;
+ height:auto;
+ max-height:none;
+ overflow:visible;
+}

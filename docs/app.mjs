@@ -6,6 +6,7 @@ import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName} from './category-model.mjs';
 import {openQuestionState,validQuestionPair,questionMotion} from './question-flow.mjs';
+import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
 import {createHistoryEntry,historyRows,responseStatus,historyCsv} from './history-model.mjs';
@@ -19,6 +20,8 @@ let service=null,game=null,room='',role='landing',view='start',member=null,guest
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let boardId='',boardRevision=0,boardConflict=false;
 let mapCamera={...DEFAULT_MAP_VIEW},mapCameraQuestion='';
+const consumedMapThrows=new Set();let activeMapThrow=null;
+let activeQuestionCover=null;
 const makeBoardId=()=>'b'+uid().slice(1);
 function applyBoardWorkspace(record){boardConflict=false;saveState='Lokal gesichert';boardId=record.id;boardRevision=record.revision;quiz=normalizedQuiz(record.quiz);selected=quiz.questions[0]?.id||'';undoStack=[];redoStack=[];editingBlock='';previewOpen=false;previewRevealed=false;mapPick=null;mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion='';pickedOrder=[];boardPage=0;scorePage=0;historyFilter='';try{sessionStorage.setItem('bq-board-current-tab',boardId);}catch{}studio?.reset?.();}
 function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');studio.flush?.();if(!saveLocal())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(localStorage,id);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
@@ -197,23 +200,73 @@ function watcherMarkup(){
  return `<div class="bq-screen-watcher" aria-hidden="true">${characterMarkup(3)}</div>`;
 }
 function maybeAnimateQuestion(){
- if(!publicState||!['play','live'].includes(view))return;
- const current=publicState.current;
- if(!current||publicState.phase!=='question')return;
- const key=room+':'+publicState.round+':'+current.id;
- if(key===lastAnimatedQuestion)return;
+ const q=publicState?.current;
+ const key=q?.id&&publicState.phase==='question'&&['play','live'].includes(view)
+  ?room+':'+publicState.round+':'+q.id:null;
+ if(activeQuestionCover&&activeQuestionCover.key!==key){activeQuestionCover.cancel();activeQuestionCover=null;}
+ if(!key)return;
  const stage=document.querySelector('.page-live .stage');if(!stage)return;
+ if(activeQuestionCover?.key===key){activeQuestionCover.update(stage);return;}
+ if(key===lastAnimatedQuestion)return;
  lastAnimatedQuestion=key;
  if(reducedCharacterMotion())return;
- const direction=questionMotion(publicState.round,current.id);
- const curtain=document.createElement('div');curtain.className='bq-question-curtain bq-swipe-'+direction;
+ const direction=questionMotion(publicState.round,q.id);
+ const who=CHARACTER_IDS[Math.abs(Number(publicState.round)||0)%CHARACTER_IDS.length];
+ const curtain=document.createElement('div');
+ curtain.className='bq-question-curtain bq-swipe-'+direction+' bq-standalone';
  curtain.setAttribute('aria-hidden','true');
- const grip=document.createElement('span');grip.className='bq-veil-handle';grip.setAttribute('aria-hidden','true');
- curtain.append(grip);stage.append(curtain);
- curtain.addEventListener('animationend',event=>{if(event.target===curtain)curtain.remove()},{once:true});
- setTimeout(()=>curtain.remove(),1600);
+ const handle=document.createElement('span');handle.className='bq-veil-handle';
+ const actor=document.createElement('span');actor.className='bq-curtain-helper bq-actor bq-actor--'+who;
+ const glove=document.createElement('span');glove.className='bq-curtain-glove';
+ curtain.append(handle,actor,glove);document.body.append(curtain);
+ let ended=false,timer=null;
+ const update=()=>{if(ended)return;const bounds=document.querySelector('.page-live .stage')?.getBoundingClientRect();
+  if(bounds)Object.assign(curtain.style,{left:bounds.left+'px',top:bounds.top+'px',width:bounds.width+'px',height:bounds.height+'px'});};
+ const cleanup=()=>{if(ended)return;ended=true;clearTimeout(timer);window.removeEventListener('resize',update);
+  window.removeEventListener('scroll',update,true);curtain.remove();if(activeQuestionCover?.key===key)activeQuestionCover=null;};
+ update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);
+ curtain.addEventListener('animationend',event=>{if(event.target===curtain)cleanup()},{once:true});
+ timer=setTimeout(cleanup,3500);
+ activeQuestionCover={key,update,cancel:cleanup};
 }
-function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){app.innerHTML=landing();return;}
+function removeMapThrowRail(){
+ document.querySelectorAll('.bq-map-question.bq-map-throw-active').forEach(el=>el.classList.remove('bq-map-throw-active'));
+}
+/** The only world-map animation: the actor visibly throws at solution release. */
+function maybeAnimateMapDagger(){
+ const q=publicState?.current;
+ const key=q?.id&&publicState?.phase==='reveal'&&q.type==='map'&&['play','live'].includes(view)
+  ?room+':'+publicState.round+':'+q.id:null;
+ if(activeMapThrow&&activeMapThrow.key!==key){activeMapThrow.handle.cancel();activeMapThrow=null;removeMapThrowRail();}
+ if(!key)return;
+ const marker=document.querySelector('.bq-question-scene .bq-map-pin.is-solution');
+ const viewport=marker?.closest('.bq-map-viewport');
+ if(!viewport||!marker)return;
+ const previouslyShown=consumedMapThrows.has(key)||(()=>{try{return sessionStorage.getItem('bq-map-throw:'+key)==='1'}catch{return false}})();
+ if(previouslyShown&&!activeMapThrow){marker.classList.remove('bq-throw-waiting');return;}
+ if(activeMapThrow?.key===key){
+  viewport.closest('.bq-map-question')?.classList.add('bq-map-throw-active');
+  if(!activeMapThrow.handle.landed)marker.classList.add('bq-throw-waiting');
+  activeMapThrow.handle.rebind(viewport,marker);return;
+ }
+ if(reducedCharacterMotion()||window.matchMedia?.('(forced-colors: active)')?.matches){consumedMapThrows.add(key);return;}
+ // Keep the real world-space answer unchanged. Only reset an off-screen camera.
+ if(marker.hidden)viewport.closest('.bq-map-question')?.querySelector('[data-map-zoom="reset"]')?.click();
+ if(marker.hidden)return;
+ marker.classList.add('bq-throw-waiting');
+ consumedMapThrows.add(key);
+ try{sessionStorage.setItem('bq-map-throw:'+key,'1')}catch{}
+ const actor=THROW_ACTORS[Math.abs(Number(publicState.round)||0)%THROW_ACTORS.length];
+ viewport.closest('.bq-map-question')?.classList.add('bq-map-throw-active');
+ const handle=startMapDaggerThrow({viewport,marker,actor,
+  onLand:()=>{if(publicState?.phase==='reveal'&&publicState?.current?.id===q.id)
+   document.querySelector('.bq-question-scene .bq-map-pin.is-solution')?.classList.remove('bq-throw-waiting');},
+  onDone:()=>{removeMapThrowRail();if(activeMapThrow?.key===key)activeMapThrow=null}
+ });
+ if(handle)activeMapThrow={key,handle};
+ else {removeMapThrowRail();marker.classList.remove('bq-throw-waiting');}
+}
+function render(){const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen'],['live','▦','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Vorschau']]:[['editor','✎','Fragen'],['live','◈','Quizbrett'],['history','▤','Fragenverlauf'],['present','▣','Präsentation'],['teams','♙','Lobby'],['setup','⚙','Einstellungen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
  app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav><div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
@@ -227,6 +280,7 @@ function render(){const app=$('app');document.body.classList.toggle('bq-game-mod
    canPick:canMapPick(),onPick:point=>{if(!canMapPick())return;mapPick=point;schedule();}
   });
  }
+ maybeAnimateMapDagger();
 }
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
