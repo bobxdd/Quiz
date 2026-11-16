@@ -106,7 +106,7 @@ async def main():
    page=await ctx.new_page()
    page.on('pageerror',lambda e:errors.append(str(e)))
    await page.goto(origin)
-   await page.get_by_role('button',name='Quizbrett bearbeiten').wait_for()
+   await page.locator('.bq-legacy-options>summary').wait_for()
    for width,height in SIZES:
     await page.set_viewport_size({'width':width,'height':height})
     report=await audit(page,f'landing-{width}x{height}',[
@@ -115,7 +115,8 @@ async def main():
     ],['.landing-actions button'])
     print(f'PASS landing {width}×{height}',flush=True)
    await page.set_viewport_size({'width':1440,'height':900})
-   await page.get_by_role('button',name='Quizbrett bearbeiten').click()
+   await page.locator('.bq-legacy-options>summary').click()
+    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for()
    # Browser should never expose unopened disclosure controls as interactable elements.
    assert not await page.locator('.se-file-actions:not([open]) .se-file-menu button').first.is_visible()
