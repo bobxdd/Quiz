@@ -3,7 +3,7 @@ The mock transports messages between distinct pages; it does not emulate real IC
 """
 import asyncio,importlib.util,shutil
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_lobby_loader',ROOT/'tests/categories-3_0-browser.py')
 loader=importlib.util.module_from_spec(spec);spec.loader.exec_module(loader)
@@ -38,8 +38,8 @@ async def main():
   await host.locator('[data-action="publish"]').first.click()
   await host.locator('.bq-board-scene').wait_for()
   a=await spawn(ctx,host,code,'Alice',errors)
-  assert await a.locator('.bq-lobby-team').count()==2
-  assert await a.locator('.bq-lobby-create').count()==1
+  await expect(a.locator('.bq-lobby-team')).to_have_count(2)
+  await expect(a.locator('.bq-lobby-create')).to_have_count(1)
   assert await a.locator('[data-action="lobby-ready"]').is_disabled()
   secret=await a.evaluate('JSON.stringify(window.__probe.getGame().guestData)')
   assert 'Pfefferminze' not in secret and '"current"' not in secret
@@ -57,14 +57,14 @@ async def main():
   await host.locator('[data-action="approve"]').first.click()
   await a.wait_for_function("() => window.__probe.info().member?.status==='approved'")
   assert (await a.evaluate('window.__probe.info().member.team'))=='t2'
-  assert await a.locator('.bq-lobby-counter').inner_text()=='1 / 1\nbereit'
+  await expect(a.locator('.bq-lobby-counter')).to_contain_text('1 / 1')
   print('PASS: self-chosen existing team and pre-approval readiness survive host admission',flush=True)
 
   b=await spawn(ctx,host,code,'Bob',errors)
   await b.locator('#bq-new-team').fill('Aurora & Wald')
   await b.locator('#lobby-create-form button[type="submit"]').click()
   await b.locator('.bq-lobby-proposal').wait_for()
-  assert await b.locator('.bq-lobby-team').count()==2
+  await expect(b.locator('.bq-lobby-team')).to_have_count(2)
   await b.wait_for_timeout(210)
   await b.locator('[data-action="lobby-ready"]').click()
   await host.locator('[data-action="approve"]').first.wait_for()
@@ -76,7 +76,7 @@ async def main():
   live=await host.evaluate('window.__probe.info().publicState')
   assert live['teams']['t3']=='Aurora & Wald'
   assert live['scores']['t3']==0
-  colors=await b.evaluate("""() => [...document.querySelectorAll('.bq-lobby-team')].map(x=>getComputedStyle(x).borderTopColor)""")
+  await expect(b.locator('.bq-lobby-team')).to_have_count(3)\n  colors=await b.evaluate("""() => [...document.querySelectorAll('.bq-lobby-team')].map(x=>getComputedStyle(x).borderTopColor)""")
   assert len(colors)==3 and len(set(colors))==3,colors
   print('PASS: host commits a unique new team, three distinct color accents and score baseline',flush=True)
 
@@ -87,7 +87,7 @@ async def main():
   await c.wait_for_function("() => window.__probe.info().member?.status==='approved'")
   assert (await c.evaluate('window.__probe.info().member.team'))=='t3'
   team_stats=await host.locator('.bq-host-team-row').filter(has_text='Aurora & Wald').inner_text()
-  assert '1/2 bereit' in team_stats,team_stats  # Charlie has not pressed ready
+  await expect(host.locator('.bq-host-team-row').filter(has_text='Aurora & Wald')).to_contain_text('1/2 bereit')  # Charlie has not pressed ready
   print('PASS: subsequent players can join a team created in this room',flush=True)
   # Host-created teams use the same capacity/name rules as participant-created ones.
   for team_name,expected_count in [('Host Gold',4),('Host Violett',5)]:
@@ -97,11 +97,11 @@ async def main():
    await host.locator('#bq-host-team-name').fill(team_name)
    await host.locator('#host-team-create-form button[type="submit"]').click()
    await host.wait_for_function('(count)=>Object.keys(window.__probe.info().publicState.teams).length===count',arg=expected_count)
-  assert await host.locator('.bq-host-team-create').count()==0
+  await expect(host.locator('.bq-host-team-create')).to_have_count(0,timeout=10000)
   await a.wait_for_function("() => Object.keys(window.__probe.info().guestLobby?.teams||{}).length===5")
   await a.locator('.bq-lobby-team').nth(4).wait_for(state='visible',timeout=10000)
-  assert await a.locator('.bq-lobby-team').count()==5
-  assert await a.locator('#lobby-create-form').count()==0
+  await expect(a.locator('.bq-lobby-team')).to_have_count(5,timeout=10000)
+  await expect(a.locator('#lobby-create-form')).to_have_count(0,timeout=10000)
   names=await host.evaluate("Object.values(window.__probe.info().publicState.teams)")
   assert len(names)==5 and len(set(names))==5,names
   assert (await host.evaluate('Object.keys(window.__probe.getGame().data.roster).length'))==3
@@ -124,7 +124,7 @@ async def main():
   await c.locator('.bq-shared-team-chat summary').click()
   await c.locator('.chatfeed').get_by_text('Aurora Team Secret').wait_for(timeout=12000)
   await a.locator('.bq-shared-team-chat summary').click()
-  assert await a.locator('.chatfeed').get_by_text('Aurora Team Secret').count()==0
+  await expect(a.locator('.chatfeed').get_by_text('Aurora Team Secret')).to_have_count(0)
   print('PASS: private chat does not follow a player into another team',flush=True)
   
   OUT.mkdir(exist_ok=True)
@@ -160,11 +160,11 @@ async def main():
   print('PASS: game begins and blocks team swaps without altering current question',flush=True)
   # Late arrivals must not see actionable team controls or an actionable host approval.
   late=await spawn(ctx,host,code,'Late Join',errors)
-  assert await late.locator('[data-action="lobby-join"]').count()==0
+  await expect(late.locator('[data-action="lobby-join"]')).to_have_count(0)
   assert await late.locator('[data-action="lobby-ready"]').is_disabled()
   await host.locator('.top-nav [data-view="teams"]').click()
   await host.locator('[data-action="approve"]').first.wait_for()
-  assert await host.locator('[data-action="approve"]').first.is_disabled()
+  await expect(host.locator('[data-action="approve"]').first).to_be_disabled()
   assert 'Spiel läuft' in await host.locator('[data-action="approve"]').first.inner_text()
   print('PASS: late joiners are shown locked lobby, host cannot click invalid admission',flush=True)
   assert not errors,errors
