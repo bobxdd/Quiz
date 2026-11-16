@@ -76,7 +76,8 @@ async def main():
   live=await host.evaluate('window.__probe.info().publicState')
   assert live['teams']['t3']=='Aurora & Wald'
   assert live['scores']['t3']==0
-  await expect(b.locator('.bq-lobby-team')).to_have_count(3)\n  colors=await b.evaluate("""() => [...document.querySelectorAll('.bq-lobby-team')].map(x=>getComputedStyle(x).borderTopColor)""")
+  await expect(b.locator('.bq-lobby-team')).to_have_count(3)
+  colors=await b.evaluate("""() => [...document.querySelectorAll('.bq-lobby-team')].map(x=>getComputedStyle(x).borderTopColor)""")
   assert len(colors)==3 and len(set(colors))==3,colors
   print('PASS: host commits a unique new team, three distinct color accents and score baseline',flush=True)
 
