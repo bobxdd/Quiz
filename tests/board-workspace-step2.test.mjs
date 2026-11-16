@@ -74,3 +74,9 @@ test('editing a board updates its library label without changing identity',()=>{
  persistBoard(store,a.id,a.revision,draft('After'));
  assert.deepEqual(boardList(store).map(x=>[x.id,x.title]),[[ids[0],'After']]);
 });
+
+test('reset action uses per-board session key and cannot erase other boards',async()=>{
+ const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
+ assert.match(app,/localStorage\.removeItem\('bq-session-LOCAL-'\+boardId\)/);
+ assert.doesNotMatch(app,/localStorage\.removeItem\('bq-session-LOCAL'\)/);
+});
