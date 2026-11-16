@@ -7,8 +7,9 @@ export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],
  const v=normalizeMapView(view),css=mapViewCss(v);
  const pinMarkup=(pos,cls,label,img=false)=>{
   const p=mapScreenPosition(pos,v);
-  if(!p||p.x<-4||p.x>104||p.y<-4||p.y>104)return '';
-  return `<span class="bq-map-pin ${cls}" style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':'<span class="bq-map-pin-dot" aria-hidden="true"></span>'}</span>`;
+  if(!p)return '';
+  const offscreen=p.x<-4||p.x>104||p.y<-4||p.y>104;
+  return `<span class="bq-map-pin ${cls}" ${offscreen?'hidden':''} style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':'<span class="bq-map-pin-dot" aria-hidden="true"></span>'}</span>`;
  };
  const privatePin=normalizePoint(point),answer=normalizePoint(solution);
  const action=editable?'data-map-choice="true"':'';
