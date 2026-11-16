@@ -29,6 +29,11 @@ export function revealAnswer(review,id,response){
  const value=response.text.trim().slice(0,800);
  return {...review,entries:{...review.entries,[id]:{...review.entries[id],revealed:true,value}}};
 }
+/** The review UI must not imply an unanswered entry hides a submitted answer. */
+export function answerCardState(entry){
+ if(!entry?.submitted)return 'missing';
+ return entry.revealed?'revealed':'hidden';
+}
 export function reviewIsCurrent(state){
  return !!state&&['review','reveal'].includes(state.phase)&&!!state.answerReview&&state.answerReview.round===state.round;
 }
