@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright, expect
 
 ROOT=Path(__file__).resolve().parents[1]
+(ROOT/'qa-artifacts').mkdir(exist_ok=True)
 spec=importlib.util.spec_from_file_location('bq_categories',ROOT/'tests/categories-3_0-browser.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 install=module.install
