@@ -31,6 +31,7 @@ jobs:
           python -m playwright install --with-deps chromium
           python tests/board-workspace-browser.py
           python tests/map-step3-browser.py
+          python tests/map-step3-peer-browser.py
           python tests/editor-3_1-browser.py
           python tests/categories-3_0-browser.py
       - name: No private quiz files, passwords or Windows packages in repository
