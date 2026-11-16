@@ -254,8 +254,10 @@ test('Step 4 PeerJS: team changes reset readiness, reject spoofed IDs and lock a
  assert.equal(host.data.roster[guest1.uid].team,'t2');
  assert.equal(host.data.members[guest1.uid].ready,false);
  await assert.rejects(guest2.chooseLobbyTeam(room,'__proto__'),/existiert nicht/);
- await assert.rejects(guest2._rpc('lobby-ready',{ready:true,uid:guest1.uid,team:'t1'}).then(async()=>{await sleep(25);if(host.data.members[guest1.uid].ready)throw Error('spoofed');}),/???IMPOSSIBLE/).catch(()=>{}); // replaced with explicit authority assertion below
- assert.equal(host.data.members[guest1.uid].ready,false);
+ await guest2._rpc('lobby-ready',{ready:true,uid:guest1.uid,team:'t1'});
+ await sleep(35);
+ assert.equal(host.data.members[guest1.uid].ready,false,'Spoofed uid must not change another member');
+ assert.equal(host.data.members[guest2.uid].ready,true);
  await host.openQuestion(room,0,host.hostQuiz.questions[0],publicQuestion(host.hostQuiz.questions[0],false),{},0);
  await assert.rejects(guest1.chooseLobbyTeam(room,'t1'),/gesperrt/);
  await assert.rejects(guest2.setLobbyReady(room,true),/gesperrt/);
