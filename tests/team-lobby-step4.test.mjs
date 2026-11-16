@@ -65,7 +65,7 @@ test('Step 4 assets are shipped through the offline cache and HTML',()=>{
  const idx=readFileSync(new URL('../docs/index.html',import.meta.url),'utf8');
  const sw=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
  assert.match(idx,/lobby-ui\.css/);assert.match(sw,/lobby-view\.mjs/);assert.match(sw,/lobby-ui\.css/);
- assert.match(sw,/brainquiz-shell-3\.6\.4/);
+ assert.match(sw,/brainquiz-shell-3\.6\.5/);
 });
 
 test('Host team creation appears for fewer than five teams and never for a filled room',()=>{
