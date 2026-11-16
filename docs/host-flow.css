@@ -124,7 +124,8 @@
  .bq-editor-primary-actions button{flex:1 1 125px}
  .bq-editor-tools>.se-score-mode{order:2;margin-left:0;flex:1 1 120px}
  .bq-editor-tools .bq-editor-extras{order:3}
- .bq-editor-extras-menu{right:auto;left:0}
+ .bq-editor-extras{flex:1 1 100%;min-width:0}
+ .bq-editor-extras-menu{position:relative!important;top:auto!important;right:auto!important;left:auto!important;min-width:0;max-width:100%;width:100%;margin-top:7px;box-shadow:0 5px 13px #0005}
 }
 @media(max-width:365px){
  .bq-host-join-actions{grid-template-columns:1fr 1fr}
