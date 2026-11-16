@@ -68,6 +68,7 @@ async def main():
   # Host the FIRST saved quiz, not the most recently edited second one.
   await page.locator(f'.bq-saved-quiz[data-saved-quiz-id="{first}"] [data-action="host-saved-board"]').click()
   await page.locator('.bq-host-lobby-summary').wait_for(timeout=15000)
+  assert 'Quiz eins' in await page.locator('.bq-host-lobby-summary .bq-host-lobby-title').inner_text(), 'Hosted quiz title is not visible in lobby'
   info=await page.evaluate('window.__probe.info()')
   code=info['room']
   assert len(code)==16 and info['role']=='host'
@@ -120,6 +121,7 @@ async def main():
   await page.locator('.se-board-context').wait_for()
   await page.locator('[data-action="host-current-board"]').click()
   await page.locator('.bq-host-lobby-summary').wait_for(timeout=15000)
+  assert 'Quiz zwei' in await page.locator('.bq-host-lobby-summary .bq-host-lobby-title').inner_text(), 'Second hosted quiz title is not visible'
   again=await page.evaluate('window.__probe.info()')
   assert again['room']!=code and again['publicState']['title']=='Quiz zwei'
   assert (await page.evaluate('window.__probe.getQuiz()'))['questions'][0]['answer']=='Apfel'
