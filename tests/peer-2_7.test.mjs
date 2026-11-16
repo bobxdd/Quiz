@@ -236,6 +236,7 @@ test('Step 4 PeerJS: new team is created atomically by host approval, with uniqu
  assert.equal(host.data.members[guest.uid].ready,true);
  assert.equal(host.data.members[guest.uid].createdTeam,true);
  assert.equal(guest.guestData.lobby.colors.t3,'#a7c989');
+ await sleep(185);
  await assert.rejects(guest.createLobbyTeam(room,'Bad Team'),/bereits ein eigenes Team/);
  const other=new PeerGame();sessionStorage.clear();await other.connect(room,'Ralf');
  await other.chooseLobbyTeam(room,'t1');
