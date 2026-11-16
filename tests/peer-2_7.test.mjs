@@ -112,3 +112,89 @@ test('Eight distinct guest slots are accepted; a ninth cannot be approved',async
  await sleep(60);assert.equal(guests[8].guestData.members[guests[8].uid].status,'pending');
  guests.forEach(guest=>guest.shutdown());host.shutdown();
 });
+
+test('QA part 2: waiting player receives no game state and cannot submit, buzz, chat, score or reveal',async()=>{
+ const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
+ const awaiting=new PeerGame();await awaiting.connect(room,'Awaiting');
+ assert.equal(awaiting.guestData.public,null);
+ assert.deepEqual(awaiting.guestData.roster,{});
+ assert.deepEqual(awaiting.guestData.messages,{});
+ for(const action of ['answer','buzz','message','pick','score','reveal','hostAssign','replacePublic']){
+  await assert.rejects(awaiting._rpc(action,{round:0,text:'INJECT',qid:quiz.questions[0].id}),/Hostfreigabe erforderlich/);
+ }
+ assert.equal(host.data.public.phase,'board');
+ assert.deepEqual(host.data.responses,{});
+ awaiting.shutdown();host.shutdown();
+});
+
+test('QA part 2: map replies are private and editable only in the exact current round',async()=>{
+ const {host,guest1,guest2}=await setup();
+ const first=structuredClone(host.hostQuiz.questions[0]);
+ Object.assign(first,{type:'map',roundMode:'written',mapTargetSet:true,mapTargetX:63.245,mapTargetY:28.674,answer:'NEVER SHOW'});
+ const participants={[guest1.uid]:{name:'Alice'},[guest2.uid]:{name:'Bob'}};
+ await host.openQuestion(room,0,first,publicQuestion(first,false),participants,Date.now()+120000);
+ await sleep(55);
+ for(const guest of [guest1,guest2]){
+  const view=JSON.stringify(guest.guestData);
+  for(const secret of ['NEVER SHOW','63.245','28.674','mapTargetSet'])assert.ok(!view.includes(secret),'Private map answer leaked: '+secret);
+ }
+ await assert.rejects(guest1._rpc('answer',{round:0,text:'@map:20,20'}),/nicht offen/);
+ await assert.rejects(guest1._rpc('answer',{round:1,text:'@map:150,20'}),/außerhalb/);
+ await guest1.answer(room,1,'t2','@map:25.225,35.335');
+ await sleep(65);
+ assert.equal(host.data.responses['1'][guest1.uid].team,'t1');
+ assert.equal(JSON.stringify(guest2.guestData).includes('@map:25.225,35.335'),false);
+ await guest1.answer(room,1,'t2','@map:75.75,65.65');
+ assert.equal(host.data.responses['1'][guest1.uid].text,'@map:75.75,65.65');
+ assert.equal(Object.keys(host.data.responses['1']).length,1);
+ await host.updateCurrent(room,1,first.id,{phase:'review'},['question']);
+ await assert.rejects(guest1.answer(room,1,'t1','@map:10,10'),/nicht offen/);
+ await host.updateCurrent(room,1,first.id,{phase:'reveal'},['review']);
+ const second=structuredClone(host.hostQuiz.questions[1]);second.roundMode='written';
+ await host.openQuestion(room,1,second,publicQuestion(second,false),participants,0);
+ await sleep(65);
+ assert.equal(host.data.public.answerReview,null);
+ assert.equal(host.data.public.current.id,second.id);
+ assert.equal(host.data.public.board[first.id].used,true);
+ assert.equal(host.data.public.board[second.id].used,true);
+ assert.equal(guest1.guestData.responses['1'],undefined);
+ assert.equal(guest1.guestData.responses['2'],undefined);
+ await assert.rejects(guest1.answer(room,1,'t1','STALE'),/nicht offen/);
+ assert.ok(!JSON.stringify(guest2.guestData).includes('@map:75.75,65.65'));
+ host.shutdown();guest1.shutdown();guest2.shutdown();
+});
+
+test('QA part 2: textual responses are single-submit, and failed cross-user actions do not change state',async()=>{
+ const {host,guest1,guest2}=await setup(),question=structuredClone(host.hostQuiz.questions[0]);
+ question.roundMode='written';question.type='text';
+ const expected={[guest1.uid]:{name:'Alice'},[guest2.uid]:{name:'Bob'}};
+ await host.openQuestion(room,0,question,publicQuestion(question,false),expected,0);
+ await guest1.answer(room,1,'t2','Answer 1');
+ await assert.rejects(guest1.answer(room,1,'t1','Changed answer'),/bereits abgegeben/);
+ await assert.rejects(guest1._rpc('answer',{round:1,text:''}),/leer sein/);
+ await assert.rejects(guest2._rpc('answer',{round:3,text:'Future answer'}),/nicht offen/);
+ await assert.rejects(guest2._rpc('score',{team:'t2',delta:999}),/nicht erlaubt/);
+ assert.deepEqual(Object.keys(host.data.responses['1']),[guest1.uid]);
+ assert.equal(host.data.responses['1'][guest1.uid].text,'Answer 1');
+ assert.equal(host.data.public.scores.t2,0);
+ host.shutdown();guest1.shutdown();guest2.shutdown();
+});
+
+test('QA part 2: first buzzer has exclusive ownership, wrong judgement blocks same player but not others',async()=>{
+ const {host,guest1,guest2}=await setup(),question=host.hostQuiz.questions[0];
+ await host.openQuestion(room,0,question,publicQuestion(question,false),{},0);
+ const outcomes=await Promise.all(Array.from({length:12},(_,i)=>(i%2?guest1:guest2).buzzer(room,1,'wrongTeam','wrongName')));
+ assert.equal(outcomes.filter(Boolean).length,1);
+ const winner=host.data.buzzers['1'];
+ assert.ok(winner.uid===guest1.uid||winner.uid===guest2.uid);
+ const first=winner.uid===guest1.uid?guest1:guest2;
+ const second=first===guest1?guest2:guest1;
+ assert.equal(await second.buzzer(room,1,'ignored','ignored'),false);
+ await assert.rejects(first._rpc('reveal',{answer:'ILLEGAL'}),/nicht erlaubt/);
+ await host.judgeBuzzer(room,1,winner.uid,'wrong');
+ await assert.rejects(first.buzzer(room,1,'ignored','ignored'),/gesperrt/);
+ assert.equal(await second.buzzer(room,1,'ignored','ignored'),true);
+ assert.equal(host.data.buzzers['1'].uid,second.uid);
+ assert.equal(host.data.public.buzzerJudgements['1'].uid,winner.uid);
+ host.shutdown();guest1.shutdown();guest2.shutdown();
+});
