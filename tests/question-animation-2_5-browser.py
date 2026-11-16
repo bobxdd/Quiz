@@ -43,9 +43,9 @@ async def main():
   assert await page.locator('.bq-question-scene .stage').evaluate('(e)=>e.getBoundingClientRect().width')>900
   assert await page.locator('.bq-question-curtain').count()==1
   assert await page.locator('.bq-question-curtain').evaluate('(e)=>getComputedStyle(e).animationName.includes("bq-curtain")')
-  assert await page.locator('.bq-curtain-actor').evaluate('(e)=>getComputedStyle(e).backgroundImage.includes("data:image/webp")')
-  assert await page.locator('.bq-scene-cameos .bq-actor').count()==1
-  assert await page.locator('.bq-scene-cameos .bq-actor').evaluate_all('(els)=>els.every(e=>getComputedStyle(e).backgroundImage.includes("data:image/webp"))')
+  assert await page.locator('.bq-curtain-actor').count()==0
+  assert await page.locator('.bq-scene-cameos').count()==0
+  assert await page.locator('.bq-action-actor').count()==0
   await page.screenshot(path=str(root/'screenshots/Vorschau_2_5_Frage_Aufdeckung.png'))
   await page.wait_for_timeout(1850)
   assert await page.locator('.bq-question-curtain').count()==0
@@ -65,5 +65,5 @@ async def main():
   await reduce.locator('.bq-question-scene .stage').wait_for(timeout=10000)
   assert await reduce.locator('.bq-question-curtain').count()==0
   await browser.close()
-  print('PASS 2.5: Question curtain runs once per round, clean DOM after animation, original scene actors loaded, no repeat on render, next round animates, reduced-motion instant reveal')
+  print('PASS 2.5: Question curtain runs once per round, clean DOM after animation, no emotion sprites, no repeat on render, next round animates, reduced-motion instant reveal')
 if __name__=='__main__':asyncio.run(main())
