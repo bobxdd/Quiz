@@ -31,7 +31,7 @@ async def main():
     await route.fulfill(status=200,content_type='text/javascript',body=patched)
    await page.route('**/app.mjs',route_app)
    await page.goto(f'http://127.0.0.1:{server.server_port}/')
-   await page.get_by_role('button',name='Quizbrett bearbeiten').wait_for(timeout=12000)
+   await page.locator('.bq-legacy-options>summary').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos,.bq-action-actor').count()==0
    await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
