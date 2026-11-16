@@ -70,7 +70,11 @@ async def main():
   print('PASS: host selected saved quiz directly in team lobby; published lock and solutions remain host-only',flush=True)
 
   # A participant sees that room's teams and title but not private answer.
-  guest=await ctx.new_page();guest.on('pageerror',lambda e:errors.append(str(e)))
+  # The PeerJS mock links separate real DOM windows through opener, just like
+  # the existing multiplayer fixture; a detached ctx.new_page() cannot see it.
+  async with ctx.expect_page() as opening:
+   await page.evaluate("window.open('about:blank','_blank')")
+  guest=await opening.value;guest.on('pageerror',lambda e:errors.append(str(e)))
   await install(guest)
   await guest.locator('#join-room').fill(code)
   await guest.locator('#join-name').fill('Alex')
