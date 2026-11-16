@@ -445,3 +445,25 @@ body{
 @media(prefers-reduced-transparency:reduce){.topbar{background:#20242b}.glass{backdrop-filter:none;-webkit-backdrop-filter:none}}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.topbar{background:#20242b}}
 @media print{.bq-pixel-mascot{display:none}}
+
+/* Saved-quiz-first host workflow. The selected quiz, never an empty room,
+ * determines the questions when a host opens a new multiplayer lobby. */
+.start-grid:has(.bq-saved-quiz-home){grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);align-items:start}
+.bq-saved-quiz-home{min-width:0}
+.bq-saved-quiz-home-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.bq-saved-quiz-home-head h2{margin-bottom:4px}
+.bq-saved-quiz-home-head .small{margin:0;color:var(--soft)}
+.bq-saved-quiz-home .bq-landing-boards{margin-top:17px;min-width:0;border:1px solid var(--edge);border-radius:12px;padding:10px;background:#171c2266}
+.bq-saved-quiz-home .bq-landing-boards>summary{cursor:pointer;font-weight:750;color:var(--white);padding:6px 6px 10px}
+.bq-saved-quiz-home .bq-landing-boards-list{display:grid;grid-template-columns:1fr;gap:8px;margin-top:2px}
+.bq-saved-quiz{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;border:1px solid #62707855;border-radius:10px;background:linear-gradient(115deg,#313a414a,#1b252ba6)}
+.bq-saved-quiz-info{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 180px}
+.bq-saved-quiz-info strong{color:#e6ebed;font-size:15px;overflow-wrap:anywhere}
+.bq-saved-quiz-info small{color:var(--soft);font-size:11px}
+.bq-saved-quiz-actions{display:flex;flex-wrap:wrap;gap:8px}
+.bq-saved-quiz-actions .btn{min-height:39px}
+.bq-saved-quiz-actions .btn.primary{background:#496b62;color:#f3fbf7;border-color:#6c9789;box-shadow:inset 0 1px #ffffff21}
+.bq-saved-quiz-secondary{margin-top:16px;border-top:1px solid var(--edge);padding-top:13px;display:flex;gap:9px;flex-wrap:wrap}
+.bq-saved-quiz-secondary .btn{font-size:12px;background:#252b30;color:#b5c2c5}
+@media(max-width:900px){.start-grid:has(.bq-saved-quiz-home){grid-template-columns:minmax(0,1fr)}}
+@media(max-width:490px){.bq-saved-quiz-actions{width:100%}.bq-saved-quiz-actions .btn{flex:1 1 0}.bq-saved-quiz-home-head>.btn{width:100%}}
