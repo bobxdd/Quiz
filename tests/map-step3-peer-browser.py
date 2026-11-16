@@ -132,8 +132,33 @@ async def main():
   await expect(second.locator('.review-card.is-hidden')).to_have_count(1,timeout=12000)
   assert '@map:39' not in await second.locator('.bq-question-scene').inner_text()
   print('PASS: review separates absent responses from private submitted answers for two guests',flush=True)
+  # Only this guest uses normal motion: all earlier privacy/layout checks keep the
+  # existing reduced-motion baseline, but the live reveal must show the throw.
+  await guest.emulate_media(reduced_motion='no-preference')
   await host.locator('[data-action="reveal"]').first.click()
-  await guest.locator('.bq-map-pin.is-solution img').wait_for(timeout=12000)
+  await expect(guest.locator('.bq-map-throw-layer')).to_have_count(1,timeout=12000)
+  await expect(guest.locator('.bq-map-throw-actor')).to_have_count(1)
+  await expect(guest.locator('.bq-map-throw-arm')).to_have_count(1)
+  assert not await guest.locator('.bq-map-pin.is-solution').is_visible(),'Solution marker leaked before dagger impact'
+  geometry=await guest.locator('.bq-map-throw-layer').evaluate('''layer=>{
+   const marker=document.querySelector('.bq-map-pin.is-solution');
+   const viewport=marker.closest('.bq-map-viewport');
+   const box=viewport.getBoundingClientRect();
+   return {x:Number(layer.dataset.targetX),y:Number(layer.dataset.targetY),
+    expectedX:box.left+box.width*parseFloat(marker.style.left)/100,
+    expectedY:box.top+box.height*parseFloat(marker.style.top)/100,
+    actor:layer.querySelector('.bq-map-throw-actor')?.className,
+    pointer:getComputedStyle(layer).pointerEvents};
+  }''')
+  assert abs(geometry['x']-geometry['expectedX'])<1 and abs(geometry['y']-geometry['expectedY'])<1,geometry
+  assert geometry['pointer']=='none',geometry
+  await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-windup.png'),animations='allow')
+  await guest.wait_for_timeout(2400)
+  assert await guest.locator('.bq-map-throw-flight').count()==1,'Flying dagger missing'
+  await guest.screenshot(path=str(ROOT/'qa-artifacts/step6-dagger-flight.png'),animations='allow')
+  await guest.locator('.bq-map-pin.is-solution img').wait_for(state='visible',timeout=14000)
+  await expect(guest.locator('.bq-map-throw-layer')).to_have_count(0,timeout=10000)
+  print('PASS Step 6: visible character arm throw, flying dagger, accurate marker landing, no input obstruction',flush=True)
   assert await guest.locator('.bq-map-pin.is-solution img').evaluate('(img)=>img.complete&&img.naturalWidth>0'),'Pixel dagger missing in two-client view'
   released=await guest.evaluate('window.__probe.info().publicState.current')
   assert abs(released['mapTargetX']-67.321)<.001
