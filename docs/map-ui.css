@@ -1,14 +1,5 @@
 /* BrainQuiz 3.4 – self-hosted world-map quiz and reusable image-imposter presentation. */
 .se-scene{position:relative}
-.se-world-map{position:absolute;left:8%;top:27%;width:84%;height:65%;border:2px solid rgba(149,185,174,.6);border-radius:12px;overflow:hidden;background:#132532;box-shadow:0 8px 26px rgba(0,0,0,.27);isolation:isolate;touch-action:manipulation}
-.se-world-map img{width:100%;height:100%;display:block;object-fit:fill;pointer-events:none;user-select:none}
-.se-world-map[data-map-choice]{cursor:crosshair;outline-offset:4px}
-.se-world-map[data-map-choice]:focus-visible{outline:3px solid #fff1c5}
-.bq-pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-90%);font-size:clamp(18px,2.4vw,29px);line-height:1;pointer-events:none;filter:drop-shadow(1px 3px 4px #000);z-index:3}
-.bq-pin-self{color:#ffdaa1}
-.bq-pin-public{font-size:22px;filter:drop-shadow(1px 2px 3px #000)}
-.bq-pin-solution{color:#f6d47e;font-size:38px;text-shadow:0 0 10px #e5b34e}
-.se-kind-image.se-imposter-image{outline:3px solid #eabf77;box-shadow:0 0 18px rgba(230,180,90,.4)}
 .se-imposter-label{position:absolute;bottom:4px;left:4px;right:4px;text-align:center;z-index:3;font-size:clamp(10px,1.25vw,16px);font-weight:800;letter-spacing:.03em;color:#f8e5bb;background:#533b48;padding:5px}
 .bq-guest-mode p,.bq-host-main-status{font-size:clamp(14px,1.15vw,19px);line-height:1.45}
 .bq-map-hint,.bq-map-result{font-size:clamp(14px,1.1vw,18px);font-weight:600;line-height:1.4;margin:8px 0}
@@ -17,8 +8,7 @@
 .bq-shared-team-chat[open]{width:min(420px,calc(100vw - 24px));max-height:min(75vh,540px);overflow:auto}
 .bq-shared-team-chat .glass{border:0;box-shadow:none;background:none;padding:8px}
 .bq-shared-team-chat .chatfeed{max-height:260px;overflow:auto}
-@media(max-width:680px){.bq-shared-team-chat{top:76px;right:8px}.se-world-map{left:3%;width:94%;top:30%;height:60%}.bq-pin{font-size:19px}.bq-pin-solution{font-size:28px}}
-@media(prefers-reduced-motion:reduce){.bq-pin,.se-world-map{transition:none!important;animation:none!important}}
+@media(max-width:680px){.bq-shared-team-chat{top:76px;right:8px}}
 /* The shared team chat overlays the board while open without blocking the quiz when closed. */
 .bq-board-scene{isolation:auto;position:relative}
 .bq-board-scene:has(.bq-shared-team-chat[open]){z-index:60}
