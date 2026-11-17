@@ -407,7 +407,7 @@ export function createStudioEditor(api){
   root.addEventListener('keydown',event=>{
    if((menu||libraryMenu)&&event.key==='Escape'){event.preventDefault();menu=null;libraryMenu=null;draw();requestAnimationFrame(()=>document.querySelector(sel?`[data-se-element="${sel}"]`:'.se-scene')?.focus({preventScroll:true}));return;}
    if(event.target.matches?.('.se-editor-pane-tabs [role="tab"]')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
-     event.preventDefault();const pane=event.key==='ArrowLeft'||event.key==='Home'?'question':'answer';
+     event.preventDefault();const pane=event.key==='Home'?'question':event.key==='End'?'answer':event.target.dataset.pane==='question'?'answer':'question';
      onAction('editor-pane',{dataset:{pane}});return;
     }
    if(menu&&event.target.closest('.se-context')){
