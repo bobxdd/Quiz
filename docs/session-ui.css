@@ -378,3 +378,10 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-sfx-previews{display:flex;flex-wrap:wrap;gap:5px}
 .bq-sfx-previews .btn{font-size:11px;min-height:32px}
 @media(max-width:520px){.bq-sfx-menu{margin-right:2px}.bq-sfx-menu>summary{width:34px;height:34px}}
+
+/* Keep opened audio panel above question/canvas and inside small phone viewports. */
+.topbar:has(.bq-sfx-menu[open]){position:relative!important;z-index:500!important;overflow:visible!important}
+@media(max-width:620px){
+ .bq-sfx-panel{position:fixed;top:64px;left:9px;right:9px;width:auto;
+  max-height:calc(100dvh - 78px);overflow:auto}
+}
