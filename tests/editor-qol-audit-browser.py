@@ -35,6 +35,11 @@ async def main():
   assert await page.evaluate("""() => [...document.querySelectorAll('.se-editor-pane-tabs [role=tab]')].every(t=>!!document.getElementById(t.getAttribute('aria-controls')))""")
   await page.locator('#se-editor-tab-answer').press('ArrowLeft')
   await expect(page.locator('#se-editor-tab-question')).to_be_focused()
+  # Two-tab keyboard navigation wraps in both directions at each end.
+  await page.locator('#se-editor-tab-question').press('ArrowLeft')
+  await expect(page.locator('#se-editor-tab-answer')).to_be_focused()
+  await page.locator('#se-editor-tab-answer').press('ArrowRight')
+  await expect(page.locator('#se-editor-tab-question')).to_be_focused()
   await page.locator('#se-editor-tab-question').press('End')
   await expect(page.locator('#se-editor-tab-answer')).to_be_focused()
   print('PASS: keyboard ArrowRight/ArrowLeft/End preserves focus and each tab controls a real panel')
