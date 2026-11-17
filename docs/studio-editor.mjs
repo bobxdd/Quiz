@@ -1,4 +1,5 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
+import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
@@ -8,7 +9,7 @@ import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normaliz
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
  let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='';
- let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas';
+ let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas',editorPane='question';
  let mapCamera={...DEFAULT_MAP_VIEW},mapQuestionId='';
  const q=()=>api.getQuestion();
  const quiz=()=>api.getQuiz();
@@ -66,8 +67,7 @@ export function createStudioEditor(api){
   ${scene.template==='map'?`<div class="se-subpanel bq-map-host-point"><h4>Geheimer Zielpunkt (Pflicht)</h4><p>${item.mapTargetSet?'✓ Dolch wurde auf der Karte platziert.':'⚠ Noch kein Zielpunkt gewählt. Zum Veröffentlichen ist ein Pin erforderlich.'}</p><p class="se-muted">Öffne „Bearbeiten“ und tippe auf die graue Weltkarte. Mit +, −, Mausrad oder zwei Fingern kannst du vorher heranzoomen. Der Dolch markiert deinen Antwortpunkt. Teilnehmer sehen ihn erst nach der Lösung.</p>${item.mapTargetSet?`<div class="se-inline"><strong>Position: ${Number(item.mapTargetX).toFixed(3)} / ${Number(item.mapTargetY).toFixed(3)}</strong><button type="button" data-se-action="map-clear">Pin entfernen</button></div>`:''}</div>`:''}
   ${scene.template==='map'?input('mapPrompt','Frage über der Weltkarte',item.prompt||'',{rows:2}):''}
   ${scene.template==='audio'?`${input('audioStart','Start im Original (Sekunden)',item.audioStart||0,{kind:'number',min:0,step:0.5})}${input('audioDuration','Ausschnitt (1–12 Sekunden)',item.audioDuration||8,{kind:'number',min:1,max:12})}<label class="se-field"><span>MP3 / WAV / OGG auswählen</span><input type="file" accept=".mp3,audio/mpeg,.wav,audio/wav,.ogg,audio/ogg" data-se-upload="audio"></label><p class="se-muted">MP3 wird in einen kompakten Clip umgewandelt. Im Live-Spiel startet und wiederholt nur der Host; alle können währenddessen buzzern.</p>${item.audio?`<audio controls src="${item.audio}"></audio>`:''}`:''}
-  ${!['multiple','order','map'].includes(scene.template)?input('answer','Musterlösung (nur Host)',item.answer||'',{rows:2}):''}
-  <details class="se-extras"><summary>Weitere Angaben & Tipps (1–4)</summary>${scene.template==='hints'?'<p class="se-muted">Die vier Tipps bearbeitest du direkt in der Fragenfläche. Ihr Aufdeckzeitpunkt ist bei jedem Tipp einstellbar.</p>':`<p class="se-muted">Optional: bis zu vier Tipps, die der Host einzeln veröffentlicht.</p>${[0,1,2,3].map(i=>input('hint-'+i,`Tipp ${i+1}`,item.hints?.[i]||'',{rows:2})).join('')}`} ${input('explanation','Erklärung bei Auflösung',item.explanation||'',{rows:3})}${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:600})}</details></section>`;
+  <details class="se-extras"><summary>Weitere Angaben & Tipps (1–4)</summary>${scene.template==='hints'?'<p class="se-muted">Die vier Tipps bearbeitest du direkt in der Fragenfläche. Ihr Aufdeckzeitpunkt ist bei jedem Tipp einstellbar.</p>':`<p class="se-muted">Optional: bis zu vier Tipps, die der Host einzeln veröffentlicht.</p>${[0,1,2,3].map(i=>input('hint-'+i,`Tipp ${i+1}`,item.hints?.[i]||'',{rows:2})).join('')}`} ${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:600})}</details></section>`;
   if(!el)return `${base}<section class="se-properties"><h3>Element</h3><p class="se-muted">Ein Element auf der Fragenfläche anklicken.</p></section>`;
   return `${base}<section class="se-properties"><div class="se-sectionhead"><h3>Ausgewähltes Element</h3><div class="se-inline"><button type="button" data-se-action="duplicate" title="Duplizieren">⧉</button><button type="button" data-se-action="remove" title="Entfernen">✕</button></div></div><div class="se-chip">${escape(el.kind.toUpperCase())} ${el.letter?`· ${escape(el.letter)}`:''}</div>
   ${el.kind!=='image'?input('text','Inhalt',el.text,{rows:3}):`<label class="se-field" data-se-upload-zone="image"><span>Bilddatei (PNG/JPG/WebP)</span><small class="se-drop-help">Bild hier ablegen oder auswählen</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="image"></label>${input('alt','Bildbeschreibung',el.alt||'')}`}
@@ -81,6 +81,34 @@ export function createStudioEditor(api){
   <div class="se-inline"><button type="button" data-se-action="layer-back">Nach hinten</button><button type="button" data-se-action="layer-front">Nach vorn</button></div>
   <p class="se-muted">Mit der Maus ziehen oder die X-/Y-Felder verwenden. Pfeiltasten verschieben das gewählte Element.</p></section>`;
  }
+
+ function answerEditor(item){
+  const info=answerViewContent(item),ready=hasRequiredAnswer(item),automatic=!!(info.text||info.image)&&!item.answerText?.trim()&&!item.answerImage;
+  const previewMap=item.type==='map'&&item.mapTargetSet?
+   '<div class="se-answer-map-preview"><h4>Kartenlösung</h4>'
+    +renderScene(item.scene,{revealed:true,mapView:mapCamera,mapSolution:normalizePoint({x:item.mapTargetX,y:item.mapTargetY})})
+    +'</div>':'';
+  const currentText=item.answerText||(!['multiple','order','estimate','map','imposter'].includes(item.type)?item.answer||'':'');
+  return '<section class="se-answer-tab-content" id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" tabindex="0">'
+   +'<div class="se-answer-sectionhead"><div><span class="se-eyebrow">SCHRITT 2 · VERPFLICHTEND</span><h3>Antwort gestalten</h3>'
+   +'<p>Diese eigenständige Ansicht erscheint erst, wenn der Host die Lösung freigibt oder eine Buzzerantwort als richtig bewertet.</p></div>'
+   +'<span class="se-answer-readiness '+(ready?'is-ready':'is-missing')+'" role="status">'+(ready?'✓ Antwort bereit':'⚠ Antwort fehlt')+'</span></div>'
+   +'<div class="se-answer-edit-grid"><div class="se-answer-fields">'
+   +'<label class="se-field"><span>Antworttext</span><textarea id="se-answer-text" data-se-field="answerText" rows="4" maxlength="2000" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
+   +'<p class="se-muted">Der Text ist optional, wenn ein Antwortbild vorhanden ist. Du kannst aber auch beides gleichzeitig verwenden.</p>'
+   +'<label class="se-field se-answer-upload" data-se-upload-zone="answer-image"><span>Antwortbild · PNG, JPG oder WebP</span>'
+   +'<small class="se-drop-help">Bild hier ablegen oder auswählen (max. 6 MB Original, wird verkleinert)</small>'
+   +'<input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="answer-image"></label>'
+   +(item.answerImage?'<button type="button" class="se-answer-remove" data-se-action="answer-image-remove">✕ Antwortbild entfernen</button>':'')
+   +input('answerImageAlt','Bildbeschreibung für Barrierefreiheit',item.answerImageAlt||'')
+   +input('explanation','Zusätzliche Erklärung (optional)',item.explanation||'',{rows:3})
+   +(automatic?'<p class="se-muted">Die vorhandene Musterlösung dieses Fragetyps wird automatisch übernommen. Du kannst sie mit eigenem Text oder einem Bild ergänzen.</p>':'')
+   +(!ready?'<p class="se-answer-warning" role="alert">Vor dem Veröffentlichen bitte mindestens Text oder ein Bild für die Antwort hinterlegen.</p>':'')
+   +'</div><div class="se-answer-live-preview"><span class="se-eyebrow">VORSCHAU · SO SEHEN ALLE DIE LÖSUNG</span>'
+   +renderAnswerView(item,{preview:true})+previewMap
+   +'</div></div></section>';
+ }
+
  function contextMenuHTML(){
   if(!menu||preview)return '';
   const el=find();const actions=el?
