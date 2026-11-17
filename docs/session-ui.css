@@ -385,3 +385,18 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
  .bq-sfx-panel{position:fixed;top:64px;left:9px;right:9px;width:auto;
   max-height:calc(100dvh - 78px);overflow:auto}
 }
+
+
+/* Quiz master’s verdict is visible to every participant before the next tile. */
+.bq-quiz-verdict{
+ display:flex;flex-direction:column;gap:5px;align-items:flex-start;text-align:left;
+ background:rgba(42,60,56,.85);border:1px solid rgba(140,197,174,.55);
+ border-radius:11px;padding:10px 14px;margin:3px 0 10px;color:#e3eee9;
+}
+.bq-quiz-verdict strong{font-size:clamp(15px,1.5vw,19px);line-height:1.35}
+.bq-quiz-verdict span{font-size:13px;font-weight:650}
+.bq-quiz-verdict small{font-size:11px;line-height:1.45;color:#b6c9c2}
+.bq-quiz-verdict.is-wrong{background:rgba(58,42,43,.85);border-color:rgba(220,148,153,.46)}
+.bq-quiz-verdict.is-wrong strong{color:#f1b7b6}
+.bq-question-panel .answer{margin-top:12px}
+@media(max-width:720px){.bq-quiz-verdict{padding:8px 11px}.bq-quiz-verdict strong{font-size:15px}}
