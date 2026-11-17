@@ -287,3 +287,63 @@ test('Host can create teams directly; guest cannot bypass host rights, five-team
  assert.equal(Object.keys(host.data.public.teams).length,5);
  guest.shutdown();host.shutdown();
 });
+
+
+test('Correct buzzer judgement reveals the complete answer and score in one host snapshot to all guests',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const q=host.hostQuiz.questions[0];
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0);
+  await sleep(70);
+  assert.equal(host.data.public.current.answer,undefined,'unanswered solution must remain host-only');
+  assert.equal(guest1.guestData.public.current.answer,undefined);
+  assert.equal(guest2.guestData.public.current.answer,undefined);
+  assert.equal(await guest1.buzzer(room,'1','spoof team','spoof name'),true);
+  const buzzer=host.data.buzzers['1'];assert.equal(buzzer.uid,guest1.uid);
+  const before=host.data.public.scores.t1;
+  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct'),/Lösungsfreigabe/);
+  assert.equal(host.data.public.phase,'question','failed reveal must not award points');
+  assert.equal(host.data.public.scores.t1,before);
+  const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};
+  const out=await host.judgeBuzzer(room,1,guest1.uid,'correct',patch);
+  assert.equal(out.delta,100);
+  assert.equal(host.data.public.phase,'reveal');
+  assert.equal(host.data.public.current.answer,q.answer);
+  assert.equal(host.data.public.scores.t1,before+100);
+  assert.equal(host.data.public.buzzerResolved['1'].uid,guest1.uid);
+  await sleep(95);
+  for(const guest of [guest1,guest2]){
+   assert.equal(guest.guestData.public.current.answer,q.answer,'guest must see answer after correct host judgement');
+   assert.equal(guest.guestData.public.phase,'reveal','phase and solution must arrive together');
+   assert.equal(guest.guestData.public.scores.t1,before+100);
+  }
+  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht offen/);
+  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct',patch),/Buzzer nicht mehr aktuell|Buzzer wurde/);
+  // The host controls the move to the next question even after auto-reveal.
+  await host.updateCurrent(room,1,q.id,{phase:'board',current:null},['reveal']);
+  assert.equal(host.data.public.phase,'board');
+  assert.equal(host.data.public.current,undefined);
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+test('A wrong buzzer decision never exposes the answer and another team can try',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const q=host.hostQuiz.questions[0];
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0);
+  await sleep(60);
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  const wrong=await host.judgeBuzzer(room,1,guest1.uid,'wrong');
+  assert.equal(wrong.delta,-50);
+  assert.equal(host.data.public.phase,'question');
+  assert.equal(host.data.public.current.answer,undefined);
+  await sleep(70);
+  assert.equal(guest2.guestData.public.current.answer,undefined);
+  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true);
+  const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};
+  await host.judgeBuzzer(room,1,guest2.uid,'correct',patch);
+  assert.equal(host.data.public.current.answer,q.answer);
+  assert.equal(host.data.public.scores.t1,-50);
+  assert.equal(host.data.public.scores.t2,100);
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
