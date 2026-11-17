@@ -1,4 +1,5 @@
 import {canBuzz,roundMode,scoreMode} from './round-rules.mjs';
+import {createSoundEffects} from './sound-effects.mjs';
 import {boardList,createBoard,loadBoard,persistBoard,resumeBoard,selectBoard} from './board-workspace.mjs';
 import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,mapAnswerDistances,formatMapDistanceKm} from './map-tools.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
@@ -16,6 +17,7 @@ import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks
 import {sceneForPublicState,isBoardCellPlayed,pageBoardColumns,VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,isAudioData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
 const $=id=>document.getElementById(id),configured=true; // PeerJS/WebRTC requires no Firebase setup.
 const hostActionLease=createActionLease();
+const sfx=createSoundEffects();let buzzWatchReady=false;
 let service=null,game=null,room='',role='landing',view='start',member=null,guestLobby=null,publicState=null,members={},roster={},presence={},buzzers={},responses={},messages={},myResponse=null,quiz=emptyQuiz(),selected='',chatTeam='ALL',connected=false,guestListeners=[],guestTeam='',responseUnsub=null,watchingRound=-1,renderQueued=false,lastMsgTime=0,loadedSession=false,pickedOrder=[],previewOpen=false,previewRevealed=false,previewSceneStep=0,previewImage='',editingBlock='',editorSearch='',undoStack=[],redoStack=[],lastEditAt=0,saveState='Gespeichert',settingsExpanded=false,inspectorExpanded=false,quizMetaExpanded=false,scoreTarget='',picks={},offlineRound=0,quickSetExpanded=false,reviewStartPending=-1,questionHistory={},historyFilter='',guestChoice='',reviewPointsOpen=false,openingQuestion=false,lastAnimatedQuestion='',mapPick=null;
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let boardId='',boardRevision=0,boardConflict=false;
@@ -221,16 +223,51 @@ async function publishAllAnswers(){
  }
  await game.updateCurrent(room,Number(publicState.round),publicState.current.id,{...Object.fromEntries(Object.entries(board.entries||{}).filter(([key,item])=>item.revealed).map(([key,item])=>['answerReview/entries/'+key,item]))},['review']);
 }
-function listenRoom(){game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;reviewStartPending=-1;questionHistory={};
+
+function publicAudioEvents(next){
+ const prev=publicState,r=String(next?.round??'');
+ if(prev&&next&&Number(prev.round)===Number(next.round)){
+  const before=prev.buzzerJudgements?.[r],after=next.buzzerJudgements?.[r];
+  if(after&&['correct','wrong'].includes(after.result)&&
+     (before?.at!==after.at||before?.uid!==after.uid||before?.result!==after.result))sfx.play(after.result);
+  else if(next.current?.roundMode==='written')for(const [uid,record] of Object.entries(next.playerScores||{})){
+   const val=record?.rounds?.[r],earlier=prev.playerScores?.[uid]?.rounds?.[r];
+   if(['correct','wrong'].includes(val?.result)&&(val.at!==earlier?.at||val.result!==earlier?.result)&&
+      (canHost()||uid===game?.uid))sfx.play(val.result);
+  }
+ }
+ publicState=next;
+}
+function buzzerAudioEvents(v){
+ const current=v||{},r=roundKey(),b=current[r],before=buzzers?.[r];
+ if(buzzWatchReady&&canHost()&&publicState?.phase==='question'&&b?.uid&&
+    (before?.uid!==b.uid||before?.at!==b.at))sfx.play('buzz');
+ buzzWatchReady=true;buzzers=current;schedule();
+}
+function soundMenu(){
+ const v=sfx.values(),types=[['master','Gesamt'],['buzz','Buzzer'],['correct','Richtig'],['wrong','Falsch']];
+ const sliders=types.map(([key,label])=>'<label class="bq-sfx-row"><span>'+label+'</span><output>'+v[key]+' %</output>'
+  +'<input type="range" min="0" max="100" step="1" value="'+v[key]+'" data-sfx-volume="'+key+'" aria-label="'+label+'"></label>').join('');
+ const samples=['buzz','correct','wrong'].map(k=>btn(k==='buzz'?'▶ Buzzer':k==='correct'?'▶ Richtig':'▶ Falsch',
+    'sfx-preview','small','data-sfx="'+k+'"')).join('');
+ return '<details class="bq-sfx-menu" data-bq-persist="soundfx"><summary aria-label="Audioeinstellungen" title="Audioeinstellungen">'
+  +(v.muted?'🔇':'🔉')+'</summary><div class="bq-sfx-panel"><strong>Audioeinstellungen</strong>'
+  +'<p class="small muted">Nur auf deinem Gerät · MP3-Soundquiz unabhängig</p>'
+  +btn(v.muted?'Ton einschalten':'Effekte stummschalten','sfx-mute','small')
+  +sliders+'<div class="bq-sfx-previews">'+samples+'</div>'
+  +'<p class="small muted">Sound-Vorschau startet auch den Ton im Browser.</p></div></details>';
+}
+
+function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
  if(canHost()){
   game.watchRoom(room,'picks',v=>{picks=v||{};schedule();});
   game.watchRoom(room,'questionHistory',v=>{questionHistory=v||{};schedule();});
-  game.watchRoom(room,'public',v=>{publicState=v;schedule();void maybeAutoBeginReview();});
+  game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();});
   game.watchRoom(room,'members',v=>{members=v||{};schedule();});
   game.watchRoom(room,'roster',v=>{roster=v||{};schedule();});
   game.watchRoom(room,'presence',v=>{presence=v||{};schedule();});
-  game.watchRoom(room,'buzzers',v=>{buzzers=v||{};schedule();});
+  game.watchRoom(room,'buzzers',buzzerAudioEvents);
   game.watchRoom(room,'responses',v=>{responses=v||{};schedule();void maybeAutoBeginReview();});
   game.watchRoom(room,'messages',v=>{messages=v||{};schedule();});
   game.enterPresence(room).catch(()=>{}); // Host has no member record: onDisconnect presence requires host rights.
@@ -241,8 +278,8 @@ function listenRoom(){game.clearWatchers();stopGuestListeners();connected=false;
  schedule();}
 function startGuestListeners(){stopGuestListeners();if(member?.status!=='approved')return;guestTeam=member.team;
  const w=(path,callback)=>{const fn=game.watchRoom(room,path,callback);guestListeners.push(fn);};
- w('public',v=>{publicState=v;if(publicState?.round!==watchingRound)watchOwnResponse();schedule();});
- w('roster',v=>{roster=v||{};schedule();});w('presence',v=>{presence=v||{};schedule();});w('buzzers',v=>{buzzers=v||{};schedule();});
+ w('public',v=>{publicAudioEvents(v);if(publicState?.round!==watchingRound)watchOwnResponse();schedule();});
+ w('roster',v=>{roster=v||{};schedule();});w('presence',v=>{presence=v||{};schedule();});w('buzzers',buzzerAudioEvents);
  w('messages/'+guestTeam,v=>{messages={[guestTeam]:v||{}};schedule();});
  game.enterPresence(room).catch(error);
 }
@@ -430,7 +467,7 @@ function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';c
  const waiting=Object.values(members||{}).filter(p=>p?.status==='pending').length;
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen bearbeiten'],['live','▦','Vorschau']]:!isPublished()?[['editor','✎','Fragen bearbeiten'],['teams','♙','Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:waitingInLobby()?[['teams','♙',waiting?'Lobby · '+waiting+' Anfrage'+(waiting===1?'':'n'):'Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:[['live','◈','Quiz'],['teams','♙','Teilnehmer'],['present','▣','Präsentation'],['history','▤','Verlauf'],['setup','⚙','Optionen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state"><div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
  maybeAnimateQuestion();
  const pointsPanel=document.getElementById('review-points-panel');if(pointsPanel)pointsPanel.addEventListener('toggle',()=>{reviewPointsOpen=pointsPanel.open});
  if(view==='editor'&&role==='host')studio.mount(document.getElementById('se-root'));
@@ -785,6 +822,8 @@ const studio=createStudioEditor({
  deleteQuestion:()=>{const old=currentQuestion();if(!old)return;snapshotLayout();quiz.questions=quiz.questions.filter(x=>x.id!==old.id);selected=quiz.questions[0]?.id||'';saveLocal();}
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
+ case 'sfx-mute':sfx.setMuted(!sfx.values().muted);schedule();return;
+ case 'sfx-preview':sfx.unlock();sfx.play(button.dataset.sfx);return;
  case 'create-offline':startOffline();return;
  case 'create-new-quiz':createNewLocalQuiz();return;
  case 'save-board':saveCurrentBoard();return;
@@ -905,7 +944,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'kick':{const target=button.dataset.uid;if(!members[target])return;if(!confirm('Teilnehmer aus Raum entfernen?'))return;await game.hostRemove(room,target,members[target]);return;}
  case 'score':{const amount=Number(button.dataset.amount),team=button.dataset.team;if(!canHost()||!publicState.teams[team]||!Number.isFinite(amount))throw Error('Ungültige Punktevergabe.');await game.score(room,team,amount);return;}
  case 'erase-answer':{if(!canHost())return;await game.removeResponse(room,roundKey(),button.dataset.uid);return;}
- case 'buzz':{if(canHost()||!member||!isOpen()||winner())return;const wasFirst=await game.buzzer(room,roundKey(),member.team,member.name);notice(wasFirst?'Buzzer angekommen! Du bist zuerst gewesen.':'Ein anderer Buzzer war schneller.');return;}
+ case 'buzz':{if(canHost()||!member||!isOpen()||winner())return;sfx.play('buzz');const wasFirst=await game.buzzer(room,roundKey(),member.team,member.name);notice(wasFirst?'Buzzer angekommen! Du bist zuerst gewesen.':'Ein anderer Buzzer war schneller.');return;}
  case 'submit-map':{if(canHost()||!member||activeQuestion()?.type!=='map'||!mapPick||winner()?.uid!==game?.uid||!isOpen())return;await game.answer(room,roundKey(),member.team,encodePoint(mapPick));notice('Kartenpunkt an den Host gesendet.');return;}
  case 'submit-answer':{if(canHost()||!member||!guestCanAnswer()||(myResponse&&activeQuestion()?.type!=='map')||roundMode(activeQuestion())!=='written')return;const q=activeQuestion();let text='';if(q?.type==='map'){text=encodePoint(mapPick)}else if(q?.type==='order'){if(pickedOrder.length!==q.displayItems?.length)throw Error('Bitte alle Sortiereinträge auswählen.');text=pickedOrder.map(i=>String.fromCharCode(65+i)).join(' → ');}else if(q?.type==='estimate'){const raw=$('answer-number')?.value||'';if(!raw.trim()||!Number.isFinite(Number(raw)))throw Error('Bitte einen gültigen Zahlenwert eingeben.');text=String(Number(raw));}else{text=$('answer-text')?.value?.trim()||'';}if(!text)throw Error('Bitte eine Antwort eingeben.');await game.answer(room,roundKey(),member.team,text);notice('Antwort gesendet.');return;}
  case 'export-history':{if(!canHost())return;const players=Object.fromEntries(participantList().map(([id,name])=>[id,{name}]));const rows=historyRows(questionHistory,responses,publicState?.playerScores,players);if(!rows.length)throw Error('Noch keine Fragerunden im Verlauf.');const solutions=Object.fromEntries(quiz.questions.map(q=>[q.id,q.answer]));const blob=new Blob([historyCsv(rows,solutions)],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const link=document.createElement('a');link.href=href;link.download='BrainQuiz_Fragenverlauf.csv';link.click();setTimeout(()=>URL.revokeObjectURL(href),500);return;}
@@ -924,6 +963,12 @@ async function handleImport(input){if(isPublished())throw Error('Nach der Veröf
 function updateClock(){const el=$('clock');if(!el)return;const deadline=publicState?.deadline||0;if(!deadline){el.textContent='–:––';return;}const s=Math.max(0,Math.ceil((deadline-now())/1000));el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 const CRITICAL_HOST_ACTIONS=new Set(['open','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
+document.addEventListener('pointerdown',()=>{sfx.unlock()},{capture:true,passive:true});
+document.addEventListener('keydown',()=>{sfx.unlock()},{capture:true});
+document.addEventListener('input',ev=>{const input=ev.target;if(!input?.matches?.('[data-sfx-volume]'))return;
+ const value=sfx.setVolume(input.dataset.sfxVolume,input.value)[input.dataset.sfxVolume];
+ const output=input.closest('.bq-sfx-row')?.querySelector('output');if(output)output.textContent=value+' %';
+});
 document.addEventListener('click',async ev=>{if(ev.target.closest('.question-settings summary'))settingsExpanded=!ev.target.closest('details').open;if(ev.target.closest('.inspector-advanced summary'))inspectorExpanded=!ev.target.closest('details').open;if(ev.target.closest('.quiz-metadata summary'))quizMetaExpanded=!ev.target.closest('details').open;const b=ev.target.closest('[data-action]');if(!b)return;ev.preventDefault();if(b.disabled)return;try{b.disabled=true;const action=b.dataset.action;if(canHost()&&CRITICAL_HOST_ACTIONS.has(action)){const key=[room,publicState?.round??0,action,b.dataset.uid||b.dataset.person||b.dataset.team||b.dataset.qid||''].join(':');await hostActionLease.run(key,async()=>{await doAction(action,b);if(HOST_ACTION_FEEDBACK[action])notice(HOST_ACTION_FEEDBACK[action]);});}else await doAction(action,b);}catch(err){error(err);}finally{if(document.contains(b))b.disabled=false;}});
 document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='host-team-create-form'){if(!canHost()||isOffline())throw Error('Nur der Host des Live-Raums kann Teams erstellen.');const input=$('bq-host-team-name');const created=await game.hostCreateLobbyTeam(room,input?.value||'');if(input){input.value='';input.blur();input.closest('details')?.removeAttribute('open');}notice('Team „'+created.name+'“ erstellt.');}if(ev.target.id==='lobby-create-form'&&role==='guest'){const name=$('bq-new-team')?.value||'';await game.createLobbyTeam(room,name);notice('Teamname übernommen. Der Host bestätigt deine Auswahl.');}if(ev.target.id==='join-form')await enterRoom($('join-room').value,$('join-name').value,true);if(ev.target.id==='chat-form')await handleMessage(ev.target);if(ev.target.id==='answer-form'&&!canHost()&&(!myResponse||activeQuestion()?.type==='map'))await doAction('submit-answer',ev.target);}catch(err){error(err);}});
 document.addEventListener('input',ev=>{const input=ev.target;if(input.dataset.blockfield){blockPropertyUpdate(input);return;}if(input.id==='history-search'){historyFilter=input.value;schedule();return;}if(input.id==='editor-search'){editorSearch=input.value;schedule();return;}if(input.id?.startsWith('q-')||['quiz-title','quiz-description','quiz-teams','quiz-manual-players'].includes(input.id)){updateDraftField(input);clearTimeout(updateDraftField.timer);updateDraftField.timer=setTimeout(schedule,350);}});
