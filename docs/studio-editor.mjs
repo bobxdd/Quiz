@@ -97,7 +97,7 @@ export function createStudioEditor(api){
    +'<label class="se-field"><span>Antworttext</span><textarea id="se-answer-text" data-se-field="answerText" rows="4" maxlength="2000" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
    +'<p class="se-muted">Der Text ist optional, wenn ein Antwortbild vorhanden ist. Du kannst aber auch beides gleichzeitig verwenden.</p>'
    +'<label class="se-field se-answer-upload" data-se-upload-zone="answer-image"><span>Antwortbild · PNG, JPG oder WebP</span>'
-   +'<small class="se-drop-help">Bild hier ablegen oder auswählen (max. 6 MB Original, wird verkleinert)</small>'
+   +'<small class="se-drop-help">Bild auswählen, hier ablegen oder mit Strg+V einfügen (max. 6 MB Original, wird verkleinert)</small>'
    +'<input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="answer-image"></label>'
    +(item.answerImage?'<button type="button" class="se-answer-remove" data-se-action="answer-image-remove">✕ Antwortbild entfernen</button>':'')
    +input('answerImageAlt','Bildbeschreibung für Barrierefreiheit',item.answerImageAlt||'')
