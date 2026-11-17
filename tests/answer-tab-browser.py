@@ -31,6 +31,12 @@ async def answer_tab(host,text='',color=(20,190,120),image=True):
  if text: await expect(host.locator('.bq-answer-editor-preview')).to_contain_text(text)
  await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
 
+async def unique_question(host,title,points):
+ await host.locator('[data-se-field="title"]').fill(title)
+ await host.locator('[data-se-field="title"]').blur()
+ await host.locator('[data-se-field="points"]').fill(str(points))
+ await host.locator('[data-se-field="points"]').blur()
+
 async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(args=['--no-sandbox','--no-proxy-server'])
@@ -52,10 +58,13 @@ async def main():
   await expect(host.locator('.se-studio')).to_be_visible() # Blank answer must not publish
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
 
+  await unique_question(host,'Champions · 100',100)
   await answer_tab(host,'Anivia ist der Kryophönix.',(32,160,215),True)
   await host.locator('[data-se-action="new"]').first.click()
+  await unique_question(host,'Champions · 200',200)
   await answer_tab(host,'',(178,73,92),True)
   await host.locator('[data-se-action="new"]').first.click()
+  await unique_question(host,'Champions · 300',300)
   await answer_tab(host,'Nur Textantwort',image=False)
   ids=await host.evaluate("window.__probe.getQuiz().questions.map(x=>x.id)")
   assert len(ids)==3,ids
@@ -65,7 +74,13 @@ async def main():
   assert authoring[2]['image']==0 and authoring[2]['answerText']=='Nur Textantwort',authoring
 
   await host.locator('[data-action="publish"]').click()
-  await expect(host.locator('.bq-board-scene .tile')).to_have_count(3,timeout=12000)
+  try:
+   await expect(host.locator('.bq-board-scene .tile')).to_have_count(3,timeout=12000)
+  except AssertionError:
+   details={'toast':await host.locator('#toaster').inner_text(),
+     'quiz':await host.evaluate("window.__probe.getQuiz().questions.map(q=>({title:q.title,points:q.points,prompt:q.prompt,answer:q.answer,answerText:q.answerText,answerImageLength:q.answerImage?.length,scene:q.scene?.template}))"),
+     'errors':errors}
+   raise AssertionError('Publishing question variants failed: '+str(details))
   await host.locator('.top-nav [data-view="teams"]').click()
   async with ctx.expect_page() as opening:
    await host.evaluate("window.open('about:blank','_blank')")
