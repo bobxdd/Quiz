@@ -5,7 +5,7 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
+files=['app.mjs','answer-view.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -38,18 +38,18 @@ async def install(page):
   const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));const category=blob(src['category-model.mjs']);
   const review=blob(src['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs']);const dagger=blob(src['map-dagger-animation.mjs']);
-  const boardWorkspaces=blob(src['board-workspace.mjs']);
-  const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
+  const boardWorkspaces=blob(src['board-workspace.mjs']);const answerView=blob(src['answer-view.mjs']);
+  const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`.replace("from './answer-view.mjs'",`from '${answerView}'`));
   const lobbyView=blob(src['lobby-view.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const workflows=blob(src['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const imageDrop=blob(src['image-drop.mjs']);const soundEffects=blob(src['sound-effects.mjs']);
-  const editor=blob(src['studio-editor.mjs'].replace("from './image-drop.mjs'",`from '${imageDrop}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`));
+  const editor=blob(src['studio-editor.mjs'].replace("from './image-drop.mjs'",`from '${imageDrop}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`.replace("from './answer-view.mjs'",`from '${answerView}'`));
   const rules=blob(src['round-rules.mjs'].replace("from './core.mjs'",`from '${core}'`));
   const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`));
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member,guestLobby})};`;
   const app=src['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(')
    .replace("import('./peer-client.mjs')",`import('${peer}')`).replace("from './sound-effects.mjs'",`from '${soundEffects}'`)
-   .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`)
+   .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './answer-view.mjs'",`from '${answerView}'`)
    .replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`)
    .replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${history}'`)
    .replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './lobby-view.mjs'",`from '${lobbyView}'`).replace("from './question-flow.mjs'",`from '${flow}'`)
