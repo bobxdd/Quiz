@@ -1,6 +1,6 @@
 // Offline-capable static shell only. Quiz data, WebRTC messages, private URLs and
 // unrecognized same-origin assets MUST NOT enter the service-worker Cache Storage.
-const NAME='brainquiz-shell-3.7.1-image-drop-map-distance';
+const NAME='brainquiz-shell-3.8.0-host-soundquiz-fast-cover';
 const ASSETS=['./','./index.html','./style.css','./pixel-theme.css','./characters.css','./actor-motion.css','./map-dagger-animation.css','./session-ui.css','./map-ui.css','./lobby-ui.css','./host-flow.css','./editor-categories.css','./editor-31.css','./board-workspace.css','./category-model.mjs','./editor-workflows.mjs','./pixel-constellation.png','./pixel-corner.png','./app.mjs','./core.mjs','./question-flow.mjs','./layout.mjs','./studio-model.mjs','./studio-editor.mjs','./image-drop.mjs','./board-workspace.mjs','./answer-review.mjs','./history-model.mjs','./peer-client.mjs','./round-rules.mjs','./lobby-model.mjs','./lobby-view.mjs','./icon.svg','./characters/rogue.webp','./characters/blades.webp','./characters/mage.webp','./characters/druid.webp','./map-tools.mjs','./map-viewport.mjs','./map-dagger-animation.mjs','./world-map.svg','./dagger-pin.svg','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 const ALLOWED_PATHS=new Set(ASSETS.map(path=>new URL(path,SCOPE).pathname));
