@@ -47,7 +47,7 @@ async def main():
   await host.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
   await expect(host.locator('.se-answer-readiness.is-missing')).to_be_visible()
   await expect(host.locator('#se-answer-text')).to_be_visible()
-  assert await host.evaluate("window.__probe.getQuiz().questions[0].answerImage")===''
+  assert (await host.evaluate("window.__probe.getQuiz().questions[0].answerImage")) == ''
   await host.locator('[data-action="publish"]').click()
   await expect(host.locator('.se-studio')).to_be_visible() # Blank answer must not publish
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
