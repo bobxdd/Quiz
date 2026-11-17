@@ -48,6 +48,7 @@ jobs:
           python tests/step6-question-cover-browser.py
           python tests/soundquiz-browser.py
           python tests/sound-effects-browser.py
+          python tests/buzzer-auto-reveal-browser.py
           python tests/editor-3_1-browser.py
           python tests/image-drop-browser.py
           python tests/categories-3_0-browser.py
