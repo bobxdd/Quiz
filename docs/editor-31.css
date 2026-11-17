@@ -116,3 +116,22 @@
  .se-editor-v3 .se-answer-tab-content{padding:0 2px 8px}
  .se-editor-v3 .se-answer-fields,.se-editor-v3 .se-answer-live-preview{padding:10px}
 }
+
+
+/* QA/QoL: meaningful question readiness badges and actionable audit navigation. */
+.se-editor-v3 .se-q-status{display:inline-flex;align-items:center;justify-content:center;min-width:25px;height:25px;
+ border:1px solid rgba(169,193,185,.35);border-radius:50%;font-size:14px;font-weight:900;flex-shrink:0}
+.se-editor-v3 .se-q-status.is-complete{color:#a3dbc1;background:#243f38;border-color:#6da98f}
+.se-editor-v3 .se-q-status.is-incomplete{color:#f2c7a3;background:#49382d;border-color:#be9570}
+.se-editor-v3 .se-audit-needs-attention{border-color:#c29a72}
+.se-editor-v3 .se-audit-next{display:inline-flex;align-items:center;min-height:37px;border-radius:8px;
+ padding:8px 12px;background:#345650;border:1px solid #89b8a6;color:#edf9f0;font-weight:700}
+.se-editor-v3 .se-audit-next:hover{background:#42675c}
+.se-editor-v3 .se-audit-next:focus-visible,.se-editor-v3 .se-qrow:focus-visible{
+ outline:2px solid #c9f4e0;outline-offset:3px}
+.se-editor-v3 .se-qrow{min-height:43px}
+.se-editor-v3 .se-answer-live-preview img{max-width:100%}
+@media(max-width:620px){
+ .se-editor-v3 .se-audit-next{width:100%;justify-content:center}
+ .se-editor-v3 .se-q-status{min-width:27px;height:27px}
+}
