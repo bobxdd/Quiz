@@ -66,10 +66,10 @@ test('Step 6: once at map reveal, hidden until impact, respects reduced motion a
  assert.match(sw,/brainquiz-shell-3\.7\.1/);
 });
 
-test('Step 6: question cover shows one character moving one panel with four slow directions',()=>{
+test('Step 6: question cover shows one character moving one panel with four fast directions',()=>{
  assert.match(app,/bq-curtain-helper bq-actor bq-actor--/);
  for(const d of ['left','right','up','down'])assert.match(questionCss,new RegExp('bq-curtain-'+(d==='left'?'push-left':d==='right'?'push-right':d==='up'?'toss-up':'pull-down')));
- assert.match(questionCss,/2900ms steps/);
+ assert.match(questionCss,/900ms steps/);
  assert.match(app,/lastAnimatedQuestion/);
  assert.doesNotMatch(app,/maybeAnimateGameplay|animateDock|bq-action-actor/);
 });
