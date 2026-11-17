@@ -48,3 +48,10 @@ test('Image drop is wired to canvas and file inputs with save, preview and error
  assert.match(sw,/\.\/image-drop\.mjs/);
  assert.match(sw,/brainquiz-shell-3\.7\.1-image-drop/);
 });
+
+test('Chromium fixture resolves the editor image-drop module instead of leaving a Blob-relative import',()=>{
+ const fixture=readFileSync(new URL('./categories-3_0-browser.py',import.meta.url),'utf8');
+ assert.match(fixture,/image-drop\.mjs/);
+ assert.match(fixture,/const imageDrop=blob/);
+ assert.match(fixture,/from '\.\/image-drop\.mjs'/);
+});

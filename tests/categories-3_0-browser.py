@@ -5,7 +5,7 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
+files=['app.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -42,7 +42,8 @@ async def install(page):
   const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const lobbyView=blob(src['lobby-view.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const workflows=blob(src['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
-  const editor=blob(src['studio-editor.mjs'].replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`));
+  const imageDrop=blob(src['image-drop.mjs']);
+  const editor=blob(src['studio-editor.mjs'].replace("from './image-drop.mjs'",`from '${imageDrop}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './map-viewport.mjs'",`from '${viewport}'`));
   const rules=blob(src['round-rules.mjs'].replace("from './core.mjs'",`from '${core}'`));
   const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`));
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member,guestLobby})};`;
