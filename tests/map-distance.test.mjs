@@ -46,7 +46,7 @@ test('Map solution reveal publishes all valid pins in one state update without c
  const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const viewport=readFileSync(new URL('../docs/map-viewport.mjs',import.meta.url),'utf8');
  const sw=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
- const begin=app.indexOf('async function hostReveal(){');
+ const begin=app.indexOf('function buildRevealPatch(q){');
  const end=app.indexOf('async function hostHint(){',begin);
  assert.ok(begin>=0&&end>begin);
  const source=app.slice(begin,end);
@@ -55,7 +55,7 @@ test('Map solution reveal publishes all valid pins in one state update without c
  assert.match(source,/makeAnswerReview\(expected,answers/);
  assert.match(source,/review=revealAnswer\(review,id,response\)/);
  assert.match(source,/patch\.answerReview=review/);
- assert.match(source,/updateCurrent\(room,Number\(publicState\.round\),q\.id,patch/);
+ assert.match(source,/updateCurrent\(room,Number\(publicState\.round\),q\.id,buildRevealPatch\(q\)/);
  assert.doesNotMatch(source,/judgeWritten|scorePerson|winner\(|scoreTarget|buzzerResolved/);
  assert.match(app,/const solution=publicState\.phase==='reveal'&&activeQuestion\(\)\?\.type==='map'/);
  assert.match(app,/mapAnswerDistances\(board,solution\)/);
