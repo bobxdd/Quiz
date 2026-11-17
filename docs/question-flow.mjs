@@ -13,7 +13,7 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
   return {...state,phase:'question',round,current:playerQuestion,deadline:Number(deadline)||0,pausedRemaining:0,
-    answerReview:null,answerParticipants:participants||null,
+    answerReview:null,answerParticipants:participants||null,audioPlayback:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
 export function applyQuestionChanges(state,expectedRound,expectedId,changes,allowedPhases=['question','paused','review']){
