@@ -1,5 +1,6 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
+import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
 import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate} from './category-model.mjs';
 /* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
@@ -20,6 +21,15 @@ export function createStudioEditor(api){
  const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);if(refresh)draw();};
  const snapshot=()=>api.snapshot();
  const flushDraft=()=>{if(draftTimer){clearTimeout(draftTimer);draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);}};
+ const preventFileNavigation=event=>{
+  if(typeof document==='undefined'||!document.getElementById('se-root')||!hasDraggedFiles(event.dataTransfer)||event.defaultPrevented)return;
+  event.preventDefault();
+  if(event.type==='dragover'&&event.dataTransfer)event.dataTransfer.dropEffect='none';
+ };
+ if(typeof window!=='undefined'){
+  window.addEventListener('dragover',preventFileNavigation);
+  window.addEventListener('drop',preventFileNavigation);
+ }
  if(typeof window!=='undefined')window.addEventListener('pagehide',flushDraft);
  if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushDraft();});
  const deferDraft=()=>{setSaveBadge(true);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);},450)};
@@ -52,7 +62,7 @@ export function createStudioEditor(api){
   ${scene.template==='multiple'?`<div class="se-subpanel"><h4>Richtige Antwort</h4>${input('correct','Musterlösung',letterList[item.correct||0]||'A',{options:'ABCD'.split('').map(k=>[k,k])})}</div>`:''}
   ${scene.template==='order'?`<div class="se-subpanel"><h4>Richtige Reihenfolge</h4><div class="se-sort-sequence">${scene.sortCorrect.map((key,i)=>`<div class="se-sort-entry"><strong>${i+1}.</strong><b>${key}</b><span>${escape(scene.elements.find(v=>v.kind==='order'&&v.letter===key)?.text||'')}</span><button type="button" data-se-action="sort-up" data-pos="${i}" ${i===0?'disabled':''} title="Nach oben">↑</button><button type="button" data-se-action="sort-down" data-pos="${i}" ${i===scene.sortCorrect.length-1?'disabled':''} title="Nach unten">↓</button></div>`).join('')}</div><div class="se-inline"><button type="button" data-se-action="sort-add" ${scene.sortCorrect.length>=10?'disabled':''}>+ Eintrag</button><button type="button" data-se-action="sort-remove" ${scene.sortCorrect.length<=3?'disabled':''}>− Letzten entfernen</button></div></div>`:''}
   ${scene.template==='estimate'?`${input('estimateTarget','Schätzwert',item.estimateTarget||0,{kind:'number',step:'any'})}${input('estimateUnit','Einheit',item.estimateUnit||'')}`:''}
-  ${scene.template==='imposter'?`${input('imposterIndex','Ersetztes Bild',item.imposterIndex||0,{options:scene.elements.filter(el=>el.kind==='image').map((el,i)=>[String(i),el.alt||`Bild ${i+1}`])})}<label class="se-field"><span>Originalbild vor dem Austausch (nur Host)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="correct-icon"></label>`:''}
+  ${scene.template==='imposter'?`${input('imposterIndex','Ersetztes Bild',item.imposterIndex||0,{options:scene.elements.filter(el=>el.kind==='image').map((el,i)=>[String(i),el.alt||`Bild ${i+1}`])})}<label class="se-field" data-se-upload-zone="correct-icon"><span>Originalbild vor dem Austausch (nur Host)</span><small class="se-drop-help">Bild hier ablegen oder auswählen</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="correct-icon"></label>`:''}
   ${scene.template==='map'?`<div class="se-subpanel bq-map-host-point"><h4>Geheimer Zielpunkt (Pflicht)</h4><p>${item.mapTargetSet?'✓ Dolch wurde auf der Karte platziert.':'⚠ Noch kein Zielpunkt gewählt. Zum Veröffentlichen ist ein Pin erforderlich.'}</p><p class="se-muted">Öffne „Bearbeiten“ und tippe auf die graue Weltkarte. Mit +, −, Mausrad oder zwei Fingern kannst du vorher heranzoomen. Der Dolch markiert deinen Antwortpunkt. Teilnehmer sehen ihn erst nach der Lösung.</p>${item.mapTargetSet?`<div class="se-inline"><strong>Position: ${Number(item.mapTargetX).toFixed(3)} / ${Number(item.mapTargetY).toFixed(3)}</strong><button type="button" data-se-action="map-clear">Pin entfernen</button></div>`:''}</div>`:''}
   ${scene.template==='map'?input('mapPrompt','Frage über der Weltkarte',item.prompt||'',{rows:2}):''}
   ${scene.template==='audio'?`${input('audioStart','Audio-Start (s)',item.audioStart||0,{kind:'number',min:0,step:0.5})}${input('audioDuration','Dauer (s)',item.audioDuration||8,{kind:'number',min:1,max:12})}<label class="se-field"><span>Audiodatei</span><input type="file" accept="audio/*" data-se-upload="audio"></label>${item.audio?`<audio controls src="${item.audio}"></audio>`:''}`:''}
@@ -60,7 +70,7 @@ export function createStudioEditor(api){
   <details class="se-extras"><summary>Weitere Angaben & Tipps (1–4)</summary>${scene.template==='hints'?'<p class="se-muted">Die vier Tipps bearbeitest du direkt in der Fragenfläche. Ihr Aufdeckzeitpunkt ist bei jedem Tipp einstellbar.</p>':`<p class="se-muted">Optional: bis zu vier Tipps, die der Host einzeln veröffentlicht.</p>${[0,1,2,3].map(i=>input('hint-'+i,`Tipp ${i+1}`,item.hints?.[i]||'',{rows:2})).join('')}`} ${input('explanation','Erklärung bei Auflösung',item.explanation||'',{rows:3})}${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:600})}</details></section>`;
   if(!el)return `${base}<section class="se-properties"><h3>Element</h3><p class="se-muted">Ein Element auf der Fragenfläche anklicken.</p></section>`;
   return `${base}<section class="se-properties"><div class="se-sectionhead"><h3>Ausgewähltes Element</h3><div class="se-inline"><button type="button" data-se-action="duplicate" title="Duplizieren">⧉</button><button type="button" data-se-action="remove" title="Entfernen">✕</button></div></div><div class="se-chip">${escape(el.kind.toUpperCase())} ${el.letter?`· ${escape(el.letter)}`:''}</div>
-  ${el.kind!=='image'?input('text','Inhalt',el.text,{rows:3}):`<label class="se-field"><span>Bilddatei (PNG/JPG/WebP)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="image"></label>${input('alt','Bildbeschreibung',el.alt||'')}`}
+  ${el.kind!=='image'?input('text','Inhalt',el.text,{rows:3}):`<label class="se-field" data-se-upload-zone="image"><span>Bilddatei (PNG/JPG/WebP)</span><small class="se-drop-help">Bild hier ablegen oder auswählen</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="image"></label>${input('alt','Bildbeschreibung',el.alt||'')}`}
   <details class="se-more-properties"><summary>Position, Größe und Gestaltung</summary>  <div class="se-two">${input('x','X',Math.round(el.x),{kind:'number',min:0,max:950})}${input('y','Y',Math.round(el.y),{kind:'number',min:0,max:530})}${input('w','Breite',Math.round(el.w),{kind:'number',min:50,max:1000})}${input('h','Höhe',Math.round(el.h),{kind:'number',min:30,max:560})}</div>
   <div class="se-two">${input('font','Schriftgröße',el.font,{kind:'number',min:13,max:78})}${input('step','Aufdecken',el.step,{options:[[0,'Sofort'],[1,'Hinweis 1'],[2,'Hinweis 2'],[3,'Hinweis 3'],[4,'Hinweis 4'],[5,'Hinweis 5'],[6,'Erst bei Lösung']]})}</div>
   ${el.kind==='shape'?input('shape','Form',el.shape,{options:[['rect','Rechteck'],['pill','Abgerundet'],['circle','Kreis'],['line','Linie']]}):''}
@@ -141,7 +151,7 @@ export function createStudioEditor(api){
     ${selectedQuestions.size?`<div class="se-batch" aria-label="Mehrere Fragen bearbeiten"><strong>${selectedQuestions.size} ausgewählt</strong><label>Kategorie<select data-se-batch-category><option value="">Unverändert</option>${cats.map(name=>`<option value="${escape(name)}">${escape(name)}</option>`).join('')}</select></label><label>Punkte<input data-se-batch-points type="number" min="0" max="10000" step="1" placeholder="Unverändert"></label><div class="se-inline"><button type="button" data-se-action="batch-apply" class="se-primary">Übernehmen</button><button type="button" data-se-action="batch-clear">Auswahl löschen</button></div></div>`:''}`:`<input class="se-search" data-se-search aria-label="Fragen im Quiz suchen" placeholder="Im Quiz suchen …" value="${escape(search)}"><details class="se-advanced-set"><summary>Mehrere Fragen auf einmal</summary><p>Optional: 5 × 5 Felder pro Kategorie.</p><button type="button" class="se-quick" data-se-action="quickset">5 × 5 Schnellset erstellen</button></details>`}
    </aside>
    <main class="se-main">${!activeCategory?overview(all,cats):item?`<div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">${escape(activeCategory)}</span><h2>${escape(item.title)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview-device" aria-label="Vorschauformat wechseln">${previewDevice==='desktop'?'Handyansicht':'Desktopansicht'}</button><button type="button" data-se-action="open-menu" aria-label="Elementaktionen als Menü öffnen" aria-haspopup="menu" aria-expanded="${menu?'true':'false'}" title="Rechtsklick oder Menü">⋯ Menü</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
-    <div class="se-context-hint">${item.scene.template==='map'?'Tippe auf die Weltkarte, um den richtigen Zielpunkt zu markieren. Der Punkt ist verpflichtend. Die Frage bearbeitest du im Bereich Eigenschaften.':'Dieselbe Fragenfläche wie bei den Zuschauern. Im Bearbeitungsmodus ziehst du Elemente direkt an die gewünschte Position. Rechtsklick für Aktionen.'}</div><div class="se-stage-grid se-stage-grid--single"><section class="se-stage-card"><div class="se-audience-label"><span>${preview?'Live-Zuschauervorschau (nicht bearbeitbar)':'Bearbeitbare Zuschauerfläche'} · ${reveal===6?'Lösung':reveal?'Hinweis '+reveal:'Startansicht'}</span><button type="button" class="se-preview-toggle" data-se-action="toggle-preview" aria-pressed="${preview}">${preview?'✎ Jetzt bearbeiten':'◉ Ohne Markierungen ansehen'}</button></div><div class="se-canvas-wrap se-audience-preview se-audience-${previewDevice}">${preview?renderScene(publicScene(item.scene,reveal,reveal===6),{revealed:reveal===6,correctIndex:item.correct||0,mapView:mapCamera,mapSolution:reveal===6&&item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null}):renderScene(item.scene,{editing:true,selected:sel,revealed:false,correctIndex:item.correct||0,mapView:mapCamera,mapCanEdit:item.scene.template==='map',mapEditorPoint:item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null})}</div>${!preview&&reveal!==0?'<p class="se-muted">Aufdeckungsstufen kontrollierst du über „Ohne Markierungen ansehen“.</p>':''}</section></div>
+    <div class="se-context-hint">${item.scene.template==='map'?'Tippe auf die Weltkarte, um den richtigen Zielpunkt zu markieren. Der Punkt ist verpflichtend. Die Frage bearbeitest du im Bereich Eigenschaften.':'Dieselbe Fragenfläche wie bei den Zuschauern. Im Bearbeitungsmodus ziehst du Elemente an ihre Position. PNG-, JPG- oder WebP-Dateien kannst du direkt auf die Fragenfläche ziehen. Auf vorhandene Bilder abgelegte Dateien ersetzen das Bild. Rechtsklick für Aktionen.'}</div><div class="se-stage-grid se-stage-grid--single"><section class="se-stage-card"><div class="se-audience-label"><span>${preview?'Live-Zuschauervorschau (nicht bearbeitbar)':'Bearbeitbare Zuschauerfläche'} · ${reveal===6?'Lösung':reveal?'Hinweis '+reveal:'Startansicht'}</span><button type="button" class="se-preview-toggle" data-se-action="toggle-preview" aria-pressed="${preview}">${preview?'✎ Jetzt bearbeiten':'◉ Ohne Markierungen ansehen'}</button></div><div class="se-canvas-wrap se-audience-preview se-audience-${previewDevice}">${preview?renderScene(publicScene(item.scene,reveal,reveal===6),{revealed:reveal===6,correctIndex:item.correct||0,mapView:mapCamera,mapSolution:reveal===6&&item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null}):renderScene(item.scene,{editing:true,selected:sel,revealed:false,correctIndex:item.correct||0,mapView:mapCamera,mapCanEdit:item.scene.template==='map',mapEditorPoint:item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null})}</div>${!preview&&reveal!==0?'<p class="se-muted">Aufdeckungsstufen kontrollierst du über „Ohne Markierungen ansehen“.</p>':''}</section></div>
     ${item.scene.template==='map'?'':`<div class="se-tools"><span>Hinzufügen:</span>${[['text','Text'],['image','Bild'],['shape','Form'],['choice','Antwort'],['order','Sortierfeld']].map(([kind,label])=>`<button type="button" data-se-action="add-element" data-kind="${kind}">+ ${label}</button>`).join('')}</div>`}
     <div class="se-mini"><span>Aufdecken: 0 = sofort · 1–5 = Hinweise · 6 = Lösung</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div>`:`<section class="se-empty-category"><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">Kategorie</span><h2>${escape(activeCategory)}</h2><p>Hier gibt es noch keine Frage. Wähle einen Fragetyp oder lege eine einfache Frage an.</p><div class="se-start-templates">${[['text','Textfrage'],['multiple','Multiple Choice'],['estimate','Schätzfrage'],['image','Bildfrage'],['map','Karte auswählen'],['written','Alle schreiben'],['imposter','Imposter'],['quote','Zitat']].map(([type,label])=>`<button type="button" data-se-action="new" data-template="${type}">+ ${label}</button>`).join('')}</div></section>`}</main>
    ${item?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
@@ -211,26 +221,48 @@ export function createStudioEditor(api){
   case 'sort-remove':{if(scene.sortCorrect.length<=3)return;snapshot();const last=scene.elements.filter(v=>v.kind==='order').map(v=>v.letter).sort().at(-1);scene.sortCorrect=scene.sortCorrect.filter(key=>key!==last);scene.elements=scene.elements.filter(v=>v.kind!=='order'||v.letter!==last);sel='';persist(true);return;}
  }
  }
- async function onUpload(input){
-  const item=current(),el=find(),file=input.files?.[0];if(!file||!item)return;
-  const questionId=item.id,elementId=el?.id,uploadKind=input.dataset.seUpload;
-  // Compress/decode first, then apply only if the same question and element still exist.
-  // This prevents delayed uploads from changing an unrelated question after navigation.
-  let converted;
-  if(uploadKind==='image'){
-   if(!el||el.kind!=='image')throw Error('Bitte zuerst ein Bildelement auswählen.');
-   converted=await api.optimizeImage(file,1150,125000);
-  }else if(uploadKind==='correct-icon')converted=await api.optimizeImage(file,500,65000);
-  else if(uploadKind==='audio')converted=await api.optimizeAudio(file,item.audioStart||0,item.audioDuration||8);
-  else return;
-  if(current()?.id!==questionId)throw Error('Die Frage wurde während des Uploads gewechselt. Bitte die Datei erneut auswählen.');
-  const target=uploadKind==='image'?current().scene.elements.find(x=>x.id===elementId):null;
-  if(uploadKind==='image'&&(!target||target.kind!=='image'))throw Error('Das Bildelement ist nicht mehr vorhanden.');
-  snapshot();
-  if(uploadKind==='image'){target.src=converted;target.alt=file.name.slice(0,100);}
-  else if(uploadKind==='correct-icon')current().correctIcon=converted;
-  else current().audio=converted;
+ async function applyImageFiles(files,{kind='image',targetId='',point=null}={}){
+  const item=current();if(!item||!files?.length)return;
+  const questionId=item.id,scene=item.scene;
+  if(kind==='correct-icon'){
+   if(files.length!==1)throw Error('Für das Originalbild bitte genau eine Datei ablegen.');
+   const converted=await api.optimizeImage(files[0],500,65000);
+   if(current()?.id!==questionId||current()?.scene!==scene)throw Error('Die Frage wurde während des Uploads verändert. Bitte erneut versuchen.');
+   flushDraft();snapshot();current().correctIcon=converted;persist(true);
+   return;
+  }
+  if(kind!=='image'||preview||scene.template==='map')throw Error('Bilder bitte in einer bearbeitbaren Frage ablegen.');
+  const target=targetId?scene.elements.find(el=>el.id===targetId):null;
+  if(targetId&&(!target||target.kind!=='image'))throw Error('Das gewählte Bildelement ist nicht mehr vorhanden.');
+  if(scene.elements.length+files.length-(target?1:0)>40)throw Error('Maximal 40 Layoutelemente pro Frage.');
+  // Finish all conversions before any mutation: an invalid file must not leave partial images.
+  const converted=await Promise.all(files.map(file=>api.optimizeImage(file,1150,125000)));
+  if(current()?.id!==questionId||current()?.scene!==scene)throw Error('Die Frage wurde während des Uploads verändert. Bitte erneut versuchen.');
+  const resolved=targetId?scene.elements.find(el=>el.id===targetId):null;
+  if(targetId&&(!resolved||resolved.kind!=='image'))throw Error('Das Bildelement wurde während des Uploads entfernt.');
+  const existing=scene.elements.reduce((sum,el)=>sum+(el.src?.length||0),0);
+  const bytes=existing-(resolved?.src?.length||0)+converted.reduce((sum,src)=>sum+src.length,0);
+  if(bytes>1200000)throw Error('Zu viele Bilddaten in dieser Frage (maximal 1,2 MB). Bitte kleinere oder weniger Bilder verwenden.');
+  flushDraft();snapshot();
+  if(resolved){resolved.src=converted[0];resolved.alt=files[0].name.slice(0,100);sel=resolved.id;}
+  for(let i=resolved?1:0;i<converted.length;i++){
+   const position=i===(resolved?1:0)&&point?point:findInsertion(scene.elements,350,195);
+   const created=element('image',{...position,w:350,h:195,src:converted[i],alt:files[i].name.slice(0,100)});
+   scene.elements.push(created);sel=created.id;
+  }
   persist(true);
+ }
+ async function onUpload(input){
+  const file=input.files?.[0],kind=input.dataset.seUpload;if(!file)return;
+  if(kind==='image'||kind==='correct-icon'){
+   await applyImageFiles([file],{kind,targetId:kind==='image'?find()?.id||'':''});
+   return;
+  }
+  if(kind!=='audio')return;
+  const item=current();if(!item)return;
+  const questionId=item.id,converted=await api.optimizeAudio(file,item.audioStart||0,item.audioDuration||8);
+  if(current()?.id!==questionId)throw Error('Die Frage wurde während des Uploads gewechselt. Bitte die Datei erneut auswählen.');
+  flushDraft();snapshot();current().audio=converted;persist(true);
  }
  function mount(root){if(!root||root.dataset.bound)return;root.dataset.bound='yes';
   const map=root.querySelector('[data-map-viewport]');
@@ -246,6 +278,37 @@ export function createStudioEditor(api){
     }
    });
   }
+  // File drag-and-drop is independent of pointer-based element moving and resizing.
+  const clearFileDrop=()=>root.querySelectorAll('.is-file-drop').forEach(node=>node.classList.remove('is-file-drop'));
+  const fileDropZone=event=>event.target.closest?.('[data-se-upload-zone],.se-scene');
+  const canFileDrop=zone=>Boolean(zone&&root.contains(zone)&&current()&&
+   (zone.hasAttribute('data-se-upload-zone')||(!preview&&current().scene.template!=='map')));
+  root.addEventListener('dragover',event=>{
+   if(!hasDraggedFiles(event.dataTransfer))return;
+   event.preventDefault();clearFileDrop();
+   const zone=fileDropZone(event),allowed=canFileDrop(zone);
+   if(allowed)zone.classList.add('is-file-drop');
+   if(event.dataTransfer)event.dataTransfer.dropEffect=allowed?'copy':'none';
+  });
+  root.addEventListener('dragleave',event=>{if(!root.contains(event.relatedTarget))clearFileDrop();});
+  root.addEventListener('drop',async event=>{
+   if(!hasDraggedFiles(event.dataTransfer))return;
+   event.preventDefault();clearFileDrop();
+   const zone=fileDropZone(event);
+   if(!canFileDrop(zone))return;
+   try{
+    const files=imageFilesFromDrop(event.dataTransfer);
+    if(zone.hasAttribute('data-se-upload-zone')){
+     const kind=zone.dataset.seUploadZone;
+     await applyImageFiles(files,{kind,targetId:kind==='image'?find()?.id||'':''});
+    }else{
+     const node=event.target.closest?.('[data-se-element]');
+     const existing=current()?.scene?.elements.find(el=>el.id===node?.dataset.seElement);
+     const point=imageDropPoint(zone.getBoundingClientRect(),event.clientX,event.clientY);
+     await applyImageFiles(files,{targetId:existing?.kind==='image'?existing.id:'',point});
+    }
+   }catch(error){api.error(error);}
+  });
   root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();const rect=libraryNode.getBoundingClientRect();libraryMenu={kind:libraryNode.dataset.seLibrary,x:event.clientX||rect.left+18,y:event.clientY||rect.top+18,id:libraryNode.dataset.id||'',category:libraryNode.dataset.category||''};if(libraryNode.dataset.id){const chosen=quiz().questions.find(x=>x.id===libraryNode.dataset.id);if(chosen)activeCategory=chosen.category;}draw();requestAnimationFrame(()=>document.querySelector('.se-context [role=menuitem]')?.focus());return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
   root.addEventListener('submit',event=>{if(!event.target.matches('[data-se-category-form]'))return;event.preventDefault();try{const raw=event.target.querySelector('[data-se-category-name]')?.value||'';if(renamingCategory)renameCategory(raw);else addCategory(raw);}catch(err){api.error(err);}});
   root.addEventListener('click',event=>{if((menu||libraryMenu)&&!event.target.closest('.se-context')){menu=null;libraryMenu=null;if(!event.target.closest('[data-se-action],[data-se-element]')){draw();return;}}const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});

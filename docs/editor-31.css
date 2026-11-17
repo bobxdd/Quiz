@@ -67,3 +67,9 @@
 .se-score-mode{min-width:120px}.se-score-mode select{background:#20242c;color:#ebf3f0;border:1px solid #515d5b;border-radius:8px;padding:8px}
 .se-preview-toggle{font-weight:700;color:#e1efec!important;background:#3c5457!important;border-color:#6a898a!important}
 .se-score-mode span{font-size:11px;color:#bbc4c2}
+
+/* Native image-file drop targets (existing file picker remains available). */
+.se-studio .se-scene.se-editing.is-file-drop{outline:3px dashed #b8dfcf;outline-offset:-5px;box-shadow:inset 0 0 0 6px #95d5b525}
+.se-studio .se-field[data-se-upload-zone]{border:1px dashed #6e9295;border-radius:9px;padding:9px;transition:background .12s,border-color .12s}
+.se-studio .se-field[data-se-upload-zone].is-file-drop{background:#40665d55;border-color:#c3ead8;box-shadow:inset 0 0 0 2px #aee1c638}
+.se-studio .se-drop-help{font-size:11px;font-weight:400;color:#a9c9c4}
