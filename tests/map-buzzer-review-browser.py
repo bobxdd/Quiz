@@ -44,6 +44,9 @@ async def main():
   assert await guest.locator('.bq-quiz-verdict').count()==0
   await guest.locator('[data-action="buzz"]').click()
   await expect(host.locator('[data-action="buzz-correct"]')).to_be_visible(timeout=12000)
+  # The guest must receive the winning-buzzer snapshot before its map can accept clicks.
+  await guest.wait_for_function("() => Object.values(window.__probe.getGame().guestData.buzzers||{}).some(v=>v?.uid===window.__probe.getGame().uid)",timeout=12000)
+  await expect(guest.locator('[data-action="submit-map"]')).to_be_visible(timeout=12000)
   rect=await guest.locator('.bq-map-viewport').bounding_box()
   assert rect
   await guest.mouse.click(rect['x']+rect['width']*.5,rect['y']+rect['height']*.5)
