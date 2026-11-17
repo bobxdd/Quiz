@@ -574,7 +574,7 @@ function renderReviewGallery(){
  const solution=mapQuestion&&publicState?.phase==='reveal'?normalizePoint({x:activeQuestion().mapTargetX,y:activeQuestion().mapTargetY}):null;
  const mapDistances=new Map(mapAnswerDistances(board,solution).map(row=>[row.id,row.distanceKm]));
  return `<div class="answer-review ${mapQuestion?'bq-map-answer-review':''}">
-  <div class="review-summary"><span class="pill">${entries.length} Personen</span><span class="pill">${visible} aufgedeckt</span><span class="small muted">${solution?'Entfernungen in km Luftlinie. Der Host entscheidet weiterhin selbst über die Gewinner und Punkte.':'Antworten erscheinen erst nach Freigabe durch den Host.'}</span></div>
+  <div class="review-summary"><span class="pill">${entries.length} Personen</span><span class="pill">${visible} aufgedeckt</span><span class="small muted">${solution?(roundMode(activeQuestion())==='buzzer'&&publicState?.buzzerResolved?.[roundKey()]?'Entfernungen in km Luftlinie. Die Buzzerentscheidung und Punktevergabe sind abgeschlossen.':'Entfernungen in km Luftlinie. Der Host entscheidet weiterhin selbst über die Gewinner und Punkte.'):'Antworten erscheinen erst nach Freigabe durch den Host.'}</span></div>
   <div class="review-grid" style="--review-columns:${Math.min(4,Math.max(1,Math.ceil(entries.length/2)))}">${entries.map(([id,a])=>{
    const state=answerCardState(a),hidden=state==='hidden',submitted=state!=='missing';
    const display=!submitted?'<span class="small muted">Keine Antwort abgegeben</span>':hidden?`<div class="frosted-shield" aria-label="Antwort verdeckt – wird erst nach Host-Freigabe geladen"><span class="frosted-symbol" aria-hidden="true">◇</span><span class="frosted-title">Antwort verdeckt</span><span class="frosted-bars" aria-hidden="true"><i></i><i></i><i></i></span></div>`:`<span class="review-answer">${e(a.value||'')}</span>`;
@@ -609,11 +609,12 @@ function boardScene(host=false){
 }
 function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';}
 function renderReviewView(){
- const p=publicState,q=activeQuestion();
+ const p=publicState,q=activeQuestion(),buzzerWinner=p.phase==='reveal'&&roundMode(q)==='buzzer'?p.buzzerResolved?.[roundKey()]:null;
+ const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q?.category||'Aktuelle Frage')} · ${e(q?.points||0)} Punkte</h2></div><span class="pill ${p.phase==='reveal'?'good':''}">${p.phase==='reveal'?'Lösung sichtbar':'Antworten aufdecken'}</span></div>
- <div class="bq-answer-review-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
+ ${winnerBanner}<div class="bq-answer-review-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
  <section class="glass panel bq-answers-panel"><h3>Antworten</h3>${renderReviewGallery()}</section></div>
- ${canHost()?`<div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Antworten prüfen</span>${p.phase==='review'?btn('Alle Antworten aufdecken','reveal-all-answers','primary'):''}${p.phase==='review'?btn('Lösung zeigen','reveal','primary'):''}${btn('Zurück zum Quizbrett','back','small')}
+ ${canHost()?`<div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">${buzzerWinner?'Runde abgeschlossen':'Antworten prüfen'}</span>${p.phase==='review'?btn('Alle Antworten aufdecken','reveal-all-answers','primary'):''}${p.phase==='review'?btn('Lösung zeigen','reveal','primary'):''}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
  <details class="bq-auxiliary" data-bq-persist="reviewscore"><summary>Bewertungen & Punkte</summary>${scorePanel()}</details></div>`:''}
  ${sessionFooter()}</section>`;
 }
@@ -643,7 +644,7 @@ function renderStage(){const q=activeQuestion(),isReveal=publicState.phase==='re
  if(isReveal&&q.type==='order')html+=`<div class="answer"><b>Richtige Reihenfolge:</b> ${q.orderCorrect?e(q.orderCorrect.join(' → ')):(q.orderItems||[]).map((x,i)=>`${i+1}. ${e(x)}`).join(' → ')}</div>`;
  if(isReveal&&q.type==='estimate')html+=`<div class="answer"><b>Zielwert:</b> ${e(q.estimateTarget)} ${e(q.estimateUnit||'')}</div>`;
  if(isReveal&&q.type==='map')html+='<div class="answer">Dolch = richtiger Zielpunkt.</div>';
- if(isReveal&&q.type!=='order'&&q.type!=='estimate'&&q.type!=='map')html+=`<div class="answer">Lösung: ${e(q.answer||(q.type==='multiple'?q.options?.[q.correct]:'')||'Nicht hinterlegt')}</div>${q.explanation?`<p style="margin-top:12px">${e(q.explanation)}</p>`:''}${q.type==='imposter'&&safeImage(q.correctIcon)?`<div class="row" style="margin-top:12px"><b>Richtiges Symbol:</b><img class="editor-image" src="${safeImage(q.correctIcon)}" alt="Korrektes Fähigkeitssymbol"></div>`:''}`;
+ if(isReveal&&q.type!=='order'&&q.type!=='estimate'&&q.type!=='map')html+=`<div class="answer">Lösung: ${e(q.answer||(q.type==='multiple'?q.options?.[q.correct]:'')||(q.type==='imposter'?'Ersetztes Bild '+(Number(q.imposterIndex||0)+1)+' ('+(q.abilityNames?.[q.imposterIndex]||'Fähigkeit')+')':'Keine Textlösung hinterlegt'))}</div>${q.explanation?`<p style="margin-top:12px">${e(q.explanation)}</p>`:''}${q.type==='imposter'&&safeImage(q.correctIcon)?`<div class="row" style="margin-top:12px"><b>Richtiges Symbol:</b><img class="editor-image" src="${safeImage(q.correctIcon)}" alt="Korrektes Fähigkeitssymbol"></div>`:''}`;
  if(isReveal&&(q.type==='order'||q.type==='estimate')&&q.explanation)html+=`<p style="margin-top:12px">${e(q.explanation)}</p>`;
  html+='</div>';return html;}
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label],i)=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${TEAM_COLORS[i%TEAM_COLORS.length]}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
