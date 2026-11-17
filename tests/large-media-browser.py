@@ -87,8 +87,15 @@ async def main():
   assert await host.evaluate("Math.max(...window.__rtcWireSizes)")<=24000
   await guest.set_viewport_size({'width':390,'height':844})
   await expect(guest.locator('.stage .answer')).to_be_visible()
-  await guest.locator('.stage .answer').scroll_into_view_if_needed()
-  bounds=await guest.locator('.stage .answer').bounding_box()
+  # Capture geometry synchronously because the live view replaces its DOM on
+  # WebRTC snapshots; detached handles must not make an otherwise valid test flaky.
+  bounds=await guest.evaluate("""() => {
+   const el=document.querySelector('.stage .answer');
+   if(!el)return null;
+   el.scrollIntoView({block:'nearest',inline:'nearest'});
+   const r=el.getBoundingClientRect();
+   return {x:r.x,width:r.width};
+  }""")
   assert bounds and bounds['width']>10 and bounds['x']>=-2 and bounds['x']+bounds['width']<=391,bounds
   assert not errors,errors
   await browser.close()
