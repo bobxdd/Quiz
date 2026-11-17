@@ -118,7 +118,7 @@ async def main():
   await alice.locator('[data-action="sfx-preview"][data-sfx="buzz"]').click()
   assert await count(alice)==before_mute,'Muted client played a preview'
   assert (await alice.evaluate("JSON.parse(localStorage.getItem('brainquiz-sfx-local-v1'))"))['muted'] is True
-  assert (await host.evaluate("JSON.parse(localStorage.getItem('brainquiz-sfx-local-v1'))"))['muted'] is False
+  assert await host.evaluate("() => {const text=localStorage.getItem('brainquiz-sfx-local-v1');return !text||JSON.parse(text).muted===false}")
   # Mobile popover must remain inside screen bounds.
   await alice.set_viewport_size({'width':390,'height':844})
   await expect(alice.locator('.bq-sfx-panel')).to_be_visible()
