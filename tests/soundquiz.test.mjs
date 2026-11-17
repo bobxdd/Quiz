@@ -50,7 +50,7 @@ test('Host plays and replays; guests cannot manually seek or repeat sounds',()=>
  assert.doesNotMatch(app,/<audio controls preload="metadata" src=/);
  assert.match(editor,/accept="\.mp3,audio\/mpeg,/);
  assert.match(editor,/MP3 wird in einen kompakten Clip umgewandelt/);
- assert.match(sw,/3\.8\.0-host-soundquiz-fast-cover/);
+ assert.match(sw,/brainquiz-shell-3\.7\.1-image-drop-map-distance-soundquiz-fast-cover/);
  assert.equal((css.match(/900ms/g)||[]).length,6);
  assert.doesNotMatch(css,/2900ms/);
 });
