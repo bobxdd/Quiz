@@ -256,7 +256,25 @@ export class PeerGame{
  async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');d.public.playerScores??={};const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;this._changed();return clone(result)}
  async score(room,team,delta){const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Team unbekannt.');d.public.scores[team]=Math.max(-999999,Math.min(999999,(Number(d.public.scores?.[team])||0)+Number(delta)));this._changed()}
  async judgeWritten(room,round,uid,result){const d=this._getHostData(room),p=d.public;const key=String(round);if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||!p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))throw Error('Diese schriftliche Antwort ist nicht bewertbar.');const pts=Number(p.current.points),old=Number(p.playerScores?.[uid]?.rounds?.[key]?.delta)||0;const next=updatePlayerScore(p.playerScores?.[uid],{kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()});p.playerScores={...(p.playerScores||{}),[uid]:next};if(p.scoreMode!=='individual'){const team=d.roster[uid].team;if(!p.teams?.[team])throw Error('Spielerteam nicht mehr vorhanden.');p.scores={...(p.scores||{}),[team]:(Number(p.scores?.[team])||0)+(Number(next.rounds[key].delta)||0)-old};}this._changed();return clone(next)}
- async judgeBuzzer(room,round,uid,result){const d=this._getHostData(room);const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});d.public=next.state;d.buzzers=next.buzzers;this._changed();return {delta:next.delta,winner:next.winner};}
+ async judgeBuzzer(room,round,uid,result,revealPatch=null){
+  const d=this._getHostData(room);
+  const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
+  let finalState=next.state;
+  if(result==='correct'){
+   // Publish the score, winning buzzer, question answer and closing phase as ONE
+   // authoritative snapshot. No intermediate "correct points, hidden answer".
+   if(!revealPatch||revealPatch.phase!=='reveal'||revealPatch.deadline!==0||
+      revealPatch.current?.id!==d.public.current?.id||
+      revealPatch.current?.roundMode!=='buzzer'||
+      !Object.hasOwn(revealPatch.current,'answer')){
+    throw Error('Für die richtige Buzzer-Bewertung fehlt die vollständige Lösungsfreigabe.');
+   }
+   finalState=applyQuestionChanges(next.state,round,d.public.current.id,revealPatch,['question']);
+   if(!finalState)throw Error('Lösung und Punkte konnten nicht gemeinsam übernommen werden.');
+  }
+  d.public=finalState;d.buzzers=next.buzzers;this._changed();
+  return {delta:next.delta,winner:next.winner};
+ }
  async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
  async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};this._changed()}
