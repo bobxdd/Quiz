@@ -356,3 +356,25 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-soundquiz .bq-sound-host-control,.bq-soundquiz .bq-sound-allow{min-height:45px;padding:8px 18px}
 .bq-soundquiz .small{max-width:520px}
 @media(max-width:520px){.bq-soundquiz .bq-sound-symbol{width:45px;height:45px;font-size:24px}.bq-soundquiz{padding:10px 8px}}
+
+
+/* Individuelle, lokale Quiz-Soundeffekte im oberen Navigationsbereich. */
+.bq-sfx-menu{position:relative;flex:0 0 auto;z-index:155}
+.bq-sfx-menu>summary{list-style:none;display:grid;place-items:center;cursor:pointer;user-select:none;width:36px;height:35px;border:1px solid #9dbdb753;border-radius:9px;background:#263438;color:#e4eee9;font-size:18px;line-height:1}
+.bq-sfx-menu>summary::-webkit-details-marker{display:none}
+.bq-sfx-menu>summary:hover,.bq-sfx-menu[open]>summary{background:#375151;border-color:#92b7ae}
+.bq-sfx-menu>summary:focus-visible{outline:2px solid #e3efdb;outline-offset:2px}
+.bq-sfx-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:250;
+ width:min(305px,calc(100vw - 18px));max-height:min(530px,calc(100dvh - 65px));overflow-y:auto;
+ border:1px solid #90aca563;border-radius:12px;box-shadow:0 15px 30px #000a;
+ background:#20292d;padding:13px 14px;display:flex;flex-direction:column;gap:9px}
+.bq-sfx-panel>strong{font-size:14px;color:#e6efed}
+.bq-sfx-panel>.small{margin:0;font-size:11px;line-height:1.45}
+.bq-sfx-panel .btn{align-self:flex-start}
+.bq-sfx-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;
+ color:#dee9e5;font-size:12px;font-weight:700;align-items:center}
+.bq-sfx-row output{font-variant-numeric:tabular-nums;color:#b7d5ca}
+.bq-sfx-row input[type=range]{grid-column:1/-1;width:100%;min-height:26px;cursor:pointer;accent-color:#aecfc2}
+.bq-sfx-previews{display:flex;flex-wrap:wrap;gap:5px}
+.bq-sfx-previews .btn{font-size:11px;min-height:32px}
+@media(max-width:520px){.bq-sfx-menu{margin-right:2px}.bq-sfx-menu>summary{width:34px;height:34px}}
