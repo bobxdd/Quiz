@@ -13,7 +13,7 @@ import {createHistoryEntry,historyRows,responseStatus,historyCsv} from './histor
 import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from './answer-review.mjs';
 import {renderScene,ensureScene,templateScene,reconcileQuestion,sceneHasStep,publicScene,escape as sceneEscape} from './studio-model.mjs';
 import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks,validateBlocks} from './layout.mjs';
-import {sceneForPublicState,isBoardCellPlayed,pageBoardColumns,VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
+import {sceneForPublicState,isBoardCellPlayed,pageBoardColumns,VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,isAudioData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
 const $=id=>document.getElementById(id),configured=true; // PeerJS/WebRTC requires no Firebase setup.
 const hostActionLease=createActionLease();
 let service=null,game=null,room='',role='landing',view='start',member=null,guestLobby=null,publicState=null,members={},roster={},presence={},buzzers={},responses={},messages={},myResponse=null,quiz=emptyQuiz(),selected='',chatTeam='ALL',connected=false,guestListeners=[],guestTeam='',responseUnsub=null,watchingRound=-1,renderQueued=false,lastMsgTime=0,loadedSession=false,pickedOrder=[],previewOpen=false,previewRevealed=false,previewSceneStep=0,previewImage='',editingBlock='',editorSearch='',undoStack=[],redoStack=[],lastEditAt=0,saveState='Gespeichert',settingsExpanded=false,inspectorExpanded=false,quizMetaExpanded=false,scoreTarget='',picks={},offlineRound=0,quickSetExpanded=false,reviewStartPending=-1,questionHistory={},historyFilter='',guestChoice='',reviewPointsOpen=false,openingQuestion=false,lastAnimatedQuestion='',mapPick=null;
@@ -22,6 +22,7 @@ let boardId='',boardRevision=0,boardConflict=false;
 let mapCamera={...DEFAULT_MAP_VIEW},mapCameraQuestion='';
 const consumedMapThrows=new Set();let activeMapThrow=null;
 let activeQuestionCover=null;
+let soundPlayer=null; // Detached audio survives regular host/guest redraws.
 const makeBoardId=()=>'b'+uid().slice(1);
 function applyBoardWorkspace(record){boardConflict=false;saveState='Lokal gesichert';boardId=record.id;boardRevision=record.revision;quiz=normalizedQuiz(record.quiz);selected=quiz.questions[0]?.id||'';undoStack=[];redoStack=[];editingBlock='';previewOpen=false;previewRevealed=false;mapPick=null;mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion='';pickedOrder=[];boardPage=0;scorePage=0;historyFilter='';try{sessionStorage.setItem('bq-board-current-tab',boardId);}catch{}studio?.reset?.();}
 function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');studio.flush?.();if(!saveLocal())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(localStorage,id);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
@@ -295,7 +296,7 @@ function maybeAnimateQuestion(){
   window.removeEventListener('scroll',update,true);curtain.remove();if(activeQuestionCover?.key===key)activeQuestionCover=null;};
  update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);
  curtain.addEventListener('animationend',event=>{if(event.target===curtain)cleanup()},{once:true});
- timer=setTimeout(cleanup,3500);
+ timer=setTimeout(cleanup,1300);
  activeQuestionCover={key,update,cancel:cleanup};
 }
 function removeMapThrowRail(){
@@ -335,6 +336,96 @@ function maybeAnimateMapDagger(){
  if(handle)activeMapThrow={key,handle};
  else {removeMapThrowRail();marker.classList.remove('bq-throw-waiting');}
 }
+
+/* Host-authorized one-shot soundquiz: native controls and user replays are absent. */
+function soundEvent(){
+ const q=activeQuestion(),play=publicState?.audioPlayback;
+ return q?.type==='audio'&&play?.id===q.id&&Number(play.round)===Number(publicState?.round)
+  &&Number.isSafeInteger(play.seq)&&play.seq>0?play:null;
+}
+function soundElapsed(play){return Math.max(0,(now()-Number(play.at||now()))/1000);}
+function soundExpired(player,play){
+ return !!(player?.audio&&Number.isFinite(player.audio.duration)&&player.audio.duration>0
+  &&soundElapsed(play)>=player.audio.duration+0.15);
+}
+function stopSoundPlayer(){
+ if(!soundPlayer)return;
+ soundPlayer.audio.pause();
+ soundPlayer.audio.removeAttribute('src');
+ soundPlayer.audio.load();
+ soundPlayer=null;
+}
+async function attemptSoundPlayback(player,play){
+ if(player!==soundPlayer||!play||player.seq!==play.seq||player.ended||player.played)return;
+ if(soundExpired(player,play)){player.ended=true;player.blocked=false;schedule();return;}
+ player.blocked=false;
+ try{
+  const delay=soundElapsed(play),audio=player.audio;
+  if(Number.isFinite(audio.duration)&&audio.duration>0&&delay<audio.duration){
+   audio.currentTime=delay;
+  }else if(delay>0){try{audio.currentTime=delay;}catch{}}
+  await audio.play();
+  if(player===soundPlayer&&player.seq===play.seq){
+   player.played=true;player.blocked=false;player.playing=!audio.paused;
+   schedule();
+  }
+ }catch(err){
+  if(player!==soundPlayer||player.seq!==play.seq)return;
+  if(soundExpired(player,play)){player.ended=true;player.blocked=false;}
+  else{player.blocked=true;player.playing=false;}
+  schedule();
+ }
+}
+function syncSoundPlayer(){
+ const q=activeQuestion(),key=q?.type==='audio'&&publicState?.phase==='question'&&isAudioData(q.audio)
+  ?room+':'+publicState.round+':'+q.id:'';
+ if(!key){stopSoundPlayer();return;}
+ if(soundPlayer?.key!==key){
+  stopSoundPlayer();
+  const media=new Audio(q.audio);
+  media.preload='auto';media.autoplay=false;media.controls=false;media.loop=false;
+  const player={key,audio:media,seq:0,ended:false,blocked:false,playing:false,played:false};
+  media.addEventListener('ended',()=>{
+   if(soundPlayer!==player)return;
+   player.ended=true;player.playing=false;player.blocked=false;schedule();
+  });
+  soundPlayer=player;
+ }
+ const play=soundEvent();
+ if(!play)return;
+ if(play.seq>soundPlayer.seq){
+  const player=soundPlayer;
+  player.audio.pause();player.seq=play.seq;
+  player.ended=false;player.blocked=false;player.playing=false;player.played=false;
+  void attemptSoundPlayback(player,play);
+ }else if(soundPlayer.seq===play.seq&&soundPlayer.blocked&&soundExpired(soundPlayer,play)){
+  soundPlayer.ended=true;soundPlayer.blocked=false;schedule();
+ }
+}
+function soundQuizMarkup(q){
+ if(!isAudioData(q.audio))return '<div class="hint">Audio fehlt.</div>';
+ const play=soundEvent(),player=soundPlayer;
+ const same=player?.key===room+':'+publicState.round+':'+q.id&&play?.seq===player.seq;
+ const ended=same&&player.ended,blocked=same&&player.blocked,started=same&&player.played&&!ended;
+ const waiting=!play,stopped=publicState.phase!=='question';
+ const status=stopped?'Die Sound-Runde ist beendet.':waiting?'Der Host startet den Sound.':
+  ended?'Sound beendet – nur der Host kann eine neue Wiedergabe freigeben.':
+  blocked?'Dieser Browser benötigt einen Klick, um den freigegebenen Sound zu hören.':
+  started?'Sound läuft – Buzzer bleibt aktiv.':'Sound wird geladen …';
+ const hostAction=!stopped&&canHost()?(waiting?btn('▶ Sound abspielen','audio-play','primary bq-sound-host-control'):
+  ended?btn('↻ Sound erneut abspielen','audio-play','primary bq-sound-host-control'):
+  '<p class="small muted">Wiederholen erst nach vollständigem Abspielen.</p>'):'';
+ const userAction=!stopped&&play&&blocked&&!ended?
+  btn('▶ Freigegebenen Sound einmal starten','audio-unblock','primary bq-sound-allow'):'';
+ return '<div class="soundstage bq-soundquiz" aria-label="Soundquiz">'
+  +'<div class="sub">SOUNDQUIZ · EINMAL PRO HOST-FREIGABE</div>'
+  +'<div class="bq-sound-symbol" aria-hidden="true">♫</div>'
+  +'<p class="bq-sound-status" role="status">'+e(status)+'</p>'
+  +hostAction+userAction
+  +'<p class="small muted">'+(canHost()?'Nur der Host startet oder wiederholt den Sound.':'Nur der Host gibt weitere Wiedergaben frei.')
+  +' Du kannst jederzeit während des Sounds buzzern.</p></div>';
+}
+
 function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
  const waiting=Object.values(members||{}).filter(p=>p?.status==='pending').length;
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen bearbeiten'],['live','▦','Vorschau']]:!isPublished()?[['editor','✎','Fragen bearbeiten'],['teams','♙','Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:waitingInLobby()?[['teams','♙',waiting?'Lobby · '+waiting+' Anfrage'+(waiting===1?'':'n'):'Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:[['live','◈','Quiz'],['teams','♙','Teilnehmer'],['present','▣','Präsentation'],['history','▤','Verlauf'],['setup','⚙','Optionen']]):[['play','◈','Quiz']];
@@ -351,6 +442,7 @@ function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';c
   });
  }
  maybeAnimateMapDagger();
+ syncSoundPlayer();
 }
 function savedQuizzesStart(drafts,workspaceError,hostCode){
  const rows=drafts.map(b=>`<article class="bq-saved-quiz" data-saved-quiz-id="${e(b.id)}">
@@ -508,7 +600,7 @@ function renderStage(){const q=activeQuestion(),isReveal=publicState.phase==='re
  if(!q.scene&&(q.type==='quote'||q.type==='emoji'))html+=`<div class="cluebox ${q.type==='emoji'?'emojiclue':''}" aria-label="Rätselhinweis">${e(q.clue||'')}</div>`;
  if(q.type==='estimate')html+=`<div class="cluebox">Schätze den Zahlenwert${q.estimateUnit?' in '+e(q.estimateUnit):''}.</div>`;
  if(!q.scene&&q.type==='order')html+=`<div class="ordergrid" aria-label="Einträge zum Sortieren">${(q.displayItems||[]).map((item,i)=>`<button class="orderitem ${pickedOrder.includes(i)&&!canHost()?'chosen':''}" data-action="pick-order" data-index="${i}" ${guestCanAnswer()&&!myResponse&&!pickedOrder.includes(i)?'':'disabled'}><b>${String.fromCharCode(65+i)}</b><span>${e(item)}</span>${!canHost()&&pickedOrder.includes(i)?`<strong>${pickedOrder.indexOf(i)+1}.</strong>`:''}</button>`).join('')}</div>${!canHost()&&isOpen()&&!myResponse?`<div class="small muted">Klicke die Einträge in deiner gewünschten Reihenfolge an. ${pickedOrder.length}/${(q.displayItems||[]).length} gewählt.</div>`:''}`;
- if(q.type==='audio')html+=q.audio?`<div class="soundstage"><div class="sub">SOUND-RÄTSEL · AUDIOCLIP</div><audio controls preload="metadata" src="${q.audio}">Audio wird von diesem Browser nicht unterstützt.</audio><p class="small muted">Manuell starten, beliebig oft anhören. Der Host gibt die Lösung frei.</p></div>`:`<div class="hint">Audio fehlt.</div>`;
+ if(q.type==='audio')html+=soundQuizMarkup(q);
  if((q.hints||[]).length)html+=`<div class="hintlist">${q.hints.map((h,i)=>`<p><b>Tipp ${i+1}:</b> ${e(h)}</p>`).join('')}</div>`;
  if(q.type==='splash'&&!isReveal)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
  if(isReveal&&q.type==='order')html+=`<div class="answer"><b>Richtige Reihenfolge:</b> ${q.orderCorrect?e(q.orderCorrect.join(' → ')):(q.orderItems||[]).map((x,i)=>`${i+1}. ${e(x)}`).join(' → ')}</div>`;
@@ -775,6 +867,20 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'start-review':if(roundMode(activeQuestion())!=='written')throw Error('Antwortübersicht ist nur für Schreib-Runden.');await startAnswerReview(false);return;
  case 'reveal-answer':await publishOneAnswer(button.dataset.uid);return;
  case 'reveal-all-answers':await publishAllAnswers();return;
+ case 'audio-play':{
+  const q=activeQuestion(),play=soundEvent();
+  if(!canHost()||!q||q.type!=='audio'||!isOpen()||!isAudioData(q.audio))throw Error('Sound kann nur vom Host während einer offenen Audiofrage abgespielt werden.');
+  if(play&&soundPlayer?.key===room+':'+publicState.round+':'+q.id&&!soundPlayer.ended)throw Error('Sound läuft noch oder wurde nicht fertig abgespielt.');
+  const next={round:Number(publicState.round),id:q.id,seq:(play?.seq||0)+1,at:now()};
+  if(isOffline()){publicState.audioPlayback=next;schedule();}
+  else await game.updateCurrent(room,Number(publicState.round),q.id,{audioPlayback:next},['question']);
+  return;
+ }
+ case 'audio-unblock':{
+  const play=soundEvent();
+  if(!play||!isOpen()||!soundPlayer||soundPlayer.seq!==play.seq||!soundPlayer.blocked||soundPlayer.ended)throw Error('Der Host hat keinen neuen Sound freigegeben.');
+  await attemptSoundPlayback(soundPlayer,play);return;
+ }
  case 'reveal':if(!canHost()||!activeQuestion())return;if(isOffline()){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);publicState={...publicState,phase:'reveal',current:publicQuestion(q,true,q.image||'',3)};schedule();}else await hostReveal();return;
  case 'pause':if(isOffline()){publicState.pausedRemaining=publicState.deadline?Math.max(0,publicState.deadline-now()):0;publicState.deadline=0;publicState.phase='paused';schedule();}else await hostPause();return;
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
@@ -816,7 +922,7 @@ async function handleBlockUpload(input){const b=chosenBlock(),file=input.files?.
 async function handleAudioUpload(input){const q=currentQuestion(),file=input.files?.[0];if(!q||!file)return;notice('Audio wird lokal verarbeitet …');q.audio=await optimizeAudio(file,q.audioStart,q.audioDuration);saveLocal();schedule();notice('Audioclip verarbeitet, ohne Original-Metadaten gespeichert.');}
 async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(localStorage,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
 function updateClock(){const el=$('clock');if(!el)return;const deadline=publicState?.deadline||0;if(!deadline){el.textContent='–:––';return;}const s=Math.max(0,Math.ceil((deadline-now())/1000));el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
-const CRITICAL_HOST_ACTIONS=new Set(['open','reveal','start-review','reveal-all-answers','reveal-answer','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer']);
+const CRITICAL_HOST_ACTIONS=new Set(['open','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 document.addEventListener('click',async ev=>{if(ev.target.closest('.question-settings summary'))settingsExpanded=!ev.target.closest('details').open;if(ev.target.closest('.inspector-advanced summary'))inspectorExpanded=!ev.target.closest('details').open;if(ev.target.closest('.quiz-metadata summary'))quizMetaExpanded=!ev.target.closest('details').open;const b=ev.target.closest('[data-action]');if(!b)return;ev.preventDefault();if(b.disabled)return;try{b.disabled=true;const action=b.dataset.action;if(canHost()&&CRITICAL_HOST_ACTIONS.has(action)){const key=[room,publicState?.round??0,action,b.dataset.uid||b.dataset.person||b.dataset.team||b.dataset.qid||''].join(':');await hostActionLease.run(key,async()=>{await doAction(action,b);if(HOST_ACTION_FEEDBACK[action])notice(HOST_ACTION_FEEDBACK[action]);});}else await doAction(action,b);}catch(err){error(err);}finally{if(document.contains(b))b.disabled=false;}});
 document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='host-team-create-form'){if(!canHost()||isOffline())throw Error('Nur der Host des Live-Raums kann Teams erstellen.');const input=$('bq-host-team-name');const created=await game.hostCreateLobbyTeam(room,input?.value||'');if(input){input.value='';input.blur();input.closest('details')?.removeAttribute('open');}notice('Team „'+created.name+'“ erstellt.');}if(ev.target.id==='lobby-create-form'&&role==='guest'){const name=$('bq-new-team')?.value||'';await game.createLobbyTeam(room,name);notice('Teamname übernommen. Der Host bestätigt deine Auswahl.');}if(ev.target.id==='join-form')await enterRoom($('join-room').value,$('join-name').value,true);if(ev.target.id==='chat-form')await handleMessage(ev.target);if(ev.target.id==='answer-form'&&!canHost()&&(!myResponse||activeQuestion()?.type==='map'))await doAction('submit-answer',ev.target);}catch(err){error(err);}});
@@ -834,7 +940,7 @@ document.addEventListener('change',async ev=>{const target=ev.target;try{if(targ
 document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}if(!input&&canHost()&&view==='present'&&['ArrowRight','ArrowLeft'].includes(ev.key)){ev.preventDefault();const action=ev.key==='ArrowRight'?'present-next':'present-prev';document.querySelector(`[data-action="${action}"]`)?.click();}});
 
 document.addEventListener('keydown',ev=>{if(ev.code!=='KeyB'||ev.ctrlKey||ev.altKey||ev.metaKey||canHost()||role!=='guest')return;const el=document.activeElement;if(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName))return;ev.preventDefault();const b=document.querySelector('[data-action="buzz"]');if(b&&!b.disabled)b.click();});
-setInterval(()=>{updateClock();if(publicState?.phase==='question'&&activeQuestion()?.type==='map'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();},350);
+setInterval(()=>{updateClock();if(publicState?.phase==='question'&&activeQuestion()?.type==='map'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();const play=soundEvent();if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}},350);
 render();
 // A host may restore a previous session from its own browser; returning guests
 // need the per-tab identity/secret created on their original visit.
