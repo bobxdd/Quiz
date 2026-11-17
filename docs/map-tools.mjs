@@ -43,3 +43,36 @@ export function mapViewCss(view){
  const v=normalizeMapView(view);
  return {left:50-v.x*v.zoom,top:50-v.y*v.zoom,width:100*v.zoom,height:100*v.zoom};
 }
+
+
+/** Spherical great-circle distance in km, independent of zoom or projection.
+ * Atlas coordinates x/y span longitude -180..180, latitude +90..-90.
+ * Mean Earth radius: 6371 km. This is approximate air-line distance.
+ */
+export function mapDistanceKm(from,to){
+ const a=worldLatLon(from),b=worldLatLon(to);
+ if(!a||!b)return null;
+ const rad=Math.PI/180,lat1=a.lat*rad,lat2=b.lat*rad;
+ const dLat=(b.lat-a.lat)*rad,dLon=(b.lon-a.lon)*rad;
+ const hav=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+ return 2*6371*Math.asin(Math.sqrt(clamp(hav,0,1)));
+}
+export function formatMapDistanceKm(km){
+ if(typeof km!=='number'||!Number.isFinite(km)||km<0)return '';
+ return new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(km)+' km';
+}
+/** Only published, valid map pins can contribute to public distance rows.
+ * Distances are informational: winner and scoring stay entirely with the host.
+ */
+export function mapAnswerDistances(review,target){
+ if(!normalizePoint(target))return [];
+ const rows=[];
+ for(const [id,entry] of Object.entries(review?.entries||{})){
+  if(!entry?.revealed)continue;
+  const point=decodePoint(entry.value);
+  if(!point)continue;
+  const distanceKm=mapDistanceKm(point,target);
+  if(distanceKm!==null)rows.push({id,name:String(entry.name||'Spieler').slice(0,28),point,distanceKm});
+ }
+ return rows.sort((a,b)=>a.distanceKm-b.distanceKm||a.name.localeCompare(b.name,'de')||a.id.localeCompare(b.id));
+}

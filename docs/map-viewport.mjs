@@ -1,6 +1,6 @@
 /* BrainQuiz step 3: one map interaction implementation for host editor and game.
    Each viewer owns its camera; editing the camera never edits an answer. */
-import {normalizeMapView,mapScreenPosition,mapWorldPosition,mapZoomAt,mapPanBy,mapViewCss,normalizePoint} from './map-tools.mjs';
+import {normalizeMapView,mapScreenPosition,mapWorldPosition,mapZoomAt,mapPanBy,mapViewCss,normalizePoint,formatMapDistanceKm} from './map-tools.mjs';
 
 export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],editable=false,editor=false,visibleSolution=false}={}){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,7 +9,7 @@ export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],
   const p=mapScreenPosition(pos,v);
   if(!p)return '';
   const offscreen=p.x<-4||p.x>104||p.y<-4||p.y>104;
-  return `<span class="bq-map-pin ${cls}" ${offscreen?'hidden':''} style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':'<span class="bq-map-pin-dot" aria-hidden="true"></span>'}</span>`;
+  return `<span class="bq-map-pin ${cls}" ${offscreen?'hidden':''} style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':'<span class="bq-map-pin-dot" aria-hidden="true"></span>'}</span>`;
  };
  const privatePin=normalizePoint(point),answer=normalizePoint(solution);
  const action=editable?'data-map-choice="true"':'';
@@ -24,7 +24,7 @@ export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],
  </div>
  <div class="bq-map-viewport" tabindex="0" role="application" aria-label="Interaktive Weltkarte. Mit Klick oder Tippen einen Punkt setzen. Mit den Pfeiltasten bewegen, Plus und Minus zoomen. Enter setzt den Punkt in die Mitte." ${action} data-map-viewport="true">
   <div class="bq-map-layer" style="left:${css.left}%;top:${css.top}%;width:${css.width}%;height:${css.height}%"><img src="./world-map.svg" alt="" draggable="false"></div>
-  <div class="bq-map-markers" aria-live="off">${privatePin?pinMarkup(privatePin,editor?'is-host':'is-self',editor?'Richtiger Zielpunkt (nur Host)':'Dein Kartenpunkt',editor):''}${visibleSolution&&answer?pinMarkup(answer,'is-solution','Richtiger Zielpunkt',true):''}${otherPins.map((pin,i)=>pinMarkup(pin,'is-public',pin.name||'Antwort '+(i+1))).join('')}</div>
+  <div class="bq-map-markers" aria-live="off">${privatePin?pinMarkup(privatePin,editor?'is-host':'is-self',editor?'Richtiger Zielpunkt (nur Host)':'Dein Kartenpunkt',editor):''}${visibleSolution&&answer?pinMarkup(answer,'is-solution','Richtiger Zielpunkt',true):''}${otherPins.map((pin,i)=>pinMarkup(pin,'is-public',(pin.name||'Antwort '+(i+1))+(typeof pin.distanceKm==='number'&&Number.isFinite(pin.distanceKm)?' · '+formatMapDistanceKm(pin.distanceKm)+' Luftlinie':''))).join('')}</div>
  </div>
  <p class="bq-map-instruction">${editor?'Wähle den richtigen Ort direkt auf der Karte. Der Dolch kennzeichnet die geheime Lösung.':editable?'Tippe auf die Karte, um deinen Pin zu setzen. Du kannst ihn vor dem Absenden jederzeit verschieben.':'Weltkarte – die Position der Lösung wird erst bei der Aufdeckung angezeigt.'} Mit +/− oder Mausrad zoomen, mit Ziehen verschieben.</p>
  </div>`;

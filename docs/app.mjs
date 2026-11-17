@@ -1,6 +1,6 @@
 import {canBuzz,roundMode,scoreMode} from './round-rules.mjs';
 import {boardList,createBoard,loadBoard,persistBoard,resumeBoard,selectBoard} from './board-workspace.mjs';
-import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
+import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,mapAnswerDistances,formatMapDistanceKm} from './map-tools.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease} from './editor-workflows.mjs';
@@ -441,14 +441,19 @@ function guestCanAnswer(){const q=activeQuestion(),timeUp=!!publicState?.deadlin
 function renderReviewGallery(){
  const board=publicState?.answerReview;if(!board)return '';
  const entries=Object.entries(board.entries||{});const visible=entries.filter(([,a])=>a.revealed).length;
- return `<div class="answer-review">
-  <div class="review-summary"><span class="pill">${entries.length} Personen</span><span class="pill">${visible} aufgedeckt</span><span class="small muted">Antworten erscheinen erst nach Freigabe durch den Host.</span></div>
+ const mapQuestion=activeQuestion()?.type==='map';
+ const solution=mapQuestion&&publicState?.phase==='reveal'?normalizePoint({x:activeQuestion().mapTargetX,y:activeQuestion().mapTargetY}):null;
+ const mapDistances=new Map(mapAnswerDistances(board,solution).map(row=>[row.id,row.distanceKm]));
+ return `<div class="answer-review ${mapQuestion?'bq-map-answer-review':''}">
+  <div class="review-summary"><span class="pill">${entries.length} Personen</span><span class="pill">${visible} aufgedeckt</span><span class="small muted">${solution?'Entfernungen in km Luftlinie. Der Host entscheidet weiterhin selbst über die Gewinner und Punkte.':'Antworten erscheinen erst nach Freigabe durch den Host.'}</span></div>
   <div class="review-grid" style="--review-columns:${Math.min(4,Math.max(1,Math.ceil(entries.length/2)))}">${entries.map(([id,a])=>{
    const state=answerCardState(a),hidden=state==='hidden',submitted=state!=='missing';
    const display=!submitted?'<span class="small muted">Keine Antwort abgegeben</span>':hidden?`<div class="frosted-shield" aria-label="Antwort verdeckt – wird erst nach Host-Freigabe geladen"><span class="frosted-symbol" aria-hidden="true">◇</span><span class="frosted-title">Antwort verdeckt</span><span class="frosted-bars" aria-hidden="true"><i></i><i></i><i></i></span></div>`:`<span class="review-answer">${e(a.value||'')}</span>`;
+   const distanceKm=mapDistances.get(id);
+   const distance=distanceKm===undefined?'':`<div class="bq-review-map-distance" aria-label="Entfernung von ${e(a.name||'Spieler')} zum Lösungs-Pin"><span>Zum Lösungs-Pin</span><strong>${e(formatMapDistanceKm(distanceKm))}</strong><small>Luftlinie</small></div>`;
    const clickable=canHost()&&publicState.phase==='review'&&submitted&&hidden;
    const verdict=canHost()?publicState?.playerScores?.[id]?.rounds?.[roundKey()]?.result:null;
-   return `<article class="review-card ${!submitted?'is-missing':hidden?'is-hidden':'is-revealed'} ${clickable?'bq-selectable review-clickable':''}" data-review-player="${e(id)}" ${clickable?`role="button" tabindex="0" data-action="reveal-answer" data-uid="${e(id)}" aria-label="Antwort von ${e(a.name||'Spieler')} aufdecken"`:''}><div class="review-name">${e(a.name||'Spieler')}</div><div class="review-value">${display}</div><div class="review-footer">${!submitted?'<span class="small muted">Keine Abgabe</span>':hidden?'<span class="small muted">Verdeckt</span>':'<span class="small good">Aufgedeckt</span>'}${clickable?'<span class="small good">Klicken: aufdecken</span>':''}</div>${canHost()&&submitted&&!hidden?`<div class="review-judge"><span class="status-tag ${e(verdict||'open')}">${responseStatus(verdict).icon} ${responseStatus(verdict).label}</span>${btn('✓ Richtig','judge-review-correct','small',`data-person="${e(id)}"`)}${btn('✕ Falsch','judge-review-wrong','small',`data-person="${e(id)}"`)}</div>`:''}</article>`;
+   return `<article class="review-card ${!submitted?'is-missing':hidden?'is-hidden':'is-revealed'} ${clickable?'bq-selectable review-clickable':''}" data-review-player="${e(id)}" ${clickable?`role="button" tabindex="0" data-action="reveal-answer" data-uid="${e(id)}" aria-label="Antwort von ${e(a.name||'Spieler')} aufdecken"`:''}><div class="review-name">${e(a.name||'Spieler')}</div><div class="review-value">${display}</div>${distance}<div class="review-footer">${!submitted?'<span class="small muted">Keine Abgabe</span>':hidden?'<span class="small muted">Verdeckt</span>':'<span class="small good">Aufgedeckt</span>'}${clickable?'<span class="small good">Klicken: aufdecken</span>':''}</div>${canHost()&&submitted&&!hidden&&roundMode(activeQuestion())==='written'?`<div class="review-judge"><span class="status-tag ${e(verdict||'open')}">${responseStatus(verdict).icon} ${responseStatus(verdict).label}</span>${btn('✓ Richtig','judge-review-correct','small',`data-person="${e(id)}"`)}${btn('✕ Falsch','judge-review-wrong','small',`data-person="${e(id)}"`)}</div>`:''}</article>`;
   }).join('')}</div>
  </div>`;
 }
@@ -486,9 +491,12 @@ function renderReviewView(){
 function canMapPick(){const q=activeQuestion();return role==='guest'&&q?.type==='map'&&member?.status==='approved'&&isOpen()&&(!publicState?.deadline||now()<publicState.deadline)&&(roundMode(q)==='written'?!!publicState?.answerParticipants?.[game?.uid]:winner()?.uid===game?.uid)}
 function releasedMapPins(){
  if(!reviewIsCurrent(publicState))return [];
- return Object.values(publicState.answerReview?.entries||{})
-  .filter(entry=>entry?.revealed&&decodePoint(entry.value))
-  .map(entry=>({...decodePoint(entry.value),name:entry.name}));
+ const solution=publicState.phase==='reveal'&&activeQuestion()?.type==='map'
+  ?normalizePoint({x:activeQuestion().mapTargetX,y:activeQuestion().mapTargetY}):null;
+ const distances=new Map(mapAnswerDistances(publicState.answerReview,solution).map(row=>[row.id,row.distanceKm]));
+ return Object.entries(publicState.answerReview?.entries||{})
+  .filter(([,entry])=>entry?.revealed&&decodePoint(entry.value))
+  .map(([id,entry])=>({...decodePoint(entry.value),name:entry.name,distanceKm:distances.get(id)??null}));
 }
 function renderMapFallback(q){return renderScene({template:'map',elements:[]},{mapPrompt:q.prompt,mapView:mapCamera,mapCanPick:canMapPick(),mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:publicState?.phase==='reveal'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:releasedMapPins(),revealed:publicState?.phase==='reveal'})}
 function renderStage(){const q=activeQuestion(),isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
@@ -652,7 +660,21 @@ async function hostOpen(id){
 }
 async function hostReveal(){const q=quiz.questions.find(x=>x.id===publicState?.current?.id);if(!q)throw Error('Originalfrage im Host-Quiz fehlt. Eine Host-Quizdatei importieren.');
  const v=q.type==='order'?publicState.current.displayItems:q.image||'';
- await game.updateCurrent(room,Number(publicState.round),q.id,{current:publicQuestion(q,true,v,publicState.current.hintStep||0,6),phase:'reveal',deadline:0,pausedRemaining:0},['question','paused','review']);
+ const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,6),phase:'reveal',deadline:0,pausedRemaining:0};
+ if(q.type==='map'){
+  // Publish all submitted pins atomically with the solution; private until now.
+  const answers=responses?.[roundKey()]||{};
+  const expected=publicState.answerParticipants||participantSnapshot(roster);
+  let review=reviewIsCurrent(publicState)?structuredClone(publicState.answerReview):makeAnswerReview(expected,answers,Number(publicState.round));
+  for(const [id,entry] of Object.entries(review.entries||{})){
+   const response=answers[id];
+   if(entry.revealed||!decodePoint(response?.text))continue;
+   if(!entry.submitted)review.entries[id]={...entry,submitted:true};
+   review=revealAnswer(review,id,response);
+  }
+  patch.answerReview=review;
+ }
+ await game.updateCurrent(room,Number(publicState.round),q.id,patch,['question','paused','review']);
 }
 async function hostHint(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||!isOpen())return;const current=Number(activeQuestion()?.hintStep||0);if(current>=4)return;const next=(q.hints||[]).findIndex((h,i)=>i>=current&&h.trim());if(next<0)return;const v=q.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(q,false,v,next+1,Number(activeQuestion()?.scene?.step||0));if(q.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);await game.updateCurrent(room,Number(publicState.round),q.id,{current:pub},['question']);}
 async function hostSplashNext(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||q.type!=='splash'||!isOpen())return;const expectedRound=Number(publicState.round);const next=Math.min(2,Number(activeQuestion().visualStep||0)+1);const visual=await splashPreview(q.image,{...q,zoom:splashStageZoom(q.zoom,next)},false);const pub=publicQuestion(q,false,visual,Number(activeQuestion().hintStep)||0,Number(activeQuestion()?.scene?.step||0));pub.visualStep=next;await game.updateCurrent(room,expectedRound,q.id,{current:pub},['question']);}

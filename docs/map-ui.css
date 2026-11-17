@@ -350,3 +350,14 @@
 .bq-map-question.bq-map-throw-active>.bq-map-controls{
  margin-left:calc(-1 * var(--bq-map-throw-rail));width:calc(100% + var(--bq-map-throw-rail));
 }
+
+/* Map reveal: explanatory geographical distance, not automatic scoring. */
+.bq-map-answer-review .bq-review-map-distance{
+ display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;
+ margin:6px 0 8px;padding:8px 10px;border:1px solid #bfd8d135;
+ border-radius:8px;background:#a5c6ba0e;color:#d1e8e2;
+}
+.bq-review-map-distance span{font-size:12px;color:#b8ccc8}
+.bq-review-map-distance strong{font-size:clamp(15px,1.35vw,20px);font-variant-numeric:tabular-nums;color:#e0f5ec}
+.bq-review-map-distance small{font-size:11px;color:#b8ccc8}
+@media(max-width:470px){.bq-map-answer-review .bq-review-map-distance{padding:7px;gap:3px 6px}}
