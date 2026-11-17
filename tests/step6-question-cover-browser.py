@@ -45,12 +45,12 @@ async def main():
    await expect(page.locator('.bq-question-curtain.bq-standalone')).to_have_count(1,timeout=12000)
    assert await page.locator('.bq-curtain-helper.bq-actor').count()==1
    duration=await page.locator('.bq-question-curtain').evaluate('(e)=>parseFloat(getComputedStyle(e).animationDuration)')
-   assert duration>=2.7,duration
+   assert .8<=duration<=1.0,duration
    assert await page.locator('.bq-question-curtain').evaluate('(e)=>getComputedStyle(e).pointerEvents')=='none'
    await page.locator('.bq-question-curtain').evaluate('(e)=>e.dataset.probeToken="same-node"')
    await page.evaluate('window.__step6Refresh()')
    await expect(page.locator('.bq-question-curtain[data-probe-token="same-node"]')).to_have_count(1)
-   await page.wait_for_timeout(1100)
+   await page.wait_for_timeout(220)
    await page.screenshot(path=str(ART/'step6-question-cover-mid-motion.png'),animations='allow')
    await expect(page.locator('.bq-question-curtain')).to_have_count(0,timeout=5000)
    await page.evaluate('window.__step6Refresh()')
@@ -65,5 +65,5 @@ async def main():
    await browser.close()
  finally:
   server.shutdown();server.server_close()
- print('PASS Step 6: 2.9s cover, one original character, survives redraw, no replay, respects reduced motion')
+ print('PASS Step 6: 0.9s quick cover, one original character, survives redraw, no replay, respects reduced motion')
 if __name__=='__main__':asyncio.run(main())
