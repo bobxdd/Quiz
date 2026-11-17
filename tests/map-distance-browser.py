@@ -84,7 +84,7 @@ async def main():
   # Bob is farther away, but the host may choose Bob anyway.
   bobid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Bob')[0]""")
   await host.locator(f'.review-card[data-review-player="{bobid}"] [data-action="judge-review-correct"]').click()
-  await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===200""",bobid,timeout=12000)
+  await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===200""",arg=bobid,timeout=12000)
   after=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
   assert after[bobid]['total']==200,after
   assert sum(v.get('total',0) for v in after.values() if isinstance(v,dict))==200,after
