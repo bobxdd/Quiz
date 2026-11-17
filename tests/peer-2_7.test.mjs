@@ -370,16 +370,23 @@ test('12-second 512-KB WAV transfers over capped RTC packets; cache and late gue
   assert.equal(guest1.guestData.public.current.audio,audio);
   const bytes=conn.sentBytes.slice(before).reduce((sum,x)=>sum+x,0);
   assert.ok(bytes<40000,'A small update must not retransmit the whole audio: '+bytes);
+  // A new pending guest remains unable to read the already-running question.
   sessionStorage.clear();
-  late=new PeerGame();await late.init();await late.connect(room,'Late');
-  assert.equal(late.guestData.public,null,'Pending member cannot inspect media');
-  await host.hostAssign(room,late.uid,host.data.members[late.uid],'t1');
+  const pending=new PeerGame();await pending.init();await pending.connect(room,'Too late');
+  assert.equal(pending.guestData.public,null,'Late pending member cannot inspect audio');
+  pending.shutdown();
+  // Existing, approved participants must recover the complete WAV after reconnect.
+  const reconnectIdentity={uid:guest1.uid,secret:guest1.secret};
+  guest1.shutdown();
+  sessionStorage.setItem('bq-p2p-guest-'+room,JSON.stringify(reconnectIdentity));
+  late=new PeerGame();await late.init();await late.connect(room,'Alice');
   await sleep(550);
-  assert.equal(late.guestData.public?.current?.audio,audio,'New approved member receives full audio');
+  assert.equal(late.guestData.members[late.uid]?.status,'approved');
+  assert.equal(late.guestData.public?.current?.audio,audio,'Reconnected approved member receives full audio');
   assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true);
   await host.judgeBuzzer(room,1,guest2.uid,'correct',{current:publicQuestion(question,true),phase:'reveal',deadline:0,pausedRemaining:0});
   await sleep(180);
-  for(const g of [guest1,guest2,late]){
+  for(const g of [guest2,late]){
    assert.equal(g.guestData.public?.phase,'reveal');
    assert.equal(g.guestData.public?.current?.answer,'Big WAV answer');
    assert.equal(g.guestData.public?.current?.audio,audio);
