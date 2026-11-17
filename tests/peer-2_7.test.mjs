@@ -7,7 +7,7 @@ import {quickBoard,emptyQuiz,publicQuestion} from '../docs/core.mjs';
 const instances=new Map();let nextId=0;
 class Connection extends EventEmitter{
  constructor(){super();this.open=false;this.partner=null;this.connectionId='test_'+(++nextId)}
- send(value){if(!this.open)throw Error('Connection closed');const copy=structuredClone(value);queueMicrotask(()=>{if(this.partner?.open)this.partner.emit('data',copy)})}
+ send(value){if(!this.open)throw Error('Connection closed');const bytes=new TextEncoder().encode(JSON.stringify(value)).length;if(bytes>24000)throw Error('RTC max-size 24 KB exceeded: '+bytes);this.sentBytes??=[];this.sentBytes.push(bytes);const copy=structuredClone(value);queueMicrotask(()=>{if(this.partner?.open)this.partner.emit('data',copy)})}
  close(){if(!this.open)return;this.open=false;queueMicrotask(()=>this.emit('close'));if(this.partner?.open){this.partner.open=false;queueMicrotask(()=>this.partner.emit('close'))}}
 }
 class MockPeer extends EventEmitter{
@@ -346,4 +346,43 @@ test('A wrong buzzer decision never exposes the answer and another team can try'
   assert.equal(host.data.public.scores.t1,-50);
   assert.equal(host.data.public.scores.t2,100);
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+
+test('12-second 512-KB WAV transfers over capped RTC packets; cache and late guests work',async()=>{
+ const {host,guest1,guest2}=await setup();let late=null;
+ try{
+  const original=host.hostQuiz.questions[0];
+  const audio='data:audio/wav;base64,'+'A'.repeat(512000);
+  const question={...original,type:'audio',roundMode:'buzzer',audio,answer:'Big WAV answer'};
+  await host.openQuestion(room,0,question,publicQuestion(question,false),null,0);
+  await sleep(550);
+  for(const g of [guest1,guest2]){
+   assert.equal(g.guestData.public?.current?.audio,audio);
+   assert.equal(g.guestData.public?.phase,'question');
+  }
+  const conn=host.guestConnections.get(guest1.uid).conn;
+  assert.ok(conn.sentBytes.length>60,'Long audio should be split into dozens of small packets');
+  assert.ok(conn.sentBytes.every(v=>v<=24000));
+  const before=conn.sentBytes.length;
+  await host.setState(room,{'settings/chatOpen':false});
+  await sleep(140);
+  assert.equal(guest1.guestData.public.current.audio,audio);
+  const bytes=conn.sentBytes.slice(before).reduce((sum,x)=>sum+x,0);
+  assert.ok(bytes<40000,'A small update must not retransmit the whole audio: '+bytes);
+  sessionStorage.clear();
+  late=new PeerGame();await late.init();await late.connect(room,'Late');
+  assert.equal(late.guestData.public,null,'Pending member cannot inspect media');
+  await host.hostAssign(room,late.uid,host.data.members[late.uid],'t1');
+  await sleep(550);
+  assert.equal(late.guestData.public?.current?.audio,audio,'New approved member receives full audio');
+  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true);
+  await host.judgeBuzzer(room,1,guest2.uid,'correct',{current:publicQuestion(question,true),phase:'reveal',deadline:0,pausedRemaining:0});
+  await sleep(180);
+  for(const g of [guest1,guest2,late]){
+   assert.equal(g.guestData.public?.phase,'reveal');
+   assert.equal(g.guestData.public?.current?.answer,'Big WAV answer');
+   assert.equal(g.guestData.public?.current?.audio,audio);
+  }
+ }finally{late?.shutdown();host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
