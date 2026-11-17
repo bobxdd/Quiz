@@ -45,6 +45,7 @@ async def main():
   await host.evaluate('(q)=>window.__probe.setQuiz({title:"Km Test",teams:["Rot","Blau"],questions:[q]})',q)
   await host.locator('[data-action="publish"]').first.click()
   await host.locator('.bq-board-scene .tile').first.wait_for()
+  await host.locator('.top-nav [data-view="teams"]').click()
   alice=await join_guest(ctx,host,code,'Alice')
   bob=await join_guest(ctx,host,code,'Bob')
   for guest,name in [(alice,'alice'),(bob,'bob')]:
