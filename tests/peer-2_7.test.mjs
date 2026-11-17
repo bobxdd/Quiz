@@ -317,7 +317,7 @@ test('Correct buzzer judgement reveals the complete answer and score in one host
    assert.equal(guest.guestData.public.phase,'reveal','phase and solution must arrive together');
    assert.equal(guest.guestData.public.scores.t1,before+100);
   }
-  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht offen/);
+  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),false,'Other guests cannot buzz once answer was revealed');
   await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct',patch),/Buzzer nicht mehr aktuell|Buzzer wurde/);
   // The host controls the move to the next question even after auto-reveal.
   await host.updateCurrent(room,1,q.id,{phase:'board',current:null},['reveal']);
