@@ -18,19 +18,19 @@
 .bq-peek-fingers::before,.bq-peek-fingers::after{content:"";position:absolute;top:0;width:7px;height:7px;border:1px solid #7e7379;border-radius:2px 2px 1px 1px;background:#b7a8a1;box-shadow:inset 1px 1px #e2d0c0,0 2px 1px #0006}
 .bq-peek-fingers::before{left:7px}
 .bq-peek-fingers::after{right:5px}
-/* Step 6: one unhurried character-assisted question cover per newly opened round.
+/* Step 6: one fast character-assisted question cover per newly opened round.
    A character moves the actual cover, not a separate reactive popup. */
 .bq-question-curtain{z-index:11!important;overflow:visible;transform-origin:50% 40%;background:linear-gradient(144deg,#423745,#252b35 64%,#1c2229)!important;border:4px solid #9f8194!important;box-shadow:inset 0 4px #ffffff12,inset 0 -6px #03050959,0 10px 18px #0007!important;pointer-events:none!important}
 .bq-question-curtain::after{border-color:#ded1b23c!important}
 /* Outside #app to survive live roster/timer redraws. Always non-interactive. */
 .bq-question-curtain.bq-standalone{position:fixed!important;right:auto!important;bottom:auto!important;z-index:69!important;pointer-events:none!important}
 .bq-question-curtain .bq-veil-handle{position:absolute;z-index:2;width:34px;height:14px;right:9px;bottom:42px;border:3px solid #cbb593;border-radius:4px;background:#55445f;box-shadow:inset 2px 2px #fff4,0 3px 0 #0006;pointer-events:none}
-.bq-question-curtain .bq-curtain-helper.bq-actor{position:absolute;z-index:3;right:-18px;bottom:-14px;width:clamp(94px,11vw,136px);height:clamp(94px,11vw,136px);filter:drop-shadow(0 5px 5px #0008);animation:bq-curtain-helper-motion 2900ms steps(18,end) both}
-.bq-question-curtain .bq-curtain-glove{position:absolute;right:16px;bottom:44px;width:17px;height:11px;background:#a98472;border:3px solid #483a42;z-index:4;box-shadow:inset 1px 1px #e3cbb0;animation:bq-curtain-grip 2900ms steps(14,end) both}
-.bq-question-curtain.bq-swipe-left{animation:bq-curtain-push-left 2900ms steps(30,end) forwards!important}
-.bq-question-curtain.bq-swipe-right{animation:bq-curtain-push-right 2900ms steps(30,end) forwards!important}
-.bq-question-curtain.bq-swipe-up{animation:bq-curtain-toss-up 2900ms steps(30,end) forwards!important;transform-origin:82% 72%}
-.bq-question-curtain.bq-swipe-down{animation:bq-curtain-pull-down 2900ms steps(30,end) forwards!important;transform-origin:15% 0}
+.bq-question-curtain .bq-curtain-helper.bq-actor{position:absolute;z-index:3;right:-18px;bottom:-14px;width:clamp(94px,11vw,136px);height:clamp(94px,11vw,136px);filter:drop-shadow(0 5px 5px #0008);animation:bq-curtain-helper-motion 900ms steps(18,end) both}
+.bq-question-curtain .bq-curtain-glove{position:absolute;right:16px;bottom:44px;width:17px;height:11px;background:#a98472;border:3px solid #483a42;z-index:4;box-shadow:inset 1px 1px #e3cbb0;animation:bq-curtain-grip 900ms steps(14,end) both}
+.bq-question-curtain.bq-swipe-left{animation:bq-curtain-push-left 900ms steps(30,end) forwards!important}
+.bq-question-curtain.bq-swipe-right{animation:bq-curtain-push-right 900ms steps(30,end) forwards!important}
+.bq-question-curtain.bq-swipe-up{animation:bq-curtain-toss-up 900ms steps(30,end) forwards!important;transform-origin:82% 72%}
+.bq-question-curtain.bq-swipe-down{animation:bq-curtain-pull-down 900ms steps(30,end) forwards!important;transform-origin:15% 0}
 .bq-question-curtain.bq-swipe-right .bq-veil-handle,.bq-question-curtain.bq-swipe-right .bq-curtain-glove{left:9px;right:auto}
 .bq-question-curtain.bq-swipe-right .bq-curtain-helper{right:auto!important;left:-18px;transform:scaleX(-1)}
 .bq-question-curtain.bq-swipe-up .bq-veil-handle{right:10%;bottom:8px;transform:rotate(-35deg)}
