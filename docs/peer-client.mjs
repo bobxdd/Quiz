@@ -14,6 +14,48 @@ const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
 const safeUid=id=>UID_RE.test(id||'')&&!['__proto__','constructor','prototype'].includes(id);
 const TOKEN_RE=/^[a-f0-9]{32,128}$/;
 const MAX_WAITING=24, MAX_MESSAGE_BYTES=18000;
+
+/* PeerJS JSON may exceed RTCDataChannel message limits with embedded WAV/images.
+ * Fragment into 8K code-unit packets, preserving Unicode surrogate pairs.
+ * Recipients never render a partial snapshot. */
+const WIRE_PART_CHARS=8000,WIRE_MAX_CHARS=10_000_000,WIRE_MAX_PARTS=1500;
+function wireMessages(message,id){
+ const json=JSON.stringify(message);
+ if(json.length<=WIRE_PART_CHARS)return [message];
+ if(json.length>WIRE_MAX_CHARS)throw Error('Live-Spielstand ist für die Übertragung zu groß.');
+ const chunks=[];
+ for(let start=0;start<json.length;){
+  let end=Math.min(json.length,start+WIRE_PART_CHARS);
+  if(end<json.length&&json.charCodeAt(end-1)>=0xD800&&json.charCodeAt(end-1)<=0xDBFF)end--;
+  if(end<=start)throw Error('Ungültiges Unicode-Paket.');
+  chunks.push(json.slice(start,end));start=end;
+ }
+ if(chunks.length>WIRE_MAX_PARTS)throw Error('Live-Spielstand überschreitet das Nachrichtenlimit.');
+ return chunks.map((data,part)=>({t:'wire-part',id,part,total:chunks.length,data}));
+}
+function nextWirePart(current,msg){
+ if(msg?.t!=='wire-part')return {message:msg,partial:current};
+ if(!Number.isInteger(msg.id)||msg.id<1||!Number.isInteger(msg.total)||msg.total<2||msg.total>WIRE_MAX_PARTS||
+    !Number.isInteger(msg.part)||msg.part<0||msg.part>=msg.total||
+    typeof msg.data!=='string'||!msg.data.length||msg.data.length>WIRE_PART_CHARS){
+  return {message:null,partial:null};
+ }
+ let pending=current;
+ if(!pending||pending.id!==msg.id){
+  if(msg.part!==0)return {message:null,partial:null};
+  pending={id:msg.id,total:msg.total,items:[],size:0,startedAt:Date.now()};
+ }
+ if(pending.total!==msg.total||pending.items.length!==msg.part||
+    Date.now()-pending.startedAt>30000||pending.size+msg.data.length>WIRE_MAX_CHARS){
+  return {message:null,partial:null};
+ }
+ pending.items.push(msg.data);pending.size+=msg.data.length;
+ if(pending.items.length<pending.total)return {message:null,partial:pending};
+ try{return {message:JSON.parse(pending.items.join('')),partial:null};}
+ catch{return {message:null,partial:null};}
+}
+const wireTick=()=>new Promise(resolve=>setTimeout(resolve,0));
+
 const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
 const safeText=(value,length)=>String(value??'').trim().slice(0,length);
 const randomHex=(bytes=20)=>Array.from(crypto.getRandomValues(new Uint8Array(bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -46,7 +88,7 @@ function guestIdentity(room){
 function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 export class PeerGame{
- constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.requestNo=0;this.reconnectTimer=null;this.snapshotTimer=null;this.quitting=false;this.netError='';}
+ constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.requestNo=0;this.reconnectTimer=null;this.snapshotTimer=null;this.incomingWire=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
  async init(){return this;}
  serverNow(){return Date.now()+this.offset;}
  _emit(){for(const entry of [...this.listeners]){try{entry.cb(this._read(entry.path))}catch(error){console.error('[BrainQuiz Peer watcher]',error)}}}
@@ -58,7 +100,7 @@ export class PeerGame{
  _listenHostPeer(peer){
   peer.on('connection',conn=>{
    if(this.mode!=='host'||this.quitting){try{conn.close()}catch{}return}
-   const ctx={conn,uid:null,ready:false,lastChat:0};
+   const ctx={conn,uid:null,ready:false,lastChat:0,wireSequence:0,sentQuizAudioKey:null,wireChain:Promise.resolve()};
    conn.on('data',msg=>this._receiveFromGuest(ctx,msg));
    conn.on('close',()=>this._disconnectGuest(ctx));
    conn.on('error',()=>this._disconnectGuest(ctx));
@@ -104,6 +146,7 @@ export class PeerGame{
   await this._connectGuestOnce();return this.guestData.members?.[this.uid]||null;
  }
  async _connectGuestOnce(){
+  this.incomingWire=null;this.cachedQuizAudio=null;
   const Peer=await this._preparePeer();this.quitting=false;
   const peer=new Peer(undefined,{debug:0});this.peer=peer;
   await new Promise((resolve,reject)=>{
@@ -111,7 +154,9 @@ export class PeerGame{
    const finish=error=>{if(done)return;done=true;clearTimeout(timer);if(error){try{peer.destroy()}catch{}reject(error)}else resolve()};
    peer.on('open',()=>{conn=peer.connect(peerId(this.room),{reliable:true,serialization:'json'});this.conn=conn;
     conn.on('open',()=>conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room}));
-    conn.on('data',msg=>{
+    conn.on('data',input=>{
+     const decoded=nextWirePart(this.incomingWire,input);this.incomingWire=decoded.partial;const msg=decoded.message;
+     if(!msg)return;
      if(msg?.t==='welcome'){if(this.peer!==peer||this.conn!==conn)return;accepted=true;this._applySnapshot(msg.state);this.connected=true;this.netError='';finish();this._emit();}
      else if(msg?.t==='denied')finish(Error(msg.reason||'Beitritt abgelehnt.'));
      else if(this.peer===peer&&this.conn===conn)this._receiveFromHost(msg);
@@ -126,7 +171,21 @@ export class PeerGame{
  _guestLost(){if(this.quitting||this.mode!=='guest')return;this.connected=false;this.netError='Hostverbindung unterbrochen. Wiederverbindung läuft …';for(const pending of this.pending.values()){clearTimeout(pending.timer);pending.reject(Error('Hostverbindung unterbrochen.'))}this.pending.clear();this._emit();
   if(!this.reconnectTimer)this.reconnectTimer=setTimeout(()=>{this.reconnectTimer=null;try{this.peer?.destroy()}catch{}this._connectGuestOnce().catch(()=>{if(!this.quitting)this._guestLost()})},3500);
  }
- _applySnapshot(payload){if(!payload||typeof payload!=='object')return;this.guestData={
+ _applySnapshot(payload){if(!payload||typeof payload!=='object')return;
+  // Hydrate previously delivered audio before publishing this new room state.
+  const q=payload.public?.current;
+  if(q?.type==='audio'&&q._wireAudioKey){
+   if(typeof q.audio==='string'&&q.audio.startsWith('data:audio/')){
+    this.cachedQuizAudio={key:q._wireAudioKey,data:q.audio};
+   }else if(this.cachedQuizAudio?.key===q._wireAudioKey){
+    q.audio=this.cachedQuizAudio.data;
+   }else{
+    console.warn('[BrainQuiz] Audioclip nicht im lokalen Cache. Spielstand verwerfen und erneut verbinden.');
+    return;
+   }
+   delete q._wireAudioKey;
+  }else if(q?.type!=='audio')this.cachedQuizAudio=null;
+  this.guestData={
   public:payload.public||null,lobby:payload.lobby||null,roster:payload.roster||{},presence:payload.presence||{},buzzers:payload.buzzers||{},
   members:payload.member?{[this.uid]:payload.member}:{},responses:payload.ownResponse?{[String(payload.public?.round||0)]:{[this.uid]:payload.ownResponse}}:{},
   messages:payload.messages||{}
@@ -141,7 +200,53 @@ export class PeerGame{
   const msgs=approved&&member.team?{[member.team]:this.data.messages?.[member.team]||{}}:{};
   return {member:clone(member),lobby:lobbySnapshot(this.data),public:clone(publicState),roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs)};
  }
- _sendSnapshot(ctx){if(!ctx?.ready||!ctx.conn?.open)return;try{ctx.conn.send({t:'snapshot',state:this._snapshotFor(ctx)})}catch(error){console.warn('[BrainQuiz] Snapshot nicht übertragbar:',error)}}
+ async _sendHostMessage(ctx,message){
+  if(!ctx.conn?.open)return;
+  // Every receiver gets ordered packets, including its welcome handshake.
+  const previous=ctx.wireChain||Promise.resolve();
+  const sent=previous.then(async()=>{
+   if(!ctx.conn?.open)return;
+   const q=message?.state?.public?.current;
+   let audioKey=null;
+   if(q?.type==='audio'&&typeof q.audio==='string'&&q.audio.length>WIRE_PART_CHARS){
+    audioKey=message.state.public.round+':'+q.id+':'+q.audio.length;
+    q._wireAudioKey=audioKey;
+    if(ctx.sentQuizAudioKey===audioKey)q.audio='';
+   }
+   const packets=wireMessages(message,++ctx.wireSequence);
+   for(let i=0;i<packets.length;i++){
+    if(!ctx.conn?.open)throw Error('Datenkanal während Übertragung geschlossen.');
+    let attempts=0;
+    while(ctx.conn.dataChannel?.bufferedAmount>160000&&attempts++<160){
+     if(!ctx.conn.open)throw Error('Datenkanal geschlossen.');
+     await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    ctx.conn.send(packets[i]);
+    if(i%8===7)await wireTick();
+   }
+   if(audioKey)ctx.sentQuizAudioKey=audioKey;
+  });
+  ctx.wireChain=sent.catch(error=>{
+   console.warn('[BrainQuiz] Live-Spielstand nicht vollständig übertragen:',error);
+   if(ctx.conn?.open)try{ctx.conn.close()}catch{}
+  });
+  return sent;
+ }
+ _sendSnapshot(ctx){
+  if(!ctx?.ready||!ctx.conn?.open)return;
+  ctx.wantSnapshot=true;
+  if(ctx.sendingSnapshot)return;
+  ctx.sendingSnapshot=true;
+  void (async()=>{
+   try{
+    while(ctx.wantSnapshot&&ctx.conn?.open&&ctx.ready){
+     ctx.wantSnapshot=false;
+     await this._sendHostMessage(ctx,{t:'snapshot',state:this._snapshotFor(ctx)});
+    }
+   }catch(error){console.warn('[BrainQuiz] Snapshot nicht übertragbar:',error);}
+   finally{ctx.sendingSnapshot=false;}
+  })();
+ }
  _disconnectGuest(ctx){if(!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
  _receiveFromGuest(ctx,msg){if(!msg||typeof msg!=='object'||Array.isArray(msg))return;
   try{if(JSON.stringify(msg).length>MAX_MESSAGE_BYTES){ctx.conn.close();return}}catch{return}
@@ -156,7 +261,7 @@ export class PeerGame{
    ctx.uid=msg.uid;ctx.ready=true;
    const old=this.guestConnections.get(ctx.uid);if(old&&old!==ctx){try{old.conn.close()}catch{}}
    this.guestConnections.set(ctx.uid,ctx);this.data.presence[ctx.uid]={connectedAt:Date.now()};
-   ctx.conn.send({t:'welcome',state:this._snapshotFor(ctx)});this._changed();return;
+   void this._sendHostMessage(ctx,{t:'welcome',state:this._snapshotFor(ctx)});this._changed();return;
   }
   if(ctx.ready&&msg.t==='action'&&typeof msg.id==='string'&&msg.id.length<=90){
    if(this.guestConnections.get(ctx.uid)!==ctx)return; // A replaced/reconnected data channel cannot issue actions.
