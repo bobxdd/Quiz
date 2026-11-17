@@ -25,7 +25,7 @@ async def answer_tab(host,text='',color=(20,190,120),image=True):
   await host.locator('#se-answer-text').blur()
  if image:
   await host.locator('[data-se-upload="answer-image"]').set_input_files({'name':'answer.png','mimeType':'image/png','buffer':png(*color)})
-  await expect(host.locator('.se-answer-editor-preview .bq-answer-image img')).to_have_count(1,timeout=12000)
+  await expect(host.locator('.bq-answer-editor-preview .bq-answer-image img')).to_have_count(1,timeout=12000)
  await expect(host.locator('.se-answer-readiness.is-ready')).to_be_visible(timeout=12000)
  await expect(host.locator('.bq-answer-editor-preview')).to_be_visible()
  if text: await expect(host.locator('.bq-answer-editor-preview')).to_contain_text(text)
@@ -49,7 +49,7 @@ async def main():
   await expect(host.locator('#se-answer-text')).to_be_visible()
   assert await host.evaluate("window.__probe.getQuiz().questions[0].answerImage")===''
   await host.locator('[data-action="publish"]').click()
-  await expect(host.locator('.se-studio')).to_be_visible(),'Blank answer must not publish'
+  await expect(host.locator('.se-studio')).to_be_visible() # Blank answer must not publish
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
 
   await answer_tab(host,'Anivia ist der Kryophönix.',(32,160,215),True)
