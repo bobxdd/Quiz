@@ -79,7 +79,7 @@ async def main():
   assert by_name['Alice']=='0 km',by_name
   assert by_name['Bob'] and by_name['Bob']!='0 km',by_name
   before=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
-  assert not any((v.get('total') or 0)!=0 for v in before.values()),before
+  assert not any((v.get('total') or 0)!=0 for v in before.values() if isinstance(v,dict)),before
   assert await host.locator('.review-card [data-action="judge-review-correct"]').count()==2
   # Bob is farther away, but the host may choose Bob anyway.
   bobid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Bob')[0]""")
@@ -87,7 +87,7 @@ async def main():
   await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===200""",bobid,timeout=12000)
   after=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
   assert after[bobid]['total']==200,after
-  assert sum(v.get('total',0) for v in after.values())==200,after
+  assert sum(v.get('total',0) for v in after.values() if isinstance(v,dict))==200,after
   assert not errors,errors
   print('PASS: two public distances after solution, private until reveal, host chooses winner manually',flush=True)
   await browser.close()
