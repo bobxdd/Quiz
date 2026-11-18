@@ -762,39 +762,50 @@ function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';
 function renderReviewView(){
  const p=publicState,q=activeQuestion(),buzzerWinner=p.phase==='reveal'&&roundMode(q)==='buzzer'?p.buzzerResolved?.[roundKey()]:null;
  const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
- return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q?.category||'Aktuelle Frage')} · ${e(q?.points||0)} Punkte</h2></div><span class="pill ${p.phase==='reveal'?'good':''}">${p.phase==='reveal'?'Lösung sichtbar':'Antworten aufdecken'}</span></div>
+ return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q?.category||'Aktuelle Frage')} · ${e(q?.points||0)} Punkte</h2></div><span class="pill ${p.phase==='reveal'?'good':''}">${p.phase==='reveal'?(p.solutionVisible===false?'Frage im Rückblick':'Lösung sichtbar'):'Antworten aufdecken'}</span></div>
  ${winnerBanner}<div class="bq-answer-review-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
  <section class="glass panel bq-answers-panel"><h3>Antworten</h3>${renderReviewGallery()}</section></div>
- ${canHost()?`<div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">${buzzerWinner?'Runde abgeschlossen':'Antworten prüfen'}</span>${p.phase==='review'?btn('Alle Antworten aufdecken','reveal-all-answers','primary'):''}${p.phase==='review'?btn('Lösung zeigen','reveal','primary'):''}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
+ ${canHost()?`<div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">${buzzerWinner?'Runde abgeschlossen':'Antworten prüfen'}</span>${p.phase==='review'?btn('Alle Antworten aufdecken','reveal-all-answers','primary'):''}${p.phase==='review'?btn('Lösung zeigen','reveal','primary'):(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small'))}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
  <details class="bq-auxiliary" data-bq-persist="reviewscore"><summary>Bewertungen & Punkte</summary>${scorePanel()}</details></div>`:''}
  ${sessionFooter()}</section>`;
 }
 function canMapPick(){const q=activeQuestion();return role==='guest'&&q?.type==='map'&&member?.status==='approved'&&isOpen()&&(!publicState?.deadline||now()<publicState.deadline)&&(roundMode(q)==='written'?!!publicState?.answerParticipants?.[game?.uid]:winner()?.uid===game?.uid)}
 function releasedMapPins(){
  if(!reviewIsCurrent(publicState))return [];
- const solution=publicState.phase==='reveal'&&activeQuestion()?.type==='map'
+ const solution=publicState.phase==='reveal'&&publicState.solutionVisible!==false&&activeQuestion()?.type==='map'
   ?normalizePoint({x:activeQuestion().mapTargetX,y:activeQuestion().mapTargetY}):null;
  const distances=new Map(mapAnswerDistances(publicState.answerReview,solution).map(row=>[row.id,row.distanceKm]));
  return Object.entries(publicState.answerReview?.entries||{})
   .filter(([,entry])=>entry?.revealed&&decodePoint(entry.value))
   .map(([id,entry])=>({...decodePoint(entry.value),name:entry.name,distanceKm:distances.get(id)??null}));
 }
-function renderMapFallback(q){return renderScene({template:'map',elements:[]},{mapPrompt:q.prompt,mapView:mapCamera,mapCanPick:canMapPick(),mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:publicState?.phase==='reveal'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:releasedMapPins(),revealed:publicState?.phase==='reveal'})}
-function renderStage(readOnly=false){const q=activeQuestion(),isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
+function renderMapFallback(q){return renderScene({template:'map',elements:[]},{mapPrompt:q.prompt,mapView:mapCamera,mapCanPick:canMapPick(),mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:publicState?.phase==='reveal'&&publicState.solutionVisible!==false?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:releasedMapPins(),revealed:publicState?.phase==='reveal'&&publicState.solutionVisible!==false})}
+function renderStage(readOnly=false){let q=activeQuestion();const isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
  if(publicState.phase==='ready')return readyQuestionContent(false);
  if(q.type===TEAM_EMOJI&&publicState.teamEmoji)return renderTeamEmoji(readOnly);
- const showAnswer=isReveal&&q.type!=='imposter';
- let html=`<div class="stage ${showAnswer?'bq-stage-is-answer':''}">${showAnswer?renderAnswerView(q)+'<section class="bq-answer-context" aria-label="Frage im Rückblick">':''}<div class="eyebrow">${e(q.category)} · ${isReveal?(showAnswer?'FRAGE IM RÜCKBLICK':'LÖSUNG'):publicState.phase==='paused'?'PAUSIERT':'FRAGE OFFEN'}</div>${q.scene?'':(q.prompt?`<h2>${e(q.prompt)}</h2>`:'')}${q.scene?renderScene(q.scene,{revealed:showAnswer,interactive:!canHost(),canAnswer:guestCanAnswer()&&!myResponse,picked:pickedOrder,correctIndex:q.type==='imposter'?(q.imposterIndex||0):(q.correct||0),mapCanPick:canMapPick(),mapView:mapCamera,mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:isReveal&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:q.type==='map'?releasedMapPins():[] }):renderBlocks(q.blocks,{reveal:isReveal})}`;
+ const showAnswer=isReveal&&publicState.solutionVisible!==false;
+ // For a step back, reproduce the previous public question display without
+ // duplicating its media in network snapshots or changing the scored round.
+ const previous=!showAnswer&&isReveal?publicState.preRevealDisplay:null;
+ if(previous&&q){
+  const sceneStep=Math.max(0,Math.min(5,Number(previous.sceneStep)||0));
+  q={...q,
+   scene:q.scene?{...q.scene,step:sceneStep,elements:(q.scene.elements||[]).filter(element=>Number(element.step||0)<=sceneStep)}:q.scene,
+   hints:(q.hints||[]).slice(0,Math.max(0,Number(previous.hintStep)||0)),
+   image:previous.image||q.image,
+   visualStep:Math.max(0,Number(previous.visualStep)||0)};
+ }
+ let html=`<div class="stage ${showAnswer?'bq-stage-is-answer':''}">${showAnswer?renderAnswerView(q)+'<section class="bq-answer-context" aria-label="Frage im Rückblick">':''}<div class="eyebrow">${e(q.category)} · ${isReveal?(showAnswer?'FRAGE IM RÜCKBLICK':'FRAGE OFFEN'):publicState.phase==='paused'?'PAUSIERT':'FRAGE OFFEN'}</div>${q.scene?'':(q.prompt?`<h2>${e(q.prompt)}</h2>`:'')}${q.scene?renderScene(q.scene,{revealed:showAnswer,interactive:!canHost(),canAnswer:guestCanAnswer()&&!myResponse,picked:pickedOrder,correctIndex:q.type==='imposter'?(q.imposterIndex||0):(q.correct||0),mapCanPick:canMapPick(),mapView:mapCamera,mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:showAnswer&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:q.type==='map'?releasedMapPins():[] }):renderBlocks(q.blocks,{reveal:showAnswer})}`;
  if(q.type==='map'&&!q.scene)html+=renderMapFallback(q);
  if(!q.scene&&q.type==='splash')html+=safeImage(q.image)?`<img class="media" src="${safeImage(q.image)}" alt="Rätselbild">`:`<p class="hint">Kein Rätselbild hinterlegt.</p>`;
- if(!q.scene&&q.type==='multiple')html+=`<div class="choices">${(q.options||[]).map((opt,i)=>`${guestCanAnswer()?`<button type="button" class="choice ${isReveal&&q.correct===i?'correct':''}" data-action="select-choice" data-choice="${'ABCD'[i]}" ${myResponse?'disabled':''}><b>${'ABCD'[i]}</b>${e(opt)}</button>`:`<div class="choice ${isReveal&&q.correct===i?'correct':''}"><b>${'ABCD'[i]}</b>${e(opt)}</div>`}`).join('')}</div>`;
- if(!q.scene&&q.type==='imposter')html+=`<div class="abilities">${(q.icons||[]).map((icon,i)=>`<div class="ability">${safeImage(icon)?`<img src="${safeImage(icon)}" alt="${e(q.abilityNames?.[i]||'Fähigkeit '+(i+1))}">`:`<div class="preview-placeholder">Icon fehlt</div>`}<b>${e(q.abilityNames?.[i]||ABILITIES[i])}</b></div>`).join('')}</div>`;
+ if(!q.scene&&q.type==='multiple')html+=`<div class="choices">${(q.options||[]).map((opt,i)=>`${guestCanAnswer()?`<button type="button" class="choice ${showAnswer&&q.correct===i?'correct':''}" data-action="select-choice" data-choice="${'ABCD'[i]}" ${myResponse?'disabled':''}><b>${'ABCD'[i]}</b>${e(opt)}</button>`:`<div class="choice ${isReveal&&q.correct===i?'correct':''}"><b>${'ABCD'[i]}</b>${e(opt)}</div>`}`).join('')}</div>`;
+ if(!q.scene&&q.type==='imposter')html+=`<div class="abilities">${(q.icons||[]).map((icon,i)=>`<div class="ability ${showAnswer&&q.imposterIndex===i?'is-imposter':''}" ${showAnswer&&q.imposterIndex===i?'aria-label="Falsches Bild – ausgetauschter Slot"':''}>${safeImage(icon)?`<img src="${safeImage(icon)}" alt="${e(q.abilityNames?.[i]||'Fähigkeit '+(i+1))}">`:`<div class="preview-placeholder">Icon fehlt</div>`}<b>${e(q.abilityNames?.[i]||ABILITIES[i])}</b>${showAnswer&&q.imposterIndex===i?'<span class="bq-imposter-wrong-label">FALSCHES BILD</span>':''}</div>`).join('')}</div>`;
  if(!q.scene&&(q.type==='quote'||q.type==='emoji'))html+=`<div class="cluebox ${q.type==='emoji'?'emojiclue':''}" aria-label="Rätselhinweis">${e(q.clue||'')}</div>`;
  if(q.type==='estimate')html+=`<div class="cluebox">Schätze den Zahlenwert${q.estimateUnit?' in '+e(q.estimateUnit):''}.</div>`;
  if(!q.scene&&q.type==='order')html+=`<div class="ordergrid" aria-label="Einträge zum Sortieren">${(q.displayItems||[]).map((item,i)=>`<button class="orderitem ${pickedOrder.includes(i)&&!canHost()?'chosen':''}" data-action="pick-order" data-index="${i}" ${guestCanAnswer()&&!myResponse&&!pickedOrder.includes(i)?'':'disabled'}><b>${String.fromCharCode(65+i)}</b><span>${e(item)}</span>${!canHost()&&pickedOrder.includes(i)?`<strong>${pickedOrder.indexOf(i)+1}.</strong>`:''}</button>`).join('')}</div>${!canHost()&&isOpen()&&!myResponse?`<div class="small muted">Klicke die Einträge in deiner gewünschten Reihenfolge an. ${pickedOrder.length}/${(q.displayItems||[]).length} gewählt.</div>`:''}`;
  if(q.type==='audio')html+=readOnly?'<p class="small muted">Der Host steuert die Wiedergabe.</p>':soundQuizMarkup(q);
  if((q.hints||[]).length)html+=`<div class="hintlist">${q.hints.map((h,i)=>`<p><b>Tipp ${i+1}:</b> ${e(h)}</p>`).join('')}</div>`;
- if(q.type==='splash'&&!isReveal)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
+ if(q.type==='splash'&&!showAnswer)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
  html+=showAnswer?'</section></div>':'</div>';return html;}
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label],i)=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${TEAM_COLORS[i%TEAM_COLORS.length]}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
 function scoreControls(){const pts=activeQuestion()?.points??100;return Object.entries(publicState?.teams||{}).map(([id,label])=>`<div class="scoreline"><b>${e(label)}</b><div class="row">${btn('−'+pts,'score','small danger',`data-team="${id}" data-amount="-${pts}"`)}${btn('+'+pts,'score','small primary',`data-team="${id}" data-amount="${pts}"`)}</div></div>`).join('');}
@@ -955,10 +966,10 @@ function renderHostLive(){
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${isOpen()?'good':''}">${p.phase==='paused'?'Pausiert':isOpen()?'Frage offen':'Auflösung'}</span></div>
- ${hostVisibilityCard()}${hostBuzzerControl()}${hostPrivateSolution()}<section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
- <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase!=='reveal'?btn('Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion?'':'disabled'):''}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
- ${q?.scene&&isOpen()&&sceneHasStep(quiz.questions.find(x=>x.id===q.id),Number(q.scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}${q?.type==='splash'&&isOpen()&&Number(q.visualStep||0)<2?btn('Bild weiter aufdecken','splash-next','small'):''}${isOpen()&&quiz.questions.find(x=>x.id===q?.id)?.hints?.slice(Number(q.hintStep||0)).some(Boolean)?btn('Tipp '+Math.min(4,Number(q.hintStep||0)+1)+' freigeben','hint-next','primary'):''}
- <details class="bq-auxiliary" data-bq-persist="hostmore"><summary>Mehr · Timer, Chat, Buzzer & Punkte</summary><div class="bq-host-detail"><section><h3>Timer und Buzzer</h3>${buzzerStatus()}<div class="row">${btn(p.settings?.buzzerEnabled?'Buzzer deaktivieren':'Buzzer aktivieren','toggle-buzz','small')}${btn(p.settings?.chatOpen?'Chat sperren':'Chat öffnen','toggle-chat','small')}</div><div class="row"><select id="time-choice" aria-label="Timerdauer">${[15,30,45,60,90,120,180].map(n=>`<option value="${n}">${n} Sekunden</option>`).join('')}</select>${btn('Timer starten','start-timer','small')}${btn('Timer beenden','stop-timer','small',p.deadline?'':'disabled')}</div></section><section><h3>Antworten</h3>${renderResponses()}${renderChat()}</section>${scorePanel()}</div></details></div>
+ ${p.phase==='reveal'?'':hostBuzzerControl()}<section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
+ <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase==='reveal'?(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small')):btn('Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion?'':'disabled')}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
+ ${canHost()&&isOpen()&&(Number(q?.scene?.step||0)>0||Number(q?.hintStep||0)>0||Number(q?.visualStep||0)>0)?btn('Schritt zurück','reveal-prev','small'):''}${q?.scene&&isOpen()&&sceneHasStep(quiz.questions.find(x=>x.id===q.id),Number(q.scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}${q?.type==='splash'&&isOpen()&&Number(q.visualStep||0)<2?btn('Bild weiter aufdecken','splash-next','small'):''}${isOpen()&&quiz.questions.find(x=>x.id===q?.id)?.hints?.slice(Number(q.hintStep||0)).some(Boolean)?btn('Tipp '+Math.min(4,Number(q.hintStep||0)+1)+' freigeben','hint-next','primary'):''}
+ <details class="bq-auxiliary" data-bq-persist="hostmore"><summary>Mehr · Timer, Chat, Buzzer & Punkte</summary><div class="bq-host-detail"><section><h3>Timer und Buzzer</h3>${buzzerStatus()}<div class="row">${btn(p.settings?.buzzerEnabled?'Buzzer deaktivieren':'Buzzer aktivieren','toggle-buzz','small')}${btn(p.settings?.chatOpen?'Chat sperren':'Chat öffnen','toggle-chat','small')}</div><div class="row"><select id="time-choice" aria-label="Timerdauer">${[15,30,45,60,90,120,180].map(n=>`<option value="${n}">${n} Sekunden</option>`).join('')}</select>${btn('Timer starten','start-timer','small')}${btn('Timer beenden','stop-timer','small',p.deadline?'':'disabled')}</div></section><section><h3>Antworten</h3>${renderResponses()}${renderChat()}</section><section class="bq-host-info-wrap">${hostVisibilityCard()}${hostPrivateSolution()}</section>${scorePanel()}</div></details></div>
  ${sessionFooter()}</section>`;
 }
 function renderResponses(){const list=Object.values(responses?.[roundKey()]||{}).sort((a,b)=>(a.at||0)-(b.at||0));if(!list.length)return '<div class="empty">Noch keine eingegangenen Antworten.</div>';const source=canHost()?quiz.questions.find(q=>q.id===activeQuestion()?.id):null;const ranking=source?.type==='estimate'?rankEstimates(list,source.estimateTarget):[];return `${ranking.length?`<div class="hint"><b>Schätz-Ranking (nur Host):</b> Zielwert ${e(source.estimateTarget)} ${e(source.estimateUnit||'')} · ${ranking.map((r,i)=>`${i+1}. ${e(roster?.[r.uid]?.name||'Spieler')} (${e(r.value)}, Δ${e(Number(r.difference.toFixed(3)))})`).join(' · ')}<br><span class="small">Die Punkte werden bewusst weiterhin vom Host vergeben, damit Gleichstände und Sonderregeln manuell geprüft werden können.</span></div>`:''}<div class="roster">${list.map(r=>`<div class="person"><div><b>${e(roster?.[r.uid]?.name||r.uid.slice(0,7))}</b><small>${e(teamName(r.team))} · ${r.at?new Date(r.at).toLocaleTimeString('de-DE'):''}</small><p style="margin:4px 0 0">${e(r.text)}</p></div><div class="row">${btn('Entfernen','erase-answer','small danger',`data-uid="${e(r.uid)}"`)}</div></div>`).join('')}</div>`;}
@@ -982,7 +993,7 @@ function renderGuestLive(){
    ?`<div class="bq-quiz-verdict is-wrong" role="status"><strong>✕ Leider falsch · ${e(lastJudgement.delta)} Punkte</strong><span>Andere Spieler können jetzt buzzern. Die Lösung bleibt verborgen.</span></div>`
    :'';
  const buzzUI=`${resultNotice}<div class="bq-guest-mode"><h3>🎙️ Buzzerfrage</h3><p>${resolved&&publicState.phase==='reveal'?'Diese Runde ist beendet.':b?`<b>${e(b.name)} (${e(teamName(b.team))})</b> darf jetzt antworten.`:'Sobald du bereit bist, auf den Buzzer drücken. Das erste gültige Signal gewinnt – unabhängig davon, wer die Frage ausgewählt hat.'}</p><p class="small muted">Die Antwort wird außerhalb von BrainQuiz gegeben. Der Host bewertet direkt im Quiz.</p></div><button type="button" class="btn primary bq-big-buzzer" data-action="buzz" ${allowedBuzz?'':'disabled'}>${resolved?'Richtig beantwortet · Runde beendet':!open?'Runde beendet':lockedOut?'Für diese Runde gesperrt':b?'Buzzer belegt':waitingForBuzz?'Warte auf Buzzer-Freigabe':timeUp?'Zeit abgelaufen':'◉ JETZT BUZZERN (B)'}</button>${lockedOut?'<p class="small bad">Du bzw. dein Team seid nach einer falschen Antwort bis zur Host-Freigabe gesperrt.</p>':''}${participantHasMap?`<div class="bq-map-hint">📍 Tippe auf die Weltkarte und bestätige deinen Pin.</div><p class="bq-map-result">${mapPick?`Ausgewählt: ${mapPick.x} % / ${mapPick.y} %`:'Noch kein Ort gewählt'}</p>${!written?btn('Kartenpunkt senden','submit-map','primary bq-big-control',mapPick?'':'disabled'):''}`:''}${myResponse&&q.type==='map'?'<p class="small good">Kartenpunkt beim Host eingegangen. Bis zum Rundenende kannst du ihn aktualisieren.</p>':''}`;
- return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${open?'good':''}">${open?'Offen':publicState.phase==='paused'?'Pausiert':'Warten'}</span></div><div class="bq-question-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section><section class="glass panel bq-guest-compose"><div class="panelhead"><h3>${written?'Schriftliche Runde':'Dein Buzzer'}</h3>${publicState.deadline?'<span class="pill" id="clock">–:––</span>':''}</div>${written?writtenUI:buzzUI}<details class="bq-auxiliary" data-bq-persist="teamchat"><summary>Privater Teamchat</summary>${renderChat()}</details></section></div>${sessionFooter()}</section>`;
+ return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${open?'good':''}">${open?'Offen':publicState.phase==='paused'?'Pausiert':'Warten'}</span></div><div class="bq-question-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>${publicState.phase==='reveal'?`<div class="bq-guest-reveal-status">${resultNotice}</div>`:`<section class="glass panel bq-guest-compose"><div class="panelhead"><h3>${written?'Schriftliche Runde':'Dein Buzzer'}</h3>${publicState.deadline?'<span class="pill" id="clock">–:––</span>':''}</div>${written?writtenUI:buzzUI}<details class="bq-auxiliary" data-bq-persist="teamchat"><summary>Privater Teamchat</summary>${renderChat()}</details></section>`}</div>${sessionFooter()}</section>`;
 }
 function renderTeams(){
  if(!publicState)return '<div class="empty">Lade Lobby …</div>';
@@ -1203,8 +1214,9 @@ function renderPresenter(){
  else content=`<section class="bq-session-scene bq-question-scene" data-scene="rehearsal">
   ${q?renderRehearsalControls(q):''}
   <section class="glass panel bq-question-panel presenter-stage">${renderStage()}</section>
-  <div class="row bq-action-bar">${publicState.phase!=='reveal'?btn('Lösung zeigen','reveal','primary'):''}
+  <div class="row bq-action-bar">${publicState.phase!=='reveal'?btn('Lösung zeigen','reveal','primary'):(publicState.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small'))}
    ${btn('Zurück zur Übersicht','back','primary')}
+   ${isOpen()&&(Number(activeQuestion().scene?.step||0)>0||Number(activeQuestion().hintStep||0)>0)?btn('Schritt zurück','reveal-prev','small'):''}
    ${q?.scene&&isOpen()&&sceneHasStep(q,Number(activeQuestion().scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}
   </div>${sessionFooter()}</section>`;
  return toolbar+`<div class="${rehearsal.compact?'bq-probe-compact':''}">${content}</div>`;
@@ -1256,7 +1268,14 @@ async function hostOpen(id){
 function buildRevealPatch(q){
  const v=q.type==='order'?publicState.current.displayItems:q.image||'';
  const sceneStep=q.type==='imposter'?Number(publicState.current.scene?.step||0):6;
- const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',deadline:0,pausedRemaining:0};
+ const preRevealDisplay={
+  sceneStep:Number(publicState.current.scene?.step||0),
+  hintStep:Number(publicState.current.hintStep||0),
+  visualStep:Number(publicState.current.visualStep||0),
+  // A splash crop is different from the full answer image and must be kept.
+  ...(q.type==='splash'?{image:publicState.current.image||''}:{})
+ };
+ const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',solutionVisible:true,preRevealDisplay,deadline:0,pausedRemaining:0};
  if(q.type==='map'){
   // Publish all submitted pins atomically with the solution; private until now.
   const answers=responses?.[roundKey()]||{};
@@ -1281,6 +1300,38 @@ async function hostReveal(){
 async function hostHint(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||!isOpen())return;const current=Number(activeQuestion()?.hintStep||0);if(current>=4)return;const next=(q.hints||[]).findIndex((h,i)=>i>=current&&h.trim());if(next<0)return;const v=q.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(q,false,v,next+1,Number(activeQuestion()?.scene?.step||0));if(q.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);await game.updateCurrent(room,Number(publicState.round),q.id,{current:pub},['question']);}
 async function hostSplashNext(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||q.type!=='splash'||!isOpen())return;const expectedRound=Number(publicState.round);const next=Math.min(2,Number(activeQuestion().visualStep||0)+1);const visual=await splashPreview(q.image,{...q,zoom:splashStageZoom(q.zoom,next)},false);const pub=publicQuestion(q,false,visual,Number(activeQuestion().hintStep)||0,Number(activeQuestion()?.scene?.step||0));pub.visualStep=next;await game.updateCurrent(room,expectedRound,q.id,{current:pub},['question']);}
 async function hostSceneNext(){const source=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!source?.scene||!isOpen())return;const step=Number(activeQuestion()?.scene?.step||0);if(step>=5)return;const next=step+1;const v=source.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(source,false,v,Number(activeQuestion()?.hintStep||0),next);if(source.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);if(isOffline()){publicState.current=pub;schedule();}else await game.updateCurrent(room,Number(publicState.round),source.id,{current:pub},['question']);}
+async function hostPreviousReveal(){
+ if(!canHost()||!activeQuestion())return;
+ const source=quiz.questions.find(q=>q.id===activeQuestion().id);
+ if(!source)throw Error('Die Originalfrage fehlt.');
+ const phase=publicState.phase,round=Number(publicState.round),id=source.id;
+ if(phase==='reveal'){
+  if(publicState.solutionVisible===false)return;
+  if(isOffline()){publicState.solutionVisible=false;schedule();}
+  else await game.updateCurrent(room,round,id,{solutionVisible:false},['reveal']);
+  return;
+ }
+ if(!isOpen())return; // Never reopen voting or buzzers after scoring.
+ const q=activeQuestion(),scene=Number(q.scene?.step||0),hints=Number(q.hintStep||0),visual=Number(q.visualStep||0);
+ if(!scene&&!hints&&!visual)return;
+ if(visual>0&&source.type==='splash'){
+  const image=await splashPreview(source.image,{...source,zoom:splashStageZoom(source.zoom,visual-1)},false);
+  const pub=publicQuestion(source,false,image,hints,scene);pub.visualStep=visual-1;
+  if(isOffline()){publicState.current=pub;schedule();}
+  else await game.updateCurrent(room,round,id,{current:pub},['question']);
+  return;
+ }
+ const v=source.type==='order'?q.displayItems:q.image||'';
+ const pub=publicQuestion(source,false,v,scene>0?hints:Math.max(0,hints-1),Math.max(0,scene-1));
+ if(source.type==='splash')pub.visualStep=visual;
+ if(isOffline()){publicState.current=pub;schedule();}
+ else await game.updateCurrent(room,round,id,{current:pub},['question']);
+}
+async function hostRepeatSolution(){
+ if(!canHost()||publicState?.phase!=='reveal'||publicState.solutionVisible!==false||!activeQuestion())return;
+ if(isOffline()){publicState.solutionVisible=true;schedule();}
+ else await game.updateCurrent(room,Number(publicState.round),activeQuestion().id,{solutionVisible:true},['reveal']);
+}
 async function hostPause(){let remains=publicState.deadline?Math.max(0,publicState.deadline-now()):0;await game.updateCurrent(room,Number(publicState.round),publicState.current.id,{phase:'paused',deadline:0,pausedRemaining:remains},['question']);}
 async function hostResume(){const ms=publicState.pausedRemaining||0;await game.updateCurrent(room,Number(publicState.round),publicState.current.id,{phase:'question',deadline:ms?now()+ms:0,pausedRemaining:0},['paused']);}
 function makeQuestion(){return normalizedQuiz({questions:[{id:uid(),roundMode:'buzzer',category:'Neue Kategorie',title:'Neue Frage',type:'text',points:100,prompt:'',answer:'',explanation:'',cropX:50,cropY:50,zoom:3,icons:['','','','',''],abilityNames:ABILITIES,orderItems:[],seconds:0,hints:['','','','']}] ,teams:quiz.teams,title:quiz.title}).questions[0]}
@@ -1458,6 +1509,8 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'splash-next':if(!canHost())return;await hostSplashNext();return;
  case 'hint-next':if(!canHost())return;await hostHint();return;
  case 'scene-next':if(!canHost())return;await hostSceneNext();return;
+ case 'reveal-prev':await hostPreviousReveal();return;
+ case 'solution-forward':await hostRepeatSolution();return;
  case 'save-q':saveLocal();if(!isOffline()){cloudDirty=true;await flushHostCloudSave();notice('Frage privat im Host-Browser gesichert.');}else notice('Frage lokal gespeichert.');return;
  case 'import':$('import-quiz')?.click();return;
  case 'export':safeDownload(backupFilename(),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quizbrett als privates Backup exportiert. Nicht an Teilnehmer weitergeben!');return;

@@ -95,7 +95,7 @@ async def main():
    assert await page.evaluate("window.__probe.info().publicState.current.answer")=='Anivia'
    assert await page.evaluate("window.__probe.info().publicState.buzzerResolved?.['1']?.team")=='t2'
   await expect(bob.locator('.bq-quiz-verdict.is-right')).to_contain_text('Richtig beantwortet')
-  await expect(bob.locator('[data-action="buzz"]')).to_be_disabled()
+  await expect(bob.locator('[data-action="buzz"]')).to_have_count(0)  # The completed round hides its inactive buzzer.
   await expect(host.locator('[data-action="buzz-correct"]')).to_have_count(0)
   await expect(host.locator('[data-action="reveal"]')).to_have_count(0)
   await expect(host.locator('[data-action="back"]')).to_have_text('Weiter zum Quizbrett')

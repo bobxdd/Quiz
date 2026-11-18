@@ -57,7 +57,7 @@ test('Map solution reveal publishes all valid pins in one state update without c
  assert.match(source,/patch\.answerReview=review/);
  assert.match(source,/updateCurrent\(room,Number\(publicState\.round\),q\.id,buildRevealPatch\(q\)/);
  assert.doesNotMatch(source,/judgeWritten|scorePerson|winner\(|scoreTarget|buzzerResolved/);
- assert.match(app,/const solution=publicState\.phase==='reveal'&&activeQuestion\(\)\?\.type==='map'/);
+ assert.match(app,/const solution=publicState\.phase==='reveal'&&publicState\.solutionVisible!==false&&activeQuestion\(\)\?\.type==='map'/);
  assert.match(app,/mapAnswerDistances\(board,solution\)/);
  assert.match(app,/Der Host entscheidet weiterhin selbst/);
  assert.match(viewport,/formatMapDistanceKm\(pin\.distanceKm\)/);

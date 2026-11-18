@@ -86,9 +86,13 @@ test('four Ability-Imposter slots share the same decoy and only that slot is rep
  assert.deepEqual(before,publicQuestion(copy),'guest snapshots are deterministic');
  assert.equal(JSON.stringify(before).includes(image(8)),false);
  const after=publicQuestion(copy,true);
+ // The misleading icon stays visible during the answer reveal. Replacing it
+ // here would remove the very mistake the audience must identify.
  const changed=before.scene.elements.flatMap((element,index)=>element.src===after.scene.elements[index].src?[]:[element.id]);
- assert.deepEqual(changed,[slots[2].id]);
- assert.equal(after.scene.elements.find(element=>element.id===slots[2].id).src,image(8));
- assert.deepEqual(after.icons,[image(0),image(1),image(8),image(3)]);
+ assert.deepEqual(changed,[]);
+ assert.equal(after.scene.elements.find(element=>element.id===slots[2].id).src,image(2));
+ assert.deepEqual(after.icons,[image(0),image(1),image(2),image(3)]);
+ assert.equal(after.correctIcon,image(8),'the genuine icon is released alongside the answer');
+ assert.equal(after.imposterIndex,2,'the answer identifies which wrong slot to outline');
  assert.equal(copy.icons[2],image(2));
 });

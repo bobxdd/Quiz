@@ -175,11 +175,12 @@ async def run(browser, root):
         assert await images(page).evaluate_all('items => items.map(item => item.src)') == before
     await host.locator('[data-action="reveal"]').click()
     for page in [host, *players, viewer]:
-        await expect(images(page).nth(2)).to_have_attribute('src', original)
-        assert await images(page).evaluate_all('items => items.map(item => item.src)') == [*before[:2], original, before[3]]
-        await expect(page.locator('.bq-question-panel .bq-answer-image')).to_have_count(0)
+        await expect(images(page).nth(2)).to_have_attribute('src', before[2])
+        assert await images(page).evaluate_all('items => items.map(item => item.src)') == before
+        await expect(page.locator('.bq-question-panel .se-imposter-image')).to_have_count(1)
+        await expect(page.locator('.bq-question-panel .bq-answer-image img')).to_have_attribute('src', original)
     assert not errors, errors
-    print('PASS: four shared Ability-Imposter images, only the decoy slot becomes the original', flush=True)
+    print('PASS: four Ability-Imposter images keep original decoy highlighted; real icon and answer shown separately', flush=True)
     await context.close()
 
 
