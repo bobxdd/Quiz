@@ -24,6 +24,7 @@ async def main():
   await host.locator('[data-se-field="title"]').blur()
   await host.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
   await host.locator('#se-answer-text').fill('Anivia')
+  await host.locator('.se-host-metadata > summary').click()
   await host.locator('[data-se-field="hostNotes"]').fill('Privat: Nur der Host darf das lesen.')
   await host.locator('[data-se-field="hostNotes"]').blur()
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()

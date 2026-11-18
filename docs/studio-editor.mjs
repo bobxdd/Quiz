@@ -102,7 +102,7 @@ export function createStudioEditor(api){
    +(item.answerImage?'<button type="button" class="se-answer-remove" data-se-action="answer-image-remove">✕ Antwortbild entfernen</button>':'')
    +input('answerImageAlt','Bildbeschreibung für Barrierefreiheit',item.answerImageAlt||'')
    +input('explanation','Zusätzliche Erklärung (optional)',item.explanation||'',{rows:3})
-   +'<details class="se-host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe; die Bewertung bleibt beim Host.</p>'
+   +'<details class="se-host-metadata" data-bq-persist="host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe; die Bewertung bleibt beim Host.</p>'
    +input('acceptedAnswers','Weitere akzeptierte Lösungen · eine pro Zeile',item.acceptedAnswers||'',{rows:3})
    +input('hostNotes','Notizen für die Moderation · nur Host',item.hostNotes||'',{rows:4})
    +input('sourceUrl','Quellenlink (https://)',item.sourceUrl||'')
