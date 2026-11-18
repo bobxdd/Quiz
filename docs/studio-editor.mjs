@@ -284,6 +284,11 @@ export function createStudioEditor(api){
   sel='';menu=null;libraryMenu=null;preview=false;reveal=0;draw();
  }
  function updateField(field,value){const item=current(),el=find();if(!item)return;
+  if(field==='category'&&categoryKey(value)!==categoryKey(item.category)&&questionsInCategory(visibleQuestions(),value).length>=6){
+   const control=document.querySelector('#se-root [data-se-field="category"]');
+   if(control)control.value=item.category;
+   throw Error('Die Zielkategorie enthält bereits sechs Fragen.');
+  }
   if(field==='boardRound'){
    const destination=Number(value)===2?2:1;
    const questions=roundQuestions(quiz(),destination),cats=roundCategories(quiz(),destination);

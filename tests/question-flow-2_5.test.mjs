@@ -20,7 +20,8 @@ test('2.7 P2P: host serializes question opening and validates full board identit
  const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const peer=readFileSync(new URL('../docs/peer-client.mjs',import.meta.url),'utf8');
  assert.match(app,/await game\.openQuestion\(/);
- assert.match(peer,/openQuestionState\(d\.public/);
+ assert.match(peer,/openQuestionState\(state/);
+ assert.match(peer,/makeSelectionTurn\(d\.public,d\.roster\)/);
  assert.match(peer,/applyQuestionChanges\(d\.public/);
  assert.doesNotMatch(app,/await game\.setState\(room,\{current:pub\}/);
  assert.match(app,/openingQuestion=true/);

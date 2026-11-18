@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion,pageBoardColumns} from '../docs/core.mjs';
 import {changeSelectedQuestions} from '../docs/editor-workflows.mjs';
 import {boardLayoutIssues,roundCategories,roundQuestions} from '../docs/category-model.mjs';
-import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair} from '../docs/question-flow.mjs';
+import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair,makeSelectionTurn,selectingTeam,resetBoardGameState} from '../docs/question-flow.mjs';
 
 const questions=[
  {id:'first',category:'Champions',points:100,prompt:'Erste geheime Frage',answer:'Antwort eins'},
@@ -82,4 +82,45 @@ test('batch category moves enforce six cells per round before changing questions
  assert.equal(q.questions.at(-1).boardRound,2);
  assert.equal(q.questions.at(-1).points,500);
  assert.equal(q.questions.at(-1).category,'Quelle');
+});
+
+
+test('team selection rotates after a completed field and across boards, independently of score',()=>{
+ const p=state();p.teams.t3='Leer';p.selectionTurn=makeSelectionTurn(p,{alice:{team:'t1'},bob:{team:'t2'}});
+ assert.deepEqual(p.selectionTurn.order,['t1','t2']);
+ assert.equal(selectingTeam(p),'t1');
+ const q=quiz().questions[0];
+ const ready=openQuestionState(p,{expectedRound:0,question:q,playerQuestion:publicQuestion(q),covered:true});
+ assert.equal(selectingTeam(returnToBoardState(ready)),'t1','covered cancellation must preserve the chooser');
+ const next=returnToBoardState({...ready,phase:'reveal',scores:{t1:600,t2:-50}});
+ assert.equal(next.boardRound,2);
+ assert.equal(selectingTeam(next),'t2','next team chooses even when team one won the points');
+ const second=quiz().questions[1];
+ const finished=returnToBoardState({...openQuestionState(next,{expectedRound:1,question:second,playerQuestion:publicQuestion(second)}),phase:'reveal'});
+ assert.equal(selectingTeam(finished),'t1');
+ assert.deepEqual(finished.scores,{t1:600,t2:-50});
+});
+
+test('a reserved team selection cannot be replaced by another field',()=>{
+ const p=state();p.questionPick={qid:'other',round:0,team:'t1'};
+ const q=quiz().questions[0];
+ assert.equal(openQuestionState(p,{expectedRound:0,question:q,playerQuestion:publicQuestion(q),covered:true}),null);
+ assert.equal(makeSelectionTurn({...p,scoreMode:'individual'}),null);
+});
+
+
+test('restarting a completed game resets both boards, turn order and every previous buzzer verdict',()=>{
+ const p={...state(),boardRound:2,phase:'finished',round:2,selectionTurn:{order:['t1','t2'],index:3},
+  buzzerResolved:{1:{uid:'alice'}},buzzerJudgements:{1:{result:'correct'}},buzzerBlocked:{1:{bob:true}},
+  buzzerBlockedTeams:{1:{t2:true}},playerScores:{alice:{total:500}},questionPick:{qid:'second'},
+  presentation:'scores',finaleStep:2};
+ const before=structuredClone(p);
+ const next=resetBoardGameState(p,buildPublicBoard(quiz()),{alice:{team:'t1'},bob:{team:'t2'}});
+ assert.equal(next.boardRound,1);assert.equal(next.round,0);assert.equal(next.phase,'board');
+ assert.equal(selectingTeam(next),'t1');assert.equal(next.started,false);
+ assert.deepEqual(next.scores,{t1:0,t2:0});assert.deepEqual(next.playerScores,{});
+ for(const key of ['used','buzzerResolved','buzzerJudgements','buzzerBlocked','buzzerBlockedTeams'])assert.deepEqual(next[key],{});
+ assert.equal(next.questionPick,null);assert.equal(next.presentation,null);
+ assert.equal(next.board.first.used,false);assert.equal(next.board.second.used,false);
+ assert.deepEqual(p,before);
 });

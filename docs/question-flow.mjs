@@ -2,6 +2,26 @@
 // its unique board ID, not its category/title/position.
 const own=(obj,key)=>obj!=null&&Object.hasOwn(obj,key);
 const boardRound=value=>Number(value?.boardRound)===2?2:1;
+export function makeSelectionTurn(state,roster={}){
+ if(state?.scoreMode==='individual')return null;
+ const occupied=new Set(Object.values(roster).map(player=>player?.team));
+ const all=Object.keys(state?.teams||{});
+ const order=all.filter(id=>occupied.has(id));
+ return {order:order.length?order:all,index:0};
+}
+export function selectingTeam(state){
+ const turn=state?.selectionTurn;
+ if(state?.scoreMode==='individual'||!Array.isArray(turn?.order))return '';
+ const order=turn.order.filter(id=>own(state.teams,id));
+ return order.length?order[(Number.isSafeInteger(turn.index)&&turn.index>=0?turn.index:0)%order.length]:'';
+}
+export function resetBoardGameState(state,board,roster={}){
+ return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
+  used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
+  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},
+  answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
+  selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
+}
 export function remainingBoardQuestions(state,round=boardRound(state)){
  return Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round&&!cell.used&&!state.used?.[cell.id]);
 }
@@ -14,7 +34,8 @@ export function advanceBoardState(state){
 }
 export function returnToBoardState(state){
  if(!state?.current||!['ready','question','answered','paused','review','reveal'].includes(state.phase))return null;
- const next={...state,phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null,teamEmoji:null,presentation:null};
+ const next={...state,phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null,teamEmoji:null,presentation:null,questionPick:null};
+ if(state.phase!=='ready'&&selectingTeam(state))next.selectionTurn={...state.selectionTurn,index:(Number(state.selectionTurn.index)||0)+1};
  if(state.phase==='ready'){
   const id=state.current.id;
   next.used={...state.used};delete next.used[id];
@@ -31,12 +52,13 @@ export function validQuestionPair(state,question){
 export function openQuestionState(state,{expectedRound,question,playerQuestion,participants,deadline=0,covered=false}){
   if(!state||!['board','reveal'].includes(state.phase)||Number(state.round)!==Number(expectedRound))return null;
   if(state.boardSequence&&state.phase!=='board')return null;
+  if(state.questionPick&&state.questionPick.qid!==question?.id)return null;
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
   const current=covered?{id:question.id,category:question.category,type:question.type,points:question.points,roundMode:playerQuestion.roundMode}:playerQuestion;
   return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,
-    answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,
+    answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
 export function applyQuestionChanges(state,expectedRound,expectedId,changes,allowedPhases=['question','paused','review']){

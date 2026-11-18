@@ -7,7 +7,7 @@ import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
-import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState} from './question-flow.mjs';
+import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz} from './backup-store.mjs';
 import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
@@ -560,7 +560,18 @@ export class PeerGame{
     this._syncTeamEmoji();
     return true;
    }
-   case 'pick':{const qid=safeText(payload.qid,80);if(!Object.hasOwn(pub?.board||{},qid)||pub.board[qid].used||pub.phase!=='board')throw Error('Frage nicht mehr verfügbar.');this.data.picks[ctx.uid]={uid:ctx.uid,qid,name:member.name,at:now};return true}
+   case 'pick':{
+    const qid=safeText(payload.qid,80),cell=pub?.board?.[qid];
+    if(!Object.hasOwn(pub?.board||{},qid)||!cell||cell.used||pub.phase!=='board'||(Number(cell.boardRound)===2?2:1)!==(Number(pub.boardRound)===2?2:1))throw Error('Frage nicht mehr verfügbar.');
+    const team=selectingTeam(pub);
+    if(team){
+     if(Number(payload.round)!==Number(pub.round))throw Error('Die Fragenauswahl gehört zu einer früheren Runde.');
+     if(team!==member.team)throw Error('Gerade wählt ein anderes Team die Frage. Alle dürfen danach buzzern.');
+     if(pub.questionPick)throw Error('Dein Team hat bereits eine Frage ausgewählt.');
+     pub.questionPick={qid,uid:ctx.uid,team:member.team,round:Number(pub.round)};
+    }
+    this.data.picks[ctx.uid]={uid:ctx.uid,qid,team:member.team,name:member.name,round:Number(pub.round),at:now};return true;
+   }
    case 'buzz':{
     if(round!==String(payload.round))throw Error('Die Buzzer-Runde ist nicht mehr offen.');
     if(this.data.buzzers[round])return false;
@@ -637,11 +648,12 @@ export class PeerGame{
  async buzzer(room,round,team,name){if(this.mode==='guest')return this._rpc('buzz',{round});throw Error('Buzzer nur für Teilnehmer.')}
  async answer(room,round,team,text){if(this.mode==='guest')return this._rpc('answer',{round,text});throw Error('Antworten nur für Teilnehmer.')}
  async message(room,team,name,text){if(this.mode==='guest')return this._rpc('message',{text});const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Unbekanntes Team.');const id='m_'+randomHex(9);d.messages[team]??={};d.messages[team][id]={uid:this.uid,name:'HOST',text:safeText(text,500),at:Date.now()};const keys=Object.keys(d.messages[team]);for(const key of keys.slice(0,-80))delete d.messages[team][key];this._changed()}
- async setState(room,changes){const d=this._getHostData(room);for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
+ async setState(room,changes){const d=this._getHostData(room);if(changes.started===true&&!d.public.started){d.public.selectionTurn=makeSelectionTurn(d.public,d.roster);d.public.boardSequence=true;}for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
  async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
   const d=this._getHostData(room);
+  const state=covered&&!d.public.selectionTurn?{...d.public,selectionTurn:makeSelectionTurn(d.public,d.roster),boardSequence:true}:d.public;
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
-  const next=openQuestionState(d.public,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
+  const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
    participants:emoji?null:participants,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
   d.public=next;
@@ -674,7 +686,7 @@ export class PeerGame{
   const previous=d.public,next=returnToBoardState(previous);
   if(!next)throw Error('Keine aktive Frage.');
   if(previous.phase==='ready')delete d.questionHistory[String(previous.round)];
-  d.public=next;delete d.pendingQuestion;delete d.teamEmoji;
+  d.public=next;d.picks={};delete d.pendingQuestion;delete d.teamEmoji;
   this._scheduleTeamEmojiDeadline();this._changed();
   return clone(next);
  }
@@ -751,8 +763,8 @@ export class PeerGame{
  async chooseLobbyTeam(room,team){if(this.mode==='guest')return this._rpc('lobby-join',{team});throw Error('Teamwahl nur für Teilnehmer.')}
  async createLobbyTeam(room,name){if(this.mode==='guest')return this._rpc('lobby-create',{name});throw Error('Teamerstellung nur für Teilnehmer.')}
  async setLobbyReady(room,ready){if(this.mode==='guest')return this._rpc('lobby-ready',{ready});throw Error('Bereitschaft nur für Teilnehmer.')}
- async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid});throw Error('Nur Teilnehmer können Fragen wünschen.')}
- async clearPicks(room){const d=this._getHostData(room);d.picks={};this._changed()}
+ async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid,round:this.guestData.public?.round});throw Error('Nur Teilnehmer können Fragen wünschen.')}
+ async clearPicks(room){const d=this._getHostData(room);d.picks={};d.public.questionPick=null;this._changed()}
  async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');
   const before=clone(d.public);d.public.playerScores??={};
   const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;
@@ -795,7 +807,7 @@ export class PeerGame{
  }
  async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
- async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];delete d.pendingQuestion;delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
+ async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];d.public.questionPick=null;delete d.pendingQuestion;delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
  async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}
   for(const ctx of this.projectorConnections){try{ctx.conn.send({t:'closed'});}catch{}}
   this.data=null;this.shutdown();await (this.checkpointWrites||Promise.resolve()).catch(()=>null);

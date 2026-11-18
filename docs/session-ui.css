@@ -507,3 +507,5 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-round-picker span { font-size: .82rem; color: #b7c8c2; }
 .se-category-move { white-space: normal !important; font-size: .75rem; }
 .bq-rehearsal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .75rem; }
+
+.bq-selection-turn{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;padding:12px 16px;margin:0 0 12px;border:1px solid var(--line);border-left:4px solid #ffd86b}.bq-selection-turn strong{color:#ffd86b}.bq-selection-turn span{font-size:.88rem;color:var(--muted)}

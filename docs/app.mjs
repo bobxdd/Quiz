@@ -11,7 +11,7 @@ import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease,checkQuizMedia} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
-import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions} from './question-flow.mjs';
+import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,makeSelectionTurn,selectingTeam,resetBoardGameState} from './question-flow.mjs';
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
@@ -66,7 +66,7 @@ async function restoreHostQuiz(){
  const saved=await game.getHostQuiz(room);
  if(saved){quiz=normalizedQuiz(saved);selected=quiz.questions[0]?.id||'';saveLocal();}
  else{loadLocal();await game.saveHostQuiz(room,normalizedQuiz(quiz));}
- hostCloudReady=true;
+ hostCloudReady=true;void maybeOpenSelectedQuestion();
 }
 const roomFromLink=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,16);
 const canHost=()=>role==='host';
@@ -138,7 +138,7 @@ function projectorFrame(){
    <div class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage(true)}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Runde ${boardRoundOf(p)} · Fragenübersicht</h1>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Runde ${boardRoundOf(p)} · Fragenübersicht</h1>${selectingTeam(p)?`<p>${e(teamName(selectingTeam(p)))} wählt die nächste Frage.</p>`:''}
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>`;
@@ -341,6 +341,7 @@ function publicAudioEvents(next){
       (canHost()||uid===game?.uid))sfx.play(val.result);
   }
  }
+ if(prev&&next&&((prev.phase!=='board'&&next.phase==='board')||(prev.round!==next.round&&next.phase==='ready')))view=canHost()?'live':'play';
  publicState=next;
 }
 function buzzerAudioEvents(v){
@@ -363,13 +364,23 @@ function soundMenu(){
   +'<p class="small muted">Sound-Vorschau startet auch den Ton im Browser.</p></div></details>';
 }
 
+async function maybeOpenSelectedQuestion(){
+ const state=publicState,pick=state?.questionPick;
+ if(!canHost()||isOffline()||!hostCloudReady||openingQuestion||state?.phase!=='board'||!pick||pick.round!==state.round||pick.team!==selectingTeam(state))return;
+ view='live';
+ try{await hostOpen(pick.qid);}
+ catch(err){
+  if(publicState?.phase==='board'&&publicState.questionPick?.qid===pick.qid)await game.clearPicks(room).catch(()=>{});
+  error(err);
+ }
+}
 function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;playerEmoji=null;emojiDraft=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
  if(canHost()){
   game.watch('.info/diagnostics',()=>{if(view==='setup')schedule();});
   game.watchRoom(room,'picks',v=>{picks=v||{};schedule();});
   game.watchRoom(room,'questionHistory',v=>{questionHistory=v||{};schedule();});
-  game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();});
+  game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();void maybeOpenSelectedQuestion();});
   game.watchRoom(room,'members',v=>{members=v||{};schedule();});
   game.watchRoom(room,'roster',v=>{roster=v||{};schedule();});
   game.watchRoom(room,'presence',v=>{presence=v||{};schedule();});
@@ -678,11 +689,12 @@ function renderBoard(readOnly=false){
  if(!pages.length)return '<div class="empty">Noch keine Fragen veröffentlicht.</div>';
  const page=pages[readOnly?0:Math.min(boardPage,pages.length-1)];
  const choose=canHost()?'open':'request-pick';
+ const canSelect=canHost()||(!publicState.questionPick&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
  const used=isBoardCellPlayed(q,publicState);
  if(readOnly)return `<div class="tile ${used?'used is-played':''}" aria-label="${e(q.points)} Punkte${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(q.points)}</span></div>`;
- return `<button type="button" class="tile ${used?'used is-played':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':''}" ${used||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
+ return `<button type="button" class="tile ${used?'used is-played':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':''}" ${used||!canSelect||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
@@ -739,6 +751,7 @@ function boardScene(host=false){
  const cells=boardColumns().flatMap(column=>column.items);
  const suggestions=host?Object.entries(picks||{}).filter(([,x])=>p.board?.[x.qid]&&!p.board[x.qid]?.used):[];
  return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+ ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span></div>`:''}
  ${sceneCameos('board')}${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section>
  ${suggestions.length?`<details class="bq-auxiliary"><summary>${suggestions.length} Fragenwunsch${suggestions.length===1?'':'e'} von Teilnehmern</summary><div class="row">${suggestions.slice(-8).map(([,x])=>btn(`${e(x.name||'Spieler')}: ${e(p.board[x.qid]?.category||'')} ${e(p.board[x.qid]?.points||'')}`,'open','small',`data-qid="${e(x.qid)}"`)).join('')}</div></details>`:''}
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
@@ -1049,7 +1062,7 @@ function beginRehearsal(){
  publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
   board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
   used:{},playerScores:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
- roster=structuredClone(REHEARSAL_PLAYERS);buzzers={};responses={};questionHistory={};
+ roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
  view='present';boardPage=0;previewRevealed=false;schedule();
 }
 function endRehearsal(){
@@ -1382,7 +1395,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'adjust-player':{if(!canHost()||!scoreTarget)throw Error('Person auswählen.');const delta=Number($('person-adjust')?.value);const actionData={kind:'manual',delta,at:now()};if(isOffline()){publicState.playerScores??={};publicState.playerScores[scoreTarget]=updatePlayerScore(publicState.playerScores[scoreTarget],actionData);saveOfflineSession();schedule();}else await game.scorePerson(room,scoreTarget,actionData);notice('Punkte korrigiert.');return;}
  case 'score-page':{scorePage=Math.max(0,scorePage+Number(button.dataset.delta||0));schedule();return;}
  case 'board-page':{boardPage=Math.max(0,Math.min(boardPages().length-1,boardPage+Number(button.dataset.delta||0)));schedule();return;}
- case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;await sendGuestAction('Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice('Fragenwunsch an den Host gesendet.');return;}
+ case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;const turn=selectingTeam(publicState);if(turn&&turn!==member.team)throw Error('Gerade wählt ein anderes Team.');await sendGuestAction(turn?'Fragenauswahl':'Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice(turn?'Frage ausgewählt. Der Host deckt sie auf.':'Fragenwunsch an den Host gesendet.');return;}
  case 'promote-online':await promoteOnline();return;
  case 'add-block':{const q=currentQuestion();if(!q)return;if(q.blocks.length>=18)throw Error('Maximal 18 Layout-Elemente pro Frage.');snapshotLayout();const b=newBlock(button.dataset.blockType||'text');q.blocks.push(b);editingBlock=b.id;saveLocal();schedule();return;}
  case 'select-block':editingBlock=button.dataset.blockId;inspectorExpanded=false;lastEditAt=0;schedule();return;
@@ -1562,7 +1575,14 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const blob=new Blob(['\ufeff'+header+body],{type:'text/csv;charset=utf-8'}),href=URL.createObjectURL(blob);
   const anchor=document.createElement('a');anchor.href=href;anchor.download='BrainQuiz_Endstand.csv';anchor.click();
   setTimeout(()=>URL.revokeObjectURL(href),500);return;}
- case 'reset-questions':{boardPage=0;scorePage=0;if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);questionHistory={};publicState={...publicState,current:null,phase:'board',round:0,deadline:0,playerScores:{},used:{},board:buildPublicBoard(quiz)};schedule();return;}await game.clearRoomEvents(room);await game.replacePublic(room,{...publicState,current:null,phase:'board',deadline:0,round:0,started:false,pausedRemaining:0,used:{_empty:true},board:buildPublicBoard(quiz),scores:Object.fromEntries(Object.keys(publicState?.teams||{}).map(id=>[id,0])),answerReview:null,answerParticipants:null});return;}
+ case 'reset-questions':{
+  if(!canHost())return;
+  if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;
+  boardPage=0;scorePage=0;questionHistory={};buzzers={};responses={};picks={};
+  const next=resetBoardGameState(publicState,buildPublicBoard(quiz),roster);
+  if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);publicState=next;schedule();return;}
+  await game.clearRoomEvents(room);await game.replacePublic(room,next);return;
+ }
  default:return;}}
 async function handleMessage(form){const text=$('chat-text')?.value.trim();if(!text)return;if(Date.now()-lastMsgTime<1100)throw Error('Bitte zwischen zwei Nachrichten kurz warten.');if(!canHost()&&!chatAllowed())throw Error('Teamchat wurde vorübergehend gesperrt.');
  const target=canHost()?chatTeam:member?.team,targets=target==='ALL'?Object.keys(publicState.teams||{}):[target],name=canHost()?'HOST':member.name;
