@@ -439,3 +439,26 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
  .bq-answer-image img{max-height:35dvh}
  .bq-answer-context{padding-top:10px}
 }
+
+
+/* Finale is a distinct public scene: no unreleased answers, just public scores. */
+.bq-finale{max-width:1120px;margin:8px auto 32px;padding:clamp(18px,4vw,48px);
+ background:linear-gradient(145deg,#172934,#1e232e 65%,#2b2534);
+ border:1px solid #748890;border-radius:18px;box-shadow:0 12px 36px #0005;min-width:0}
+.bq-finale-head{text-align:center;margin:0 auto 30px}
+.bq-finale-head h1{font-size:clamp(30px,5vw,64px);margin:8px 0 10px;line-height:1.1;letter-spacing:-.02em}
+.bq-finale-head p{font-size:clamp(16px,2vw,25px);font-weight:600;color:#b5e4c9;overflow-wrap:anywhere}
+.bq-finale-results{margin:0;list-style:none;padding:0;display:grid;gap:12px}
+.bq-finale-place{display:grid;grid-template-columns:65px minmax(0,1fr) auto;align-items:center;gap:10px 16px;padding:16px 22px;
+ background:#222e37;border:1px solid #677880;border-radius:12px;min-width:0}
+.bq-finale-place.is-winner{background:linear-gradient(110deg,#4c4030,#323a39);border-color:#d6bc79}
+.bq-finale-place strong{font-size:clamp(17px,2vw,24px);overflow-wrap:anywhere}
+.bq-final-rank{font-weight:900;color:#eccb7f;font-size:clamp(19px,2vw,28px)}
+.bq-final-points{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
+.bq-finale-place small{grid-column:2/-1;color:#b5cec9}
+.bq-finale-controls,.bq-finale-entry{display:flex;justify-content:center;gap:12px;margin-top:24px}
+@media(max-width:590px){.bq-finale{padding:15px;border-radius:12px}
+ .bq-finale-place{grid-template-columns:45px minmax(0,1fr);padding:12px;gap:8px}
+ .bq-final-points{grid-column:2;justify-self:start}
+ .bq-finale-controls{flex-wrap:wrap}
+}
