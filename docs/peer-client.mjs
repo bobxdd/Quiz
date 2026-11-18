@@ -128,6 +128,39 @@ export function peerOptions(){
  return {debug:0,config:{iceServers,iceCandidatePoolSize:4,iceTransportPolicy:'all'}};
 }
 
+/** Verify that the configured TURN server actually allocates a relay candidate.
+ * No guest/host connection or candidate IP is exposed by this local probe. */
+export async function testTurnRelay(timeoutMs=8500){
+ if(!hasTurnRelay())throw Error('Zuerst vollständige TURN-Zugangsdaten speichern.');
+ if(typeof RTCPeerConnection!=='function')throw Error('Dieser Browser unterstützt den WebRTC-Verbindungstest nicht.');
+ let relay;
+ try{
+  const stored=JSON.parse(sessionStorage.getItem(TURN_STORAGE)||'null');
+  relay=turnServer({url:stored?.urls,username:stored?.username,credential:stored?.credential});
+ }catch{throw Error('TURN-Konfiguration ist ungültig. Bitte neu speichern.');}
+ const pc=new RTCPeerConnection({iceServers:[relay],iceTransportPolicy:'relay'});
+ let timer=null,done=false,lastCode=0;
+ const result=new Promise((resolve,reject)=>{
+  const finish=(worked)=>{
+   if(done)return;done=true;clearTimeout(timer);
+   worked?resolve(true):reject(Error('TURN-Test: kein Relay-Kandidat empfangen'+(lastCode?' (ICE '+lastCode+')':'')+'. Adresse, Port, Transport und Zugangsdaten prüfen.'));
+  };
+  timer=setTimeout(()=>finish(false),Math.max(1500,Math.min(20000,Number(timeoutMs)||8500)));
+  pc.addEventListener('icecandidate',event=>{
+   if(event.candidate?.type==='relay'||/ typ relay(?: |$)/.test(event.candidate?.candidate||''))finish(true);
+   else if(event.candidate===null)finish(false);
+  });
+  pc.addEventListener('icecandidateerror',event=>{lastCode=Number(event?.errorCode)||0;});
+  pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete')finish(false);});
+ });
+ try{
+  pc.createDataChannel('brainquiz-turn-test');
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  return await result;
+ }finally{clearTimeout(timer);pc.close();}
+}
+
 export function watchProjector(room,token,onFrame,onStatus){
  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room)||!PROJECTOR_TOKEN_RE.test(token))throw Error('Ungültiger Beamer-Link.');
  let stopped=false,peer=null,retryTimer=null,handshakeTimer=null,attempt=0;
@@ -147,7 +180,7 @@ export function watchProjector(room,token,onFrame,onStatus){
    const Peer=await loadPeerJS();if(stopped)return;
    const candidate=peer=new Peer(undefined,peerOptions());
    let conn=null,ready=false,partial=null;
-   handshakeTimer=setTimeout(()=>retry(candidate),18000);
+   handshakeTimer=setTimeout(()=>retry(candidate),CONNECT_TIMEOUT_MS);
    candidate.on('open',()=>{
     if(peer!==candidate||conn)return;
     conn=candidate.connect(peerId(room),{reliable:true,serialization:'json'});
