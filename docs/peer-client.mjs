@@ -290,9 +290,21 @@ export class PeerGame{
    void this._sendHostMessage(ctx,{t:'welcome',state:this._snapshotFor(ctx)});this._changed();return;
   }
   if(ctx.ready&&msg.t==='action'&&typeof msg.id==='string'&&msg.id.length<=90){
-   if(this.guestConnections.get(ctx.uid)!==ctx)return; // A replaced/reconnected data channel cannot issue actions.
-   let ok=true,result=null,error='';try{result=this._handleGuestAction(ctx,msg.action,msg.payload||{})}catch(e){ok=false;error=String(e?.message||'Aktion nicht erlaubt.').slice(0,200)}
-   try{ctx.conn.send({t:'ack',id:msg.id,ok,result,error})}catch{};
+   if(this.guestConnections.get(ctx.uid)!==ctx||!this.data)return; // Replaced connections are not authoritative.
+   if(!/^r[0-9]{1,12}_[a-f0-9]{8}$/.test(msg.id)){
+    try{ctx.conn.send({t:'ack',id:msg.id,ok:false,error:'Ungültige Anfrage-ID.'})}catch{}return;
+   }
+   const cache=this.data.actionAcks??=(Object.create(null)),key=ctx.uid+':'+msg.id;
+   // Reconnect/replay must never perform the same authoritative action twice.
+   if(Object.hasOwn(cache,key)){try{ctx.conn.send(cache[key])}catch{}return;}
+   let ok=true,result=null,error='';
+   try{result=this._handleGuestAction(ctx,msg.action,msg.payload||{})}
+   catch(e){ok=false;error=String(e?.message||'Aktion nicht erlaubt.').slice(0,200)}
+   const ack={t:'ack',id:msg.id,ok,result,error};cache[key]=ack;
+   // Compact private replay receipts to prevent unbounded growth during long events.
+   const keys=Object.keys(cache);if(keys.length>320)for(const old of keys.slice(0,keys.length-240))delete cache[old];
+   this._persist();
+   try{ctx.conn.send(ack)}catch{};
   }
  }
  _handleGuestAction(ctx,action,payload){
