@@ -58,6 +58,11 @@ jobs:
           python tests/editor-3_1-browser.py
           python tests/image-drop-browser.py
           python tests/categories-3_0-browser.py
+      - name: Firefox and WebKit recovery and projector checks
+        run: |
+          python -m playwright install --with-deps firefox webkit
+          BRAINQUIZ_BROWSER=firefox python tests/recovery-projector-browser.py
+          BRAINQUIZ_BROWSER=webkit python tests/recovery-projector-browser.py
       - name: Preserve layout screenshots and measurements for review
         uses: actions/upload-artifact@v4
         if: always()
@@ -95,3 +100,22 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+      - name: Verify published app and projector files
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          test -n "$PAGES_URL"
+          published="$(mktemp)"
+          trap 'rm -f "$published"' EXIT
+          for asset in app.mjs projector.html sw.js; do
+            verified=false
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 10 "${PAGES_URL%/}/$asset?release=$GITHUB_SHA-$attempt" -o "$published" && cmp -s "docs/$asset" "$published"; then
+                echo "Verified $asset for $GITHUB_SHA"
+                verified=true
+                break
+              fi
+              sleep 5
+            done
+            "$verified" || exit 1
+          done

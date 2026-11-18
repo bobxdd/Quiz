@@ -79,6 +79,32 @@ export async function loadPeerJS(){
  }).catch(error=>{loadingPeer=null;throw error;});
  return loadingPeer;
 }
+const TURN_STORAGE='bq-turn-relay-v1';
+
+export function turnServer({url,username,credential}){
+ const urls=String(url||'').trim();
+ const user=String(username||'').trim();
+ const pass=String(credential||'');
+ if(urls.length>300||!/^turns?:[a-z0-9.[\]:-]+(?:\?transport=(?:udp|tcp))?$/i.test(urls)||
+    !user||user.length>512||!pass||pass.length>512)throw Error('Gültige TURN-Adresse, Nutzername und Passwort eingeben.');
+ return {urls,username:user,credential:pass};
+}
+export function configureTurnRelay(input){
+ if(!input){sessionStorage.removeItem(TURN_STORAGE);return;}
+ const relay=turnServer(input);
+ sessionStorage.setItem(TURN_STORAGE,JSON.stringify(relay));
+}
+function peerOptions(){
+ try{
+  const stored=JSON.parse(sessionStorage.getItem(TURN_STORAGE)||'null');
+  if(stored){
+   const relay=turnServer({url:stored.urls,username:stored.username,credential:stored.credential});
+   return {debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},relay]}};
+  }
+ }catch{}
+ return {debug:0};
+}
+
 export function watchProjector(room,token,onFrame,onStatus){
  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room)||!PROJECTOR_TOKEN_RE.test(token))throw Error('Ungültiger Beamer-Link.');
  let stopped=false,peer=null,retryTimer=null,handshakeTimer=null,attempt=0;
@@ -96,7 +122,7 @@ export function watchProjector(room,token,onFrame,onStatus){
   if(stopped)return;
   try{
    const Peer=await loadPeerJS();if(stopped)return;
-   const candidate=peer=new Peer(undefined,{debug:0});
+   const candidate=peer=new Peer(undefined,peerOptions());
    let conn=null,ready=false,partial=null;
    handshakeTimer=setTimeout(()=>retry(candidate),18000);
    candidate.on('open',()=>{
@@ -197,7 +223,7 @@ export class PeerGame{
   peer.on('error',error=>{if(peer.destroyed||['network','server-error','socket-error','socket-closed'].includes(error?.type))lost();});
  }
  async _openHostPeer(room){
-  const Peer=await this._preparePeer();const peer=new Peer(peerId(room),{debug:0});this.peer=peer;this.quitting=false;
+  const Peer=await this._preparePeer();const peer=new Peer(peerId(room),peerOptions());this.peer=peer;this.quitting=false;
   await new Promise((resolve,reject)=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;reject(Error('PeerJS konnte den Host-Raum nicht anmelden.'))}},16000);
    peer.on('open',()=>{if(!done){done=true;clearTimeout(timer);resolve()}});
    peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error)))}})
@@ -259,7 +285,7 @@ export class PeerGame{
  async _connectGuestOnce(){
   this.incomingWire=null;this.cachedQuizAudio=null;
   const Peer=await this._preparePeer();this.quitting=false;
-  const peer=new Peer(undefined,{debug:0});this.peer=peer;
+  const peer=new Peer(undefined,peerOptions());this.peer=peer;
   await new Promise((resolve,reject)=>{
    let done=false,accepted=false,conn=null;const timer=setTimeout(()=>finish(Error('Host nicht erreichbar. Einladung und Internetverbindung prüfen.')),18000);
    const finish=error=>{if(done)return;done=true;clearTimeout(timer);if(error){try{peer.destroy()}catch{}reject(error)}else resolve()};
@@ -428,7 +454,7 @@ export class PeerGame{
   try{ctx.conn.send({t:'display-ready'});}catch{}
   this._sendDisplay(ctx);
  }
- _disconnectGuest(ctx){if(!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
+ _disconnectGuest(ctx){if(this.quitting||!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
  _receiveFromGuest(ctx,msg){if(!msg||typeof msg!=='object'||Array.isArray(msg))return;ctx.lastSeenAt=Date.now();
   try{if(JSON.stringify(msg).length>MAX_MESSAGE_BYTES){ctx.conn.close();return}}catch{return}
   if(ctx.display)return;

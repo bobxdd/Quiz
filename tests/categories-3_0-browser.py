@@ -49,7 +49,7 @@ async def install(page):
   const peer=blob(src['peer-client.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './question-flow.mjs'",`from '${flow}'`).replace("from './round-rules.mjs'",`from '${rules}'`).replace("from './map-tools.mjs'",`from '${map}'`).replace("from './score-ledger.mjs'",`from '${ledger}'`).replace("from './backup-store.mjs'",`from '${backups}'`));
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member,guestLobby})};`;
   const app=src['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(')
-   .replace("import('./peer-client.mjs')",`import('${peer}')`).replace("from './sound-effects.mjs'",`from '${soundEffects}'`)
+   .replaceAll("import('./peer-client.mjs')",`import('${peer}')`).replace("from './sound-effects.mjs'",`from '${soundEffects}'`)
    .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './answer-view.mjs'",`from '${answerView}'`).replace("from './final-results.mjs'",`from '${finale}'`).replace("from './backup-store.mjs'",`from '${backups}'`).replace("from './score-ledger.mjs'",`from '${ledger}'`)
    .replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`)
    .replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${history}'`)

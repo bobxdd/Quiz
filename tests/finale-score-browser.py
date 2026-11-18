@@ -27,6 +27,8 @@ async def main():
   await host.locator('.se-host-metadata > summary').click()
   await host.locator('[data-se-field="hostNotes"]').fill('Privat: Nur der Host darf das lesen.')
   await host.locator('[data-se-field="hostNotes"]').blur()
+  await expect(host.locator('.se-host-metadata')).to_have_attribute('open','')
+  await expect(host.locator('[data-se-field="hostNotes"]')).to_have_value('Privat: Nur der Host darf das lesen.')
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
   await host.locator('[data-action="publish"]').click()
   await expect(host.locator('.bq-board-scene .tile')).to_have_count(1,timeout=15000)
