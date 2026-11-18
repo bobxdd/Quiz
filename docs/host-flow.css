@@ -422,7 +422,17 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 @media(max-width:680px){
  .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail{
   left:8px!important;
+  /* Leave the full wrapped two-row host action strip hit-testable below
+     this menu, not underneath it. Height includes the compact scoreboard. */
+  bottom:calc(clamp(165px,23dvh,220px) + env(safe-area-inset-bottom,0px))!important;
+  max-height:min(49dvh,460px)!important;
   grid-template-columns:minmax(0,1fr);
+ }
+}
+@media(max-height:520px){
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail{
+  bottom:clamp(105px,29dvh,145px)!important;
+  max-height:min(42dvh,230px)!important;
  }
 }
 /* In abnormal text-heavy questions, let the text itself scroll locally
