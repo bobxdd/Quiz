@@ -69,8 +69,10 @@ async def main():
    await expect(page.locator('.bq-finale-results')).to_contain_text('100 Punkte')
   assert await guest.locator('[data-action="resume-final"]').count()==0
   await guest.set_viewport_size({'width':390,'height':844})
-  metrics=await guest.locator('.bq-finale').bounding_box()
-  assert metrics and metrics['x']>=-2 and metrics['x']+metrics['width']<=392,metrics
+  await guest.wait_for_function("""()=>{
+   const box=document.querySelector('.bq-finale')?.getBoundingClientRect();
+   return box && box.width>0 && box.x>=-2 && box.right<=392;
+  }""")
   await host.locator('[data-action="resume-final"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.phase==='board'",timeout=15000)
   assert await guest.evaluate("window.__probe.info().publicState.scores.t1")==100

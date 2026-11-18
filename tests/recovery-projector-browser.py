@@ -90,6 +90,38 @@ async def native_room(browser,root):
  await ctx.close()
  print('PASS: 10 native WebRTC guests in 5 teams, simultaneous buzz, IndexedDB-only host recovery and remote viewer')
 
+async def rehearse_locally(browser,root):
+ ctx=await browser.new_context(viewport={'width':390,'height':844},reduced_motion='reduce')
+ page=await ctx.new_page()
+ errors=[]
+ page.on('pageerror',lambda error:errors.append(str(error)))
+ await page.goto(root+'/')
+ await page.locator('[data-action="create-new-quiz"]').click()
+ await page.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
+ await page.locator('[data-se-action="new"][data-template="text"]').click()
+ await page.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
+ await page.locator('#se-answer-text').fill('Anivia aus der Generalprobe')
+ await page.locator('[data-se-upload="answer-image"]').set_input_files(DOCS/'pixel-corner.png')
+ await expect(page.locator('.se-answer-live-preview img')).to_be_visible()
+ await page.locator('[data-action="editor-probe"]').click()
+ await expect(page.locator('.bq-rehearsal')).to_be_visible()
+ saved=lambda:page.evaluate("Object.entries(localStorage).filter(([key])=>key.startsWith('bq-board-workspace-'))")
+ before=await saved()
+ await page.locator('[data-action="probe-buzz"]').first.click()
+ await page.locator('[data-action="probe-wrong"]').click()
+ await expect(page.locator('.bq-probe-scores')).to_contain_text('-50')
+ await page.locator('[data-action="probe-buzz"]').last.click()
+ await page.locator('[data-action="probe-correct"]').click()
+ await expect(page.locator('.presenter-stage')).to_contain_text('Anivia aus der Generalprobe')
+ await page.locator('[data-action="probe-width"]').click()
+ await expect(page.locator('.bq-probe-compact')).to_be_visible()
+ await page.locator('[data-action="probe-media"]').click()
+ await expect(page.locator('.bq-rehearsal [role="status"]')).to_contain_text('1 eingebettete Medien geprüft · 0 Probleme')
+ assert await saved()==before
+ assert not errors,errors
+ await ctx.close()
+ print('PASS: local mobile rehearsal, score rules, answer reveal, image decode and unchanged saved quiz')
+
 async def main():
  server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
  thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -134,6 +166,7 @@ async def main():
    await page.close();await projector.close()
    print('PASS: local projector receives only explicitly published display frames and has no game engine')
    if engine=='chromium':await native_room(browser,root)
+   await rehearse_locally(browser,root)
    await browser.close()
  finally:server.shutdown();server.server_close()
 
