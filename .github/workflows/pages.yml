@@ -56,6 +56,7 @@ jobs:
           timeout -k 10s 120s python tests/board-rounds-browser.py || failed=1
           timeout -k 10s 120s python tests/team-turns-browser.py || failed=1
           timeout -k 10s 120s python tests/one-screen-reveal-browser.py || failed=1
+          timeout -k 10s 120s python tests/connection-recovery-browser.py || failed=1
           timeout -k 10s 120s python tests/finale-score-browser.py || failed=1
           timeout -k 10s 120s python tests/recovery-projector-browser.py || failed=1
           timeout -k 10s 120s python tests/editor-qol-audit-browser.py || failed=1
