@@ -1691,11 +1691,33 @@ document.addEventListener('input',ev=>{const input=ev.target;if(!input?.matches?
  const output=input.closest('.bq-sfx-row')?.querySelector('output');if(output)output.textContent=value+' %';
 });
 document.addEventListener('click',async ev=>{if(ev.target.closest('.question-settings summary'))settingsExpanded=!ev.target.closest('details').open;if(ev.target.closest('.inspector-advanced summary'))inspectorExpanded=!ev.target.closest('details').open;if(ev.target.closest('.quiz-metadata summary'))quizMetaExpanded=!ev.target.closest('details').open;const b=ev.target.closest('[data-action]');if(!b)return;ev.preventDefault();if(b.disabled)return;try{b.disabled=true;const action=b.dataset.action;if(canHost()&&CRITICAL_HOST_ACTIONS.has(action)){const key=[room,publicState?.round??0,action,b.dataset.uid||b.dataset.person||b.dataset.team||b.dataset.qid||b.dataset.event||''].join(':');await hostActionLease.run(key,async()=>{await doAction(action,b);if(HOST_ACTION_FEEDBACK[action])notice(HOST_ACTION_FEEDBACK[action]);});}else await doAction(action,b);}catch(err){error(err);}finally{if(document.contains(b))b.disabled=false;}});
-document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form','turn-relay-form','team-emoji-guess-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='team-emoji-guess-form'){await doAction('emoji-guess',ev.target);return;}if(ev.target.id==='turn-relay-form'){
+document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form','turn-relay-form','team-emoji-guess-form'].includes(ev.target.id))return;ev.preventDefault();
+ const joining=ev.target.id==='join-form';
+ const joinButton=joining?ev.target.querySelector('button[type="submit"]'):null;
+ if(joining){
+  if(ev.target.dataset.connecting==='1')return;
+  ev.target.dataset.connecting='1';
+  if(joinButton){joinButton.disabled=true;joinButton.textContent='Verbinde …';}
+  ev.target.querySelector('.bq-join-error')?.remove();
+ }
+ try{if(ev.target.id==='team-emoji-guess-form'){await doAction('emoji-guess',ev.target);return;}if(ev.target.id==='turn-relay-form'){
  const data=Object.fromEntries(new FormData(ev.target));
  const {configureTurnRelay}=await import('./peer-client.mjs');
  configureTurnRelay(data);ev.target.reset();notice(canHost()?'TURN gespeichert. Damit der Host sie nutzt, Netzwerk in den Einstellungen neu starten.':'TURN für neue Verbindungen in diesem Tab gespeichert.');if(view==='setup')schedule();return;
- }if(ev.target.id==='host-team-create-form'){if(!canHost()||isOffline())throw Error('Nur der Host des Live-Raums kann Teams erstellen.');const input=$('bq-host-team-name');const created=await game.hostCreateLobbyTeam(room,input?.value||'');if(input){input.value='';input.blur();input.closest('details')?.removeAttribute('open');}notice('Team „'+created.name+'“ erstellt.');}if(ev.target.id==='lobby-create-form'&&role==='guest'){const name=$('bq-new-team')?.value||'';await sendGuestAction('Teamname',()=>game.createLobbyTeam(room,name));notice('Teamname übernommen. Der Host bestätigt deine Auswahl.');}if(ev.target.id==='join-form')await enterRoom($('join-room').value,$('join-name').value,true);if(ev.target.id==='chat-form')await handleMessage(ev.target);if(ev.target.id==='answer-form'&&!canHost()&&(!myResponse||activeQuestion()?.type==='map'))await doAction('submit-answer',ev.target);}catch(err){error(err);}});
+ }if(ev.target.id==='host-team-create-form'){if(!canHost()||isOffline())throw Error('Nur der Host des Live-Raums kann Teams erstellen.');const input=$('bq-host-team-name');const created=await game.hostCreateLobbyTeam(room,input?.value||'');if(input){input.value='';input.blur();input.closest('details')?.removeAttribute('open');}notice('Team „'+created.name+'“ erstellt.');}if(ev.target.id==='lobby-create-form'&&role==='guest'){const name=$('bq-new-team')?.value||'';await sendGuestAction('Teamname',()=>game.createLobbyTeam(room,name));notice('Teamname übernommen. Der Host bestätigt deine Auswahl.');}if(ev.target.id==='join-form')await enterRoom($('join-room').value,$('join-name').value,true);if(ev.target.id==='chat-form')await handleMessage(ev.target);if(ev.target.id==='answer-form'&&!canHost()&&(!myResponse||activeQuestion()?.type==='map'))await doAction('submit-answer',ev.target);}catch(err){
+  if(joining&&ev.target.isConnected){
+   const alert=document.createElement('p');
+   alert.className='bq-join-error span2';alert.setAttribute('role','alert');
+   alert.textContent=String(err?.message||'Beitritt fehlgeschlagen. Netzwerk prüfen und erneut versuchen.');
+   ev.target.appendChild(alert);
+  }
+  error(err);
+ }finally{
+  if(joining){
+   delete ev.target.dataset.connecting;
+   if(joinButton&&joinButton.isConnected){joinButton.disabled=false;joinButton.textContent='Beitreten';}
+  }
+ }});
 document.addEventListener('input',ev=>{const input=ev.target;if(input.dataset.blockfield){blockPropertyUpdate(input);return;}if(input.id==='history-search'){historyFilter=input.value;schedule();return;}if(input.id==='editor-search'){editorSearch=input.value;schedule();return;}if(input.id?.startsWith('q-')||['quiz-title','quiz-description','quiz-teams','quiz-manual-players'].includes(input.id)){updateDraftField(input);clearTimeout(updateDraftField.timer);updateDraftField.timer=setTimeout(schedule,350);}});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&cloudDirty)void flushHostCloudSave();
  if(document.visibilityState==='visible'&&role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});
