@@ -91,10 +91,27 @@ export async function loadPeerJS(){
  if(loadingPeer)return loadingPeer;
  loadingPeer=new Promise((resolve,reject)=>{
   if(typeof document==='undefined')return reject(Error('PeerJS benötigt einen Browser.'));
-  const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js';script.async=true;
-  script.onload=()=>typeof globalThis.Peer==='function'?resolve(globalThis.Peer):reject(Error('PeerJS wurde nicht geladen.'));
-  script.onerror=()=>reject(Error('PeerJS konnte nicht geladen werden. Prüfe den Zugriff auf cdn.jsdelivr.net.'));
-  document.head.appendChild(script);
+  const sources=[
+   'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js',
+   'https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js'
+  ];
+  let attempt=0;
+  const next=()=>{
+   if(typeof globalThis.Peer==='function'){resolve(globalThis.Peer);return;}
+   if(attempt>=sources.length){reject(Error('PeerJS konnte über beide CDNs nicht geladen werden. Netzwerk, Adblocker oder DNS prüfen.'));return;}
+   const script=document.createElement('script');
+   script.src=sources[attempt++];script.async=true;script.crossOrigin='anonymous';
+   let done=false;const timeout=setTimeout(()=>finish(false),11000);
+   const finish=ok=>{
+    if(done)return;done=true;clearTimeout(timeout);
+    script.onload=script.onerror=null;
+    if(ok&&typeof globalThis.Peer==='function')resolve(globalThis.Peer);
+    else{script.remove();next();}
+   };
+   script.onload=()=>finish(true);script.onerror=()=>finish(false);
+   document.head.appendChild(script);
+  };
+  next();
  }).catch(error=>{loadingPeer=null;throw error;});
  return loadingPeer;
 }
