@@ -8,6 +8,7 @@ import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,updatePlayerScore} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges} from './question-flow.mjs';
+import {scoreEvent,appendScoreEvent,undoScoreEvent} from './score-ledger.mjs';
 
 const HOST_PREFIX='brainquiz27-';
 const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
@@ -358,11 +359,17 @@ export class PeerGame{
  async setLobbyReady(room,ready){if(this.mode==='guest')return this._rpc('lobby-ready',{ready});throw Error('Bereitschaft nur für Teilnehmer.')}
  async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid});throw Error('Nur Teilnehmer können Fragen wünschen.')}
  async clearPicks(room){const d=this._getHostData(room);d.picks={};this._changed()}
- async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');d.public.playerScores??={};const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;this._changed();return clone(result)}
- async score(room,team,delta){const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Team unbekannt.');d.public.scores[team]=Math.max(-999999,Math.min(999999,(Number(d.public.scores?.[team])||0)+Number(delta)));this._changed()}
- async judgeWritten(room,round,uid,result){const d=this._getHostData(room),p=d.public;const key=String(round);if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||!p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))throw Error('Diese schriftliche Antwort ist nicht bewertbar.');const pts=Number(p.current.points),old=Number(p.playerScores?.[uid]?.rounds?.[key]?.delta)||0;const next=updatePlayerScore(p.playerScores?.[uid],{kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()});p.playerScores={...(p.playerScores||{}),[uid]:next};if(p.scoreMode!=='individual'){const team=d.roster[uid].team;if(!p.teams?.[team])throw Error('Spielerteam nicht mehr vorhanden.');p.scores={...(p.scores||{}),[team]:(Number(p.scores?.[team])||0)+(Number(next.rounds[key].delta)||0)-old};}this._changed();return clone(next)}
+ async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');
+  const before=clone(d.public);d.public.playerScores??={};
+  const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;
+  this._auditScore(d,before,{kind:'manual-person',person:personId,round:d.public.round});this._changed();return clone(result)}
+ async score(room,team,delta){const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Team unbekannt.');
+  if(!Number.isFinite(Number(delta))||!Number(delta)||Math.abs(Number(delta))>10000)throw Error('Ungültige Punkteänderung.');
+  const before=clone(d.public);d.public.scores[team]=Math.max(-999999,Math.min(999999,(Number(d.public.scores?.[team])||0)+Number(delta)));
+  this._auditScore(d,before,{kind:'manual-team',team,round:d.public.round});this._changed()}
+ async judgeWritten(room,round,uid,result){const d=this._getHostData(room),p=d.public,before=clone(d.public);const key=String(round);if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||!p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))throw Error('Diese schriftliche Antwort ist nicht bewertbar.');const pts=Number(p.current.points),old=Number(p.playerScores?.[uid]?.rounds?.[key]?.delta)||0;const next=updatePlayerScore(p.playerScores?.[uid],{kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()});p.playerScores={...(p.playerScores||{}),[uid]:next};if(p.scoreMode!=='individual'){const team=d.roster[uid].team;if(!p.teams?.[team])throw Error('Spielerteam nicht mehr vorhanden.');p.scores={...(p.scores||{}),[team]:(Number(p.scores?.[team])||0)+(Number(next.rounds[key].delta)||0)-old};}this._auditScore(d,before,{kind:'written-judgement',person:uid,team:p.scoreMode!=='individual'?d.roster[uid].team:'',round:key,questionId:p.current.id,verdict:result});this._changed();return clone(next)}
  async judgeBuzzer(room,round,uid,result,revealPatch=null){
-  const d=this._getHostData(room);
+  const d=this._getHostData(room),before=clone(this._getHostData(room).public);
   const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
   let finalState=next.state;
   if(result==='correct'){
@@ -377,12 +384,18 @@ export class PeerGame{
    finalState=applyQuestionChanges(next.state,round,d.public.current.id,revealPatch,['question']);
    if(!finalState)throw Error('Lösung und Punkte konnten nicht gemeinsam übernommen werden.');
   }
-  d.public=finalState;d.buzzers=next.buzzers;this._changed();
+  d.public=finalState;d.buzzers=next.buzzers;
+  this._auditScore(d,before,{kind:'buzzer-judgement',team:d.public.scoreMode==='individual'?'':next.winner.team,
+   person:d.public.scoreMode==='individual'?uid:'',round,questionId:d.public.current?.id||'',verdict:result});
+  this._changed();
   return {delta:next.delta,winner:next.winner};
  }
+ _auditScore(d,before,meta){const event=scoreEvent(before,d.public,{...meta,id:randomHex(8),at:Date.now()});if(event)d.scoreEvents=appendScoreEvent(d.scoreEvents,event);}
+ hostScoreAudit(room){const d=this._getHostData(room);return clone((d.scoreEvents||[]).slice(-40));}
+ async hostUndoScore(room,id){const d=this._getHostData(room);const done=undoScoreEvent(d.public,d.scoreEvents,id);d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);}
  async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
- async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};this._changed()}
+ async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];this._changed()}
  async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}this.data=null;this.shutdown();try{localStorage.removeItem('bq-p2p-session-'+room)}catch{}}
  shutdown(){this.quitting=true;clearTimeout(this.reconnectTimer);clearTimeout(this.snapshotTimer);for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Verbindung geschlossen.'))}this.pending.clear();try{this.conn?.close()}catch{};try{this.peer?.destroy()}catch{};this.connected=false;this.mode='idle';this.guestConnections.clear();this._emit()}
 }
