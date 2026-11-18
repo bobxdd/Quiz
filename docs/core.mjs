@@ -41,12 +41,15 @@ export function publicQuestion(q,reveal=false,visual='',releasedHints=0,sceneSte
    answerImage:isImageData(q.answerImage)?q.answerImage:'',answerImageAlt:q.answerImageAlt||'',explanation:q.explanation||''}:safe;
  }
  const pub={id:q.id,category:q.category,type:q.type,roundMode:q.roundMode==='written'?'written':'buzzer',points:q.points,prompt:q.scene?'':q.prompt,blocks:q.scene?[]:publicBlocks(q.blocks,reveal)};
- if(q.scene)pub.scene=q.type==='imposter'?imposterPublicScene(q.scene,q.imposterIndex,reveal?q.correctIcon:'',sceneStep):publicScene(q.scene,reveal?6:sceneStep,reveal);
+ // Keep the foreign imposter icon visible on the resolved board so players can see
+ // exactly which position was wrong. The original replacement remains available
+ // ONLY in the released correctIcon/answer view, never before reveal.
+ if(q.scene)pub.scene=publicScene(q.scene,reveal?6:sceneStep,reveal);
  if(q.type==='multiple')pub.options=q.scene&&!reveal?'ABCD'.split('').map(letter=>q.scene.elements.some(el=>el.kind==='choice'&&el.letter===letter&&el.step<=sceneStep)?q.options['ABCD'.indexOf(letter)]:''):q.options.slice(0,4);
  if(q.type==='splash')pub.image=typeof visual==='string'?visual:'';
  if(q.type==='imposter'){
   const images=q.scene?.elements.filter(el=>el.kind==='image')||[];
-  pub.icons=(q.icons||[]).slice(0,8).map((icon,i)=>images[i]?.step>sceneStep?'':reveal&&i===q.imposterIndex&&isImageData(q.correctIcon)?q.correctIcon:icon);
+  pub.icons=(q.icons||[]).slice(0,8).map((icon,i)=>!reveal&&images[i]?.step>sceneStep?'':icon);
   pub.abilityNames=(q.abilityNames||[]).slice(0,8);
  }
  if(q.type==='order'){pub.displayItems=Array.isArray(visual)?visual.slice(0,10).map((x,i)=>q.scene&&!reveal&&!q.scene.elements.some(el=>el.kind==='order'&&el.letter==='ABCDEFGHIJ'[i]&&el.step<=sceneStep)?'':x):[];}
