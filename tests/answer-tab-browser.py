@@ -34,8 +34,11 @@ async def answer_tab(host,text='',color=(20,190,120),image=True):
 async def unique_question(host,title,points):
  await host.locator('[data-se-field="title"]').fill(title)
  await host.locator('[data-se-field="title"]').blur()
+ heading=host.locator('.se-canvas-top h2')
+ await expect(heading).to_contain_text(title)
  await host.locator('[data-se-field="points"]').fill(str(points))
  await host.locator('[data-se-field="points"]').blur()
+ await expect(heading).to_have_text(f'{title} · {points} Punkte')
 
 async def main():
  async with async_playwright() as p:
