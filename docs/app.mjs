@@ -12,7 +12,7 @@ import {openQuestionState,validQuestionPair,questionMotion} from './question-flo
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
-import {createHistoryEntry,historyRows,responseStatus,historyCsv} from './history-model.mjs';
+import {createHistoryEntry,historyRows,responseStatus,historyCsv,csvSafeCell} from './history-model.mjs';
 import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from './answer-review.mjs';
 import {renderScene,ensureScene,templateScene,reconcileQuestion,sceneHasStep,publicScene,escape as sceneEscape} from './studio-model.mjs';
 import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks,validateBlocks} from './layout.mjs';
@@ -1033,9 +1033,9 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'resume-final':{if(!canHost()||isOffline()||publicState?.phase!=='finished')return;await game.setState(room,{phase:'board',current:null,deadline:0});notice('Quizbrett ist wieder offen.');return;}
  case 'open-projector':{openProjector();notice('Lokales Beamerfenster geöffnet. Es zeigt nur die öffentliche Szene und kann keine Quizaktionen ausführen.');return;}
  case 'export-final-results':{if(!canHost()||isOffline())return;
-  const rows=finalStandings(publicState,roster),header='Platz;Name;Punkte\\r\\n';
-  const body=rows.map(r=>[r.rank,r.name,r.points].map(x=>'"'+String(x).replaceAll('"','""')+'"').join(';')).join('\\r\\n');
-  const blob=new Blob(['\\ufeff'+header+body],{type:'text/csv;charset=utf-8'}),href=URL.createObjectURL(blob);
+  const rows=finalStandings(publicState,roster),header='Platz;Name;Punkte\r\n';
+  const body=rows.map(r=>[r.rank,r.name,r.points].map(csvSafeCell).join(';')).join('\r\n');
+  const blob=new Blob(['\ufeff'+header+body],{type:'text/csv;charset=utf-8'}),href=URL.createObjectURL(blob);
   const anchor=document.createElement('a');anchor.href=href;anchor.download='BrainQuiz_Endstand.csv';anchor.click();
   setTimeout(()=>URL.revokeObjectURL(href),500);return;}
  case 'reset-questions':{boardPage=0;scorePage=0;if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);questionHistory={};publicState={...publicState,current:null,phase:'board',round:0,deadline:0,playerScores:{},used:{},board:buildPublicBoard(quiz)};schedule();return;}await game.clearRoomEvents(room);await game.replacePublic(room,{...publicState,current:null,phase:'board',deadline:0,round:0,started:false,pausedRemaining:0,used:{_empty:true},board:buildPublicBoard(quiz),scores:Object.fromEntries(Object.keys(publicState?.teams||{}).map(id=>[id,0])),answerReview:null,answerParticipants:null});return;}
