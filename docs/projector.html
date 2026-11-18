@@ -1,14 +1,19 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://0.peerjs.com wss://0.peerjs.com; object-src 'none'; form-action 'none'; base-uri 'none'">
 <title>BrainQuiz Studio · Beamer</title>
 <link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./pixel-theme.css">
 <link rel="stylesheet" href="./characters.css"><link rel="stylesheet" href="./session-ui.css">
 <link rel="stylesheet" href="./map-ui.css"><link rel="stylesheet" href="./host-flow.css">
 <link rel="stylesheet" href="./map-dagger-animation.css"><link rel="stylesheet" href="./actor-motion.css">
 </head><body class="bq-projector-page">
-<main id="projector-root" aria-live="polite" aria-relevant="additions text">
-<section class="bq-projector-wait"><h1>BrainQuiz Studio</h1><p>Verbinde den lokalen Beamer mit dem Hostfenster …</p></section>
+<header class="bq-projector-toolbar">
+ <button class="btn small" id="projector-fullscreen" type="button">Vollbild</button>
+ <span id="projector-clock" role="timer" aria-label="Verbleibende Zeit" hidden></span>
+ <p id="projector-status" role="status" aria-atomic="true"></p>
+</header>
+<main id="projector-root">
+<section class="bq-projector-wait"><h1>BrainQuiz Studio</h1></section>
 </main>
 <script type="module" src="./projector.mjs"></script>
 </body></html>

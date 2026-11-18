@@ -107,6 +107,7 @@ export function createStudioEditor(api){
    +input('hostNotes','Notizen für die Moderation · nur Host',item.hostNotes||'',{rows:4})
    +input('sourceUrl','Quellenlink (https://)',item.sourceUrl||'')
    +input('sourcePatch','LoL-Patch / Bezugsjahr / Datenstand',item.sourcePatch||'')
+   +input('sourceCheckedOn','Geprüft am (JJJJ-MM-TT)',item.sourceCheckedOn||'')
    +'</details>'
    +(automatic?'<p class="se-muted">Die vorhandene Musterlösung dieses Fragetyps wird automatisch übernommen. Du kannst sie mit eigenem Text oder einem Bild ergänzen.</p>':'')
    +(!ready?'<p class="se-answer-warning" role="alert">Vor dem Veröffentlichen bitte mindestens Text oder ein Bild für die Antwort hinterlegen.</p>':'')
@@ -223,7 +224,7 @@ export function createStudioEditor(api){
  function updateField(field,value){const item=current(),el=find();if(!item)return;
   if(field==='mapPrompt'&&item.scene?.template==='map'){const heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');if(heading)heading.text=String(value).slice(0,950);item.prompt=String(value).slice(0,950);deferDraft();return;}
   if(field.startsWith('hint-')){const i=Number(field.slice(5));if(Number.isInteger(i)&&i>=0&&i<4){item.hints??=[];item.hints[i]=String(value).slice(0,220);}return;}
-  if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
+  if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='sourceCheckedOn'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
    if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex','mapTargetX','mapTargetY'].includes(field)?Number(value):value;
     if(field==='answerText'&&!['multiple','order','estimate','map','imposter'].includes(item.type))item.answer=value;
   }else if(el){if(['x','y','w','h','font','step'].includes(field))el[field]=Number(value);else if(['text','alt','fill','bg','align','shape','role'].includes(field)){el[field]=value;if(field==='role'&&(value==='question'||value==='clue')){for(const other of item.scene.elements){if(other.id!==el.id&&other.role===value)other.role='content';}}}

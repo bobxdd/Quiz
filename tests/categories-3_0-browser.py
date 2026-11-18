@@ -38,8 +38,9 @@ async def install(page):
   const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));const category=blob(src['category-model.mjs']);
   const review=blob(src['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs']);const dagger=blob(src['map-dagger-animation.mjs']);
-  const boardWorkspaces=blob(src['board-workspace.mjs']);const answerView=blob(src['answer-view.mjs']);const ledger=blob(src['score-ledger.mjs']);const backups=blob(src['backup-store.mjs']);const finale=blob(src['final-results.mjs']);
+  const boardWorkspaces=blob(src['board-workspace.mjs']);const answerView=blob(src['answer-view.mjs']);const backups=blob(src['backup-store.mjs']);const finale=blob(src['final-results.mjs']);
   const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './answer-view.mjs'",`from '${answerView}'`));
+  const ledger=blob(src['score-ledger.mjs'].replace("from './core.mjs'",`from '${core}'`));
   const lobbyView=blob(src['lobby-view.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const workflows=blob(src['editor-workflows.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`));
   const imageDrop=blob(src['image-drop.mjs']);const soundEffects=blob(src['sound-effects.mjs']);
@@ -49,7 +50,7 @@ async def install(page):
   const hook=`window.__probe={room:()=>room,role:()=>role,getGame:()=>game,getQuiz:()=>structuredClone(quiz),setQuiz:x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';saveLocal();},info:()=>({role,room,publicState,member,guestLobby})};`;
   const app=src['app.mjs'].replace('const studio=createStudioEditor(',hook+'const studio=createStudioEditor(')
    .replace("import('./peer-client.mjs')",`import('${peer}')`).replace("from './sound-effects.mjs'",`from '${soundEffects}'`)
-   .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './answer-view.mjs'",`from '${answerView}'`).replace("from './final-results.mjs'",`from '${finale}'`)
+   .replace("from './studio-editor.mjs'",`from '${editor}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './answer-view.mjs'",`from '${answerView}'`).replace("from './final-results.mjs'",`from '${finale}'`).replace("from './backup-store.mjs'",`from '${backups}'`).replace("from './score-ledger.mjs'",`from '${ledger}'`)
    .replace("from './layout.mjs'",`from '${layout}'`).replace("from './core.mjs'",`from '${core}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './editor-workflows.mjs'",`from '${workflows}'`)
    .replace("from './answer-review.mjs'",`from '${review}'`).replace("from './history-model.mjs'",`from '${history}'`)
    .replace("from './lobby-model.mjs'",`from '${lobby}'`).replace("from './lobby-view.mjs'",`from '${lobbyView}'`).replace("from './question-flow.mjs'",`from '${flow}'`)

@@ -48,3 +48,36 @@ export function createActionLease() {
  const busy=new Set();
  return {async run(key,fn){if(busy.has(key))return false;busy.add(key);try{await fn();return true;}finally{busy.delete(key);}},isBusy:key=>busy.has(key)};
 }
+function checkEmbeddedMedia(kind,src){
+ return new Promise(resolve=>{
+  const media=kind==='Audio'?document.createElement('audio'):new Image();
+  const finish=ok=>{
+   clearTimeout(timeout);
+   media.onload=media.onloadeddata=media.onerror=null;
+   resolve(ok);
+  };
+  const timeout=setTimeout(()=>finish(false),6000);
+  if(kind==='Audio'){
+   media.preload='auto';
+   media.onloadeddata=()=>finish(true);
+  }else media.onload=()=>finish(true);
+  media.onerror=()=>finish(false);
+  media.src=src;
+ });
+}
+
+export async function checkQuizMedia(quiz){
+ const checked=new Map(),failures=[];
+ for(const question of quiz.questions){
+  const images=[question.image,question.answerImage,question.correctIcon,
+   ...(question.icons||[]),...(question.blocks||[]).map(block=>block.image),
+   ...(question.scene?.elements||[]).map(element=>element.src)];
+  const assets=[...images.filter(Boolean).map(src=>['Bild',src])];
+  if(question.audio)assets.push(['Audio',question.audio]);
+  for(const [kind,src] of assets){
+   if(!checked.has(src))checked.set(src,await checkEmbeddedMedia(kind,src));
+   if(!checked.get(src))failures.push({title:question.title,kind});
+  }
+ }
+ return {checked:checked.size,failures};
+}

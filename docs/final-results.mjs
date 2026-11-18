@@ -1,6 +1,9 @@
 /* Final standings from public scores only. Equal scores share a rank.
  * No hidden questions, host secrets or chat data are accessed. */
 const valid=n=>Number.isFinite(Number(n))?Number(n):0;
+export function podiumRanks(standings){
+ return [...new Set(standings.map(row=>row.rank).filter(rank=>rank<=3))].sort((a,b)=>b-a);
+}
 export function finalStandings(state={},roster={}){
  const individual=state.scoreMode==='individual';
  const players=state.playerScores||{},teams=state.teams||{},manual=state.manualPlayers||{};
