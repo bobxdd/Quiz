@@ -107,11 +107,14 @@ async def main():
    await expect(page.locator('.bq-answer-view .bq-answer-image img')).to_be_visible()
    await expect(page.locator('.bq-answer-view .answer')).to_contain_text('Anivia ist der Kryophönix.')
    assert (await page.evaluate("window.__probe.info().publicState.current.answerImage")).startswith('data:image/')
+  quiz_nav=guest.locator('.top-nav [data-view="play"]')
+  await quiz_nav.focus()
   await guest.set_viewport_size({'width':390,'height':844})
   await guest.wait_for_function("""()=>{
    const box=document.querySelector('.bq-answer-view')?.getBoundingClientRect();
    return box && box.width>0 && box.left>=-2 && box.right<=392;
   }""")
+  await expect(quiz_nav).to_be_focused()
   await host.locator('[data-action="back"]').click()
   await host.locator('[data-action="open"][data-qid="'+ids[1]+'"]').click()
   await guest.wait_for_function("(id) => window.__probe.info().publicState?.current?.id===id",arg=ids[1],timeout=12000)

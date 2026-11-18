@@ -214,7 +214,29 @@ export function createStudioEditor(api){
    ${item&&editorPane==='question'?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
    <input type="file" id="import-quiz" accept=".json,.brainquiz" hidden>${contextMenuHTML()}${libraryMenuHTML()}</div>`;
  }
- function draw(){if(redrawPending)return;redrawPending=true;requestAnimationFrame(()=>{redrawPending=false;const root=document.getElementById('se-root');if(!root)return;const parent=root.parentElement;const scrollTop=root.querySelector('.se-questions')?.scrollTop||0;const navScroll=root.querySelector('.se-category-nav')?.scrollTop||0;const inspectorTop=root.querySelector('.se-inspector')?.scrollTop||0;const extrasOpen=!!root.querySelector('.se-extras[open]');const advancedOpen=!!root.querySelector('.se-more-properties[open]');const filesOpen=!!root.querySelector('.se-file-actions[open]');const editorToolsOpen=!!root.querySelector('.bq-editor-extras[open]');const hostMetadataOpen=!!root.querySelector('.se-host-metadata[open]');parent.innerHTML=html();if(hostMetadataOpen)parent.querySelector('.se-host-metadata')?.setAttribute('open','');const next=parent.querySelector('.se-questions');if(next)next.scrollTop=scrollTop;parent.querySelector('.se-category-nav')?.scrollTo(0,navScroll);const inspector=parent.querySelector('.se-inspector');if(inspector)inspector.scrollTop=inspectorTop;if(extrasOpen)parent.querySelector('.se-extras')?.setAttribute('open','');if(advancedOpen)parent.querySelector('.se-more-properties')?.setAttribute('open','');if(editorToolsOpen)parent.querySelector('.bq-editor-extras')?.setAttribute('open','');if(filesOpen)parent.querySelector('.se-file-actions')?.setAttribute('open','');mount(parent.querySelector('#se-root'));if(menu)parent.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});});}
+ function draw(){
+  if(redrawPending)return;
+  redrawPending=true;
+  requestAnimationFrame(()=>{
+   redrawPending=false;
+   const root=document.getElementById('se-root');
+   if(!root)return;
+   const parent=root.parentElement;
+   const scrolling=['.se-questions','.se-category-nav','.se-inspector'].map(selector=>
+    [selector,root.querySelector(selector)?.scrollTop||0]);
+   const expanded=['.se-extras','.se-more-properties','.se-file-actions','.bq-editor-extras','.se-host-metadata']
+    .filter(selector=>root.querySelector(selector+'[open]'));
+   root.outerHTML=html();
+   const editor=parent.querySelector('#se-root');
+   for(const selector of expanded)editor.querySelector(selector)?.setAttribute('open','');
+   for(const [selector,top] of scrolling){
+    const element=editor.querySelector(selector);
+    if(element)element.scrollTop=top;
+   }
+   mount(editor);
+   if(menu)editor.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});
+  });
+ }
  function choose(id,{issue=false}={}){
   flushDraft();
   const problem=issue?quizAudit(quiz()).errors.find(row=>row.id===id)?.reason||'':'';

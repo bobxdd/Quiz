@@ -161,7 +161,7 @@ function guestIdentity(room){
 function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 export class PeerGame{
- constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.incomingWire=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
+ constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
  async init(){return this;}
  serverNow(){return Date.now()+this.offset;}
  diagnostics(){
@@ -177,8 +177,13 @@ export class PeerGame{
      };
     }):[]};
  }
- _emit(){for(const entry of [...this.listeners]){try{entry.cb(this._read(entry.path))}catch(error){console.error('[BrainQuiz Peer watcher]',error)}}}
- _read(path){if(path==='.info/connected')return this.connected;if(path==='.info/serverTimeOffset')return this.offset;const prefix='rooms/'+this.room;if(!path.startsWith(prefix+'/'))return null;return clone(pathValue(this.mode==='host'?this.data:this.guestData,path.slice(prefix.length+1)))??null;}
+ _emit(path){
+  for(const entry of [...this.listeners]){
+   if(path&&entry.path!==path)continue;
+   try{entry.cb(this._read(entry.path));}catch(error){console.error('[BrainQuiz Peer watcher]',error);}
+  }
+ }
+ _read(path){if(path==='.info/diagnostics')return this.diagnostics();if(path==='.info/connected')return this.connected;if(path==='.info/serverTimeOffset')return this.offset;const prefix='rooms/'+this.room;if(!path.startsWith(prefix+'/'))return null;return clone(pathValue(this.mode==='host'?this.data:this.guestData,path.slice(prefix.length+1)))??null;}
  watch(path,cb){const entry={path,cb};this.listeners.push(entry);queueMicrotask(()=>{if(this.listeners.includes(entry))cb(this._read(path))});return ()=>{this.listeners=this.listeners.filter(e=>e!==entry)};}
  watchRoom(room,path,cb){if(room!==this.room)throw Error('Falscher Raum.');return this.watch('rooms/'+room+'/'+path,cb)}
  clearWatchers(){this.listeners=[];}
@@ -238,8 +243,11 @@ export class PeerGame{
   try{localStorage.setItem('bq-p2p-session-'+room,JSON.stringify(checkpoint));localSaved=true;this.lastBackupAt=savedAt;}catch{}
   this.checkpointWrites=(this.checkpointWrites||Promise.resolve()).then(async()=>{
    const backedUp=await saveHostCheckpoint('session-'+room,checkpoint).catch(()=>false);
+   if(this.room!==room||this.mode!=='host')return backedUp;
    if(backedUp)this.lastBackupAt=Math.max(savedAt,this.lastBackupAt||0);
+   const previousError=this.backupError||'';
    this.backupError=localSaved||backedUp?'':'Spielstand konnte nicht gesichert werden. Speicherplatz im Browser prüfen.';
+   if(!localSaved||previousError!==this.backupError)this._emit('.info/diagnostics');
    return backedUp;
   });
   return localSaved?Promise.resolve(true):this.checkpointWrites;
@@ -283,26 +291,31 @@ export class PeerGame{
   await this._connectGuestOnce();return this.guestData.members?.[this.uid]||null;
  }
  async _connectGuestOnce(){
-  this.incomingWire=null;this.cachedQuizAudio=null;
+  this.cachedQuizAudio=null;
   const Peer=await this._preparePeer();this.quitting=false;
   const peer=new Peer(undefined,peerOptions());this.peer=peer;
   await new Promise((resolve,reject)=>{
-   let done=false,accepted=false,conn=null;const timer=setTimeout(()=>finish(Error('Host nicht erreichbar. Einladung und Internetverbindung prüfen.')),18000);
+   let done=false,accepted=false,conn=null,partial=null;const timer=setTimeout(()=>finish(Error('Host nicht erreichbar. Einladung und Internetverbindung prüfen.')),18000);
    const finish=error=>{if(done)return;done=true;clearTimeout(timer);if(error){try{peer.destroy()}catch{}reject(error)}else resolve()};
    peer.on('open',()=>{if(this.peer!==peer||this.quitting||conn)return;conn=peer.connect(peerId(this.room),{reliable:true,serialization:'json'});this.conn=conn;
-    conn.on('open',()=>conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room}));
+    conn.on('open',()=>{
+     if(this.peer!==peer||this.conn!==conn||this.quitting)return;
+     try{conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room});}
+     catch{finish(Error('Verbindung zum Host konnte nicht bestätigt werden.'));}
+    });
     conn.on('data',input=>{
-     const decoded=nextWirePart(this.incomingWire,input);this.incomingWire=decoded.partial;const msg=decoded.message;
+     if(this.peer!==peer||this.conn!==conn||this.quitting)return;
+     const decoded=nextWirePart(partial,input);partial=decoded.partial;const msg=decoded.message;
      if(!msg)return;
      if(msg?.t==='welcome'){
-      if(this.peer!==peer||this.conn!==conn||accepted)return;
+      if(accepted)return;
       if(!this._applySnapshot(msg.state)){finish(Error('Spielstand konnte nicht vollständig empfangen werden.'));return;}
       accepted=true;this.connected=true;this.netError='';this.guestReconnectAttempts=0;
       this._ackSnapshot(msg.version);finish();this._emit();
       for(const pending of this.pending.values())this._sendRequest(pending);
      }
      else if(msg?.t==='denied')finish(Error(msg.reason||'Beitritt abgelehnt.'));
-     else if(this.peer===peer&&this.conn===conn)this._receiveFromHost(msg);
+     else if(accepted)this._receiveFromHost(msg);
     });
     conn.on('close',()=>{if(!done)finish(Error('Hostverbindung abgebrochen.'));else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
     conn.on('error',()=>{if(!done)finish(Error('WebRTC-Datenkanal fehlgeschlagen.'));else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
@@ -470,11 +483,12 @@ export class PeerGame{
    ctx.uid=msg.uid;ctx.ready=true;
    const old=this.guestConnections.get(ctx.uid);if(old&&old!==ctx){try{old.conn.close()}catch{}}
    this.guestConnections.set(ctx.uid,ctx);this.data.presence[ctx.uid]={connectedAt:Date.now()};
-   void this._sendHostMessage(ctx,this._snapshotMessage(ctx,'welcome'));this._changed();return;
+   void this._sendHostMessage(ctx,this._snapshotMessage(ctx,'welcome')).catch(()=>{});
+   this._changed();return;
   }
   if(this.guestConnections.get(ctx.uid)!==ctx||!this.data)return;
   if(msg.t==='snapshot-ack'&&Number.isSafeInteger(msg.version)&&msg.version>(ctx.ackVersion||0)&&msg.version<=ctx.snapshotVersion){
-   ctx.ackVersion=msg.version;ctx.lastAckAt=Date.now();this._emit();return;
+   ctx.ackVersion=msg.version;ctx.lastAckAt=Date.now();this._emit('.info/diagnostics');return;
   }
   if(ctx.ready&&msg.t==='action'&&typeof msg.id==='string'&&msg.id.length<=90){
    if(!/^r[0-9]{1,12}_[a-f0-9]{8}$/.test(msg.id)){
@@ -551,9 +565,12 @@ export class PeerGame{
  _rpc(action,payload={}){
   const key=JSON.stringify([action,payload]);
   this._ensureGuest(this.room);
+  const inFlight=action==='buzz'?null:[...this.pending.values()].find(request=>request.key===key);
+  if(inFlight)return inFlight.promise;
   for(const [old,item] of this.uncertainActions)if(Date.now()-item.at>90000)this.uncertainActions.delete(old);
   const id=this.uncertainActions.get(key)?.id||'r'+(++this.requestNo)+'_'+randomHex(4);
-  if(this.pending.has(id))return this.pending.get(id).promise;
+  const retry=this.pending.get(id);
+  if(retry)return retry.promise;
   const packet={t:'action',id,action,payload};
   let pending;
   const promise=new Promise((resolve,reject)=>{

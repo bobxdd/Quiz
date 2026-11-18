@@ -94,6 +94,9 @@ function guestReceiptMarkup(){
 function preserveForm(draw){
  const focused=document.activeElement,id=focused?.id,value=focused?.value,selection=(()=>{try{return [focused.selectionStart,focused.selectionEnd]}catch{return null}})();
  const previousScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
+ const actionSelector=focused?.matches('#app button[data-action]')?
+  'button'+[...focused.attributes].filter(attr=>attr.name.startsWith('data-'))
+   .map(({name,value})=>`[${name}="${CSS.escape(value)}"]`).join(''):'';
  const expanded=[...document.querySelectorAll('#app details[data-bq-persist][open]')].map(el=>el.dataset.bqPersist);
  const saved=[...document.querySelectorAll('.questionlist,.studio-list,.studio-tools,.workspace,.chatfeed,.bq-scene-content,.bq-guest-compose,.bq-answers-panel .answer-review')].map((el,i)=>({selector:el.id?'#'+CSS.escape(el.id):'.'+[...el.classList].find(c=>['questionlist','studio-list','studio-tools','workspace','chatfeed','bq-scene-content','bq-guest-compose','answer-review'].includes(c)),top:el.scrollTop,left:el.scrollLeft,index:i,nearBottom:el.classList.contains('chatfeed')&&el.scrollHeight-el.scrollTop-el.clientHeight<60}));
  draw();
@@ -103,6 +106,8 @@ function preserveForm(draw){
  if(next&&['INPUT','TEXTAREA','SELECT'].includes(next.tagName)&&next.type!=='file'){
   if(value!==undefined)next.value=value;
   next.focus({preventScroll:true});try{if(selection&&selection[0]!==null)next.setSelectionRange(selection[0],selection[1])}catch{}
+ }else if(previousScene===nextScene&&actionSelector){
+  document.querySelector('#app '+actionSelector+':enabled')?.focus({preventScroll:true});
  }
  for(const item of saved){if(!item.selector)continue;const el=document.querySelector(item.selector);if(el){el.scrollTop=item.nearBottom?el.scrollHeight: item.top;el.scrollLeft=item.left;}}
 }
@@ -358,6 +363,7 @@ function soundMenu(){
 function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
  if(canHost()){
+  game.watch('.info/diagnostics',()=>{if(view==='setup')schedule();});
   game.watchRoom(room,'picks',v=>{picks=v||{};schedule();});
   game.watchRoom(room,'questionHistory',v=>{questionHistory=v||{};schedule();});
   game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();});

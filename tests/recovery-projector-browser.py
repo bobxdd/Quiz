@@ -161,7 +161,8 @@ async def main():
     setTimeout(()=>bc.close(),1000);
    }""",[room,token])
    await expect(projector.locator('#projector-root')).to_contain_text('PUBLIC BOARD',timeout=10000)
-   assert await projector.evaluate("document.querySelector('#projector-root').textContent.includes('Score: 200')")
+   await expect(projector.locator('#projector-root')).to_contain_text('Score: 200')
+   assert await projector.locator('#projector-root button, #projector-root [data-action]').count()==0
    assert not errors,errors
    await page.close();await projector.close()
    print('PASS: local projector receives only explicitly published display frames and has no game engine')

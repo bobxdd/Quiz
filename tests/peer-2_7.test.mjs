@@ -68,6 +68,15 @@ test('private TURN settings accept UDP, TCP/TLS and IPv6, with separate credenti
  }
 });
 
+test('concurrent identical guest actions share a receipt without a second mutation',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const send=()=>guest1.message(room,'t1','Alice','Einmal trotz Doppelklick');
+  assert.deepEqual(await Promise.all([send(),send()]),[true,true]);
+  assert.equal(Object.values(host.data.messages.t1).length,1);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
 test('PeerJS host authorizes distinct members, never transmits host solutions, history or other team messages',async()=>{
  const {host,guest1,guest2}=await setup();
  assert.equal(Object.keys(host.data.roster).length,2);assert.equal(guest1.guestData.members[guest1.uid].team,'t1');
