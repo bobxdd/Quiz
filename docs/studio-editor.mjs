@@ -295,7 +295,14 @@ export function createStudioEditor(api){
   }
   const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds'}[field];
   if(key){item.teamEmoji={...normalizeTeamEmoji(item.teamEmoji),[key]:value};deferDraft();return;}
-  if(field==='mapPrompt'&&item.scene?.template==='map'){const heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');if(heading)heading.text=String(value).slice(0,950);item.prompt=String(value).slice(0,950);deferDraft();return;}
+  if(field==='mapPrompt'&&item.scene?.template==='map'){
+   const text=String(value).slice(0,950),heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');
+   if(heading)heading.text=text;
+   item.prompt=text;
+   const previewHeading=document.querySelector('#se-root .bq-map-title h2');
+   if(previewHeading)previewHeading.textContent=text;
+   deferDraft();return;
+  }
   if(field.startsWith('hint-')){const i=Number(field.slice(5));if(Number.isInteger(i)&&i>=0&&i<4){item.hints??=[];item.hints[i]=String(value).slice(0,220);}return;}
   if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='sourceCheckedOn'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
    if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex','mapTargetX','mapTargetY'].includes(field)?Number(value):value;
