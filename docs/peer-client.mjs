@@ -323,12 +323,22 @@ export class PeerGame{
   peer.on('error',error=>{if(peer.destroyed||['network','server-error','socket-error','socket-closed'].includes(error?.type))lost();});
  }
  async _openHostPeer(room){
-  const Peer=await this._preparePeer();const peer=new Peer(peerId(room),peerOptions());this.peer=peer;this.quitting=false;
-  await new Promise((resolve,reject)=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;reject(Error('PeerJS konnte den Host-Raum nicht anmelden.'))}},16000);
+  const Peer=await this._preparePeer();const peer=new Peer(peerId(room),peerOptions());
+  this.peer=peer;this.quitting=false;this.mode='host';this.room=room;
+  // Listen BEFORE signaling 'open': quick guests must not vanish in the
+  // microtask gap between registration and the connection listener.
+  this._listenHostPeer(peer);
+  this._health('signaling','');
+  await new Promise((resolve,reject)=>{
+   let done=false;const timer=setTimeout(()=>{if(!done){done=true;reject(Error('PeerJS konnte den Host-Raum nicht anmelden.'))}},16000);
    peer.on('open',()=>{if(!done){done=true;clearTimeout(timer);resolve()}});
-   peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error,'host')))}})
-  }).catch(err=>{try{peer.destroy()}catch{}throw err});
-  this.mode='host';this.room=room;this.connected=true;this.netError='';this.connectionPhase='connected';this.hostReconnectAttempts=0;this._listenHostPeer(peer);this._emit();
+   peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error,'host'))) }});
+  }).catch(err=>{
+   if(this.peer===peer)this.peer=null;
+   this.connected=false;this.netError=err.message;this.connectionPhase='failed';
+   try{peer.destroy()}catch{}this._emit();throw err;
+  });
+  this.connected=true;this.netError='';this.connectionPhase='connected';this.hostReconnectAttempts=0;this._emit();
  }
  /** Reopen only the transport; retain the whole authoritative quiz and its scores.
      Existing guests/projectors reconnect with their original identities. */
