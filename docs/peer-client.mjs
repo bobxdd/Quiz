@@ -297,6 +297,42 @@ export class PeerGame{
   }).catch(err=>{try{peer.destroy()}catch{}throw err});
   this.mode='host';this.room=room;this.connected=true;this.netError='';this.connectionPhase='connected';this.hostReconnectAttempts=0;this._listenHostPeer(peer);this._emit();
  }
+ /** Reopen only the transport; retain the whole authoritative quiz and its scores.
+     Existing guests/projectors reconnect with their original identities. */
+ async restartHostTransport(room){
+  this._assertHost(room);
+  if(this.restartingHost)return this.restartingHost;
+  const work=(async()=>{
+   this.connected=false;this.connectionPhase='reconnecting';
+   this.netError='Host-Netzwerkverbindung wird neu eingerichtet …';this._emit();
+   clearTimeout(this.hostReconnectTimer);this.hostReconnectTimer=null;
+   const previous=this.peer;this.peer=null;
+   for(const ctx of this.guestConnections.values())try{ctx.conn?.close()}catch{}
+   for(const ctx of this.projectorConnections)try{ctx.conn?.close()}catch{}
+   this.guestConnections.clear();this.projectorConnections.clear();
+   this.data.presence={};
+   try{previous?.destroy()}catch{}
+   // PeerJS Cloud needs a brief release window before the old host ID
+   // can be re-registered by this same host browser.
+   await new Promise(resolve=>setTimeout(resolve,700));
+   let lastError;
+   for(let attempt=0;attempt<3&&!this.quitting;attempt++){
+    try{
+     await this._openHostPeer(room);
+     this.data.presence[this.uid]={connectedAt:Date.now()};
+     this._changed();return true;
+    }catch(error){
+     lastError=error;this.connected=false;this.netError=error.message;
+     this.connectionPhase='failed';this._emit();
+     if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1200*(attempt+1)));
+    }
+   }
+   if(!this.quitting)this._scheduleHostReconnect();
+   throw lastError||Error('Hostverbindung wurde geschlossen.');
+  })();
+  this.restartingHost=work;
+  try{return await work;}finally{if(this.restartingHost===work)this.restartingHost=null;}
+ }
  _persist(){if(this.mode!=='host'||!this.data)return;
   // Only the host browser receives this backup. Complete quiz media remain in bq-quiz-<room>.
   const room=this.room,savedAt=this.savedAt=Math.max(Date.now(),(this.savedAt||0)+1);
