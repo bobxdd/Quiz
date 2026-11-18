@@ -735,11 +735,9 @@ export class PeerGame{
   const d=this._getHostData(room),emoji=d.teamEmoji,p=d.public;
   if(!emoji||emoji.id!==id||emoji.phase!==phase)return false;
   const questionId=p.current.id;
-  const next=returnToBoardState(p);
+  const next=returnToBoardState(emoji.phase==='roles'?{...p,phase:'ready'}:p);
   if(!next)return false;
   if(emoji.phase==='roles'){
-   delete next.used[questionId];
-   next.board[questionId].used=false;
    delete d.questionHistory[String(p.round)];
   }
   delete d.teamEmoji;d.public=next;

@@ -1388,7 +1388,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'probe-emoji-time':{
   if(!rehearsal?.emoji)return;
   const demo=rehearsal.emoji;
-  advanceTeamEmoji(demo,demo.deadline);
+  if(!advanceTeamEmoji(demo,demo.deadline))return;
   publicState.teamEmoji=publicTeamEmoji(demo);
   if(demo.phase==='reveal'){
    for(const result of demo.results)publicState.scores[result.id]=(publicState.scores[result.id]||0)+result.points;
