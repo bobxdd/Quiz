@@ -180,7 +180,7 @@ async def run(browser, root):
         await expect(page.locator('.bq-question-panel .se-imposter-image')).to_have_count(1)
         await expect(page.locator('.bq-question-panel .bq-answer-image img')).to_have_attribute('src', original)
     assert not errors, errors
-    print('PASS: four shared Ability-Imposter images, only the decoy slot becomes the original', flush=True)
+    print('PASS: four Ability-Imposter images keep original decoy highlighted; real icon and answer shown separately', flush=True)
     await context.close()
 
 
