@@ -217,7 +217,7 @@ function guestIdentity(room){
 function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 export class PeerGame{
- constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';this.connectionPhase='idle';this.iceState='unknown';this.iceErrorCode=0;this.retryPromise=null;this.connectAttempt=null;}
+ constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.unverifiedConnections=new Set();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';this.connectionPhase='idle';this.iceState='unknown';this.iceErrorCode=0;this.retryPromise=null;this.connectAttempt=null;}
  async init(){return this;}
  serverNow(){return Date.now()+this.offset+(this.emojiClockOffset||0);}
  diagnostics(){
@@ -297,11 +297,18 @@ export class PeerGame{
  }
  _listenHostPeer(peer){
   peer.on('connection',conn=>{
-   if(this.mode!=='host'||this.quitting){try{conn.close()}catch{}return}
+   if(this.mode!=='host'||this.quitting||this.unverifiedConnections.size>=MAX_WAITING){
+    try{conn.close()}catch{}return;
+   }
    const ctx={conn,uid:null,ready:false,lastChat:0,wireSequence:0,sentQuizAudioKey:null,wireChain:Promise.resolve()};
+   this.unverifiedConnections.add(ctx);
+   ctx.helloTimer=setTimeout(()=>{
+    if(!ctx.ready){this.unverifiedConnections.delete(ctx);try{conn.close()}catch{}}
+   },12000);
    this._watchIce(conn,ctx);
    conn.on('data',msg=>this._receiveFromGuest(ctx,msg));
    const disconnected=()=>{
+    clearTimeout(ctx.helloTimer);this.unverifiedConnections.delete(ctx);
     if(ctx.display)this.projectorConnections.delete(ctx);
     else this._disconnectGuest(ctx);
    };
@@ -659,25 +666,31 @@ export class PeerGame{
    ctx.display=true;setTimeout(()=>ctx.conn.close(),200);
    return;
   }
-  ctx.display=true;
+  ctx.display=true;clearTimeout(ctx.helloTimer);this.unverifiedConnections.delete(ctx);
   this.projectorConnections.add(ctx);
   try{ctx.conn.send({t:'display-ready'});}catch{}
   this._sendDisplay(ctx);
  }
  _disconnectGuest(ctx){if(this.quitting||!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
  _receiveFromGuest(ctx,msg){if(!msg||typeof msg!=='object'||Array.isArray(msg))return;ctx.lastSeenAt=Date.now();
+  const deny=reason=>{
+   clearTimeout(ctx.helloTimer);this.unverifiedConnections.delete(ctx);
+   try{ctx.conn.send({t:'denied',reason});}catch{}
+   // Give the denial frame time to leave the channel before closing it.
+   setTimeout(()=>{try{ctx.conn.close()}catch{}},180);
+  };
   try{if(JSON.stringify(msg).length>MAX_MESSAGE_BYTES){ctx.conn.close();return}}catch{return}
   if(ctx.display)return;
   if(!ctx.ready&&msg.t==='display-hello'){this._acceptDisplay(ctx,msg);return;}
   if(!ctx.ready){
-   if(msg.t!=='hello'||msg.room!==this.room||!safeUid(msg.uid)||!TOKEN_RE.test(msg.secret||'')){ctx.conn.send({t:'denied',reason:'Ungültiger Beitritt.'});ctx.conn.close();return}
+   if(msg.t!=='hello'||msg.room!==this.room||!safeUid(msg.uid)||!TOKEN_RE.test(msg.secret||'')){deny('Ungültiger Beitritt.');return}
    const prev=this.memberSecrets[msg.uid],member=this.data.members[msg.uid];
-   if(prev&&prev!==msg.secret){ctx.conn.send({t:'denied',reason:'Spieleridentität stimmt nicht überein.'});ctx.conn.close();return}
-   if(!prev){if(Object.keys(this.data.members).filter(id=>this.data.members[id]?.status==='pending').length>=MAX_WAITING){ctx.conn.send({t:'denied',reason:'Warteraum ist voll.'});ctx.conn.close();return}
+   if(prev&&prev!==msg.secret){deny('Spieleridentität stimmt nicht überein.');return}
+   if(!prev){if(Object.keys(this.data.members).filter(id=>this.data.members[id]?.status==='pending').length>=MAX_WAITING){deny('Warteraum ist voll.');return}
     this.memberSecrets[msg.uid]=msg.secret;
     this.data.members[msg.uid]={name:safeText(msg.name,28)||'Spieler',status:'pending',team:'',joinedAt:Date.now()};
-   }else if(member?.status==='removed'){ctx.conn.send({t:'denied',reason:'Du wurdest aus dem Raum entfernt.'});ctx.conn.close();return}
-   ctx.uid=msg.uid;ctx.ready=true;
+   }else if(member?.status==='removed'){deny('Du wurdest aus dem Raum entfernt.');return}
+   ctx.uid=msg.uid;ctx.ready=true;clearTimeout(ctx.helloTimer);this.unverifiedConnections.delete(ctx);
    const old=this.guestConnections.get(ctx.uid);if(old&&old!==ctx){try{old.conn.close()}catch{}}
    this.guestConnections.set(ctx.uid,ctx);this.data.presence[ctx.uid]={connectedAt:Date.now()};
    void this._sendHostMessage(ctx,this._snapshotMessage(ctx,'welcome')).catch(()=>{});
@@ -1012,6 +1025,8 @@ export class PeerGame{
   for(const timer of [this.reconnectTimer,this.hostReconnectTimer,this.snapshotTimer,this.teamEmojiTimer])clearTimeout(timer);
   this.reconnectTimer=this.hostReconnectTimer=this.snapshotTimer=this.teamEmojiTimer=null;
   for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Verbindung geschlossen.'));}
+  for(const ctx of this.unverifiedConnections){clearTimeout(ctx.helloTimer);try{ctx.conn.close()}catch{}}
+  this.unverifiedConnections.clear();
   this.pending.clear();this.uncertainActions.clear();
   try{this.conn?.close();}catch{}try{this.peer?.destroy();}catch{}
   this.conn=this.peer=null;
