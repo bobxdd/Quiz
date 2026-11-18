@@ -60,6 +60,7 @@ async def main():
     await guest.locator('#join-room').fill(room)
     await guest.locator('#join-name').fill('Wiederverbinden')
     await guest.locator('#join-form button[type="submit"]').click()
+    await guest.locator('[data-action="lobby-join"][data-team="t1"]').click()
     await host.locator('[data-action="approve"]').click()
     await expect(guest.locator('.role-caption')).to_contain_text('Team 1')
     await guest.evaluate('window.__netQA.game().conn.close()')
