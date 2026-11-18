@@ -62,3 +62,13 @@ test('One-screen CSS fits the original 1000x560 question stage to remaining cont
  assert.match(read('app.mjs'),/bq-host-info-wrap/);
  assert.match(read('app.mjs'),/renderAnswerView\(q\)/);
 });
+
+test('A step back hides solution markers for multiple choice, layout blocks and maps',()=>{
+ const app=read('app.mjs');
+ assert.match(app,/mapSolution:showAnswer&&q\.type==='map'/);
+ assert.match(app,/renderBlocks\(q\.blocks,\{reveal:showAnswer\}\)/);
+ assert.match(app,/showAnswer&&q\.correct===i\?'correct':''/);
+ assert.match(app,/const solution=publicState\.phase==='reveal'&&publicState\.solutionVisible!==false&&activeQuestion\(\)\?\.type==='map'/);
+ assert.match(app,/function renderMapFallback\(q\)/);
+ assert.match(app,/publicState\.solutionVisible!==false\?normalizePoint/);
+});
