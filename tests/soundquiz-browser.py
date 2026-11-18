@@ -53,6 +53,7 @@ async def main():
    page.on('pageerror',lambda e,n=name:errors.append(n+' '+str(e)))
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-soundquiz')).to_have_count(1,timeout=12000)
   for guest in [alice,bob]:
    assert 'audioPlayback' not in (await guest.evaluate("window.__probe.info().publicState.current"))

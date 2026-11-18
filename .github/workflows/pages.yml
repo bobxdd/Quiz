@@ -51,6 +51,7 @@ jobs:
           python tests/buzzer-auto-reveal-browser.py
           python tests/answer-tab-browser.py
           python tests/team-emoji-browser.py
+          python tests/board-rounds-browser.py
           python tests/finale-score-browser.py
           python tests/recovery-projector-browser.py
           python tests/editor-qol-audit-browser.py

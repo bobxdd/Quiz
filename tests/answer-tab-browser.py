@@ -98,6 +98,7 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="'+ids[0]+'"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("(id) => window.__probe.info().publicState?.current?.id===id",arg=ids[0],timeout=12000)
   before=await guest.evaluate("window.__probe.info().publicState.current")
   assert 'answerImage' not in before and 'answerText' not in before and 'answer' not in before,before.keys()
@@ -105,6 +106,9 @@ async def main():
   await guest.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=12000)
   await host.locator('[data-action="buzz-correct"]').click()
+  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
+  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
+  await host.locator('[data-action="reveal"]').click()
   for page in (host,guest):
    await page.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
    await expect(page.locator('.bq-answer-view .bq-answer-image img')).to_be_visible()
@@ -120,6 +124,7 @@ async def main():
   await expect(quiz_nav).to_be_focused()
   await host.locator('[data-action="back"]').click()
   await host.locator('[data-action="open"][data-qid="'+ids[1]+'"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("(id) => window.__probe.info().publicState?.current?.id===id",arg=ids[1],timeout=12000)
   assert 'answerImage' not in await guest.evaluate("window.__probe.info().publicState.current")
   await host.locator('[data-action="reveal"]').click()
@@ -128,6 +133,7 @@ async def main():
   assert await guest.locator('.bq-answer-view .answer').count()==0,'Image-only answer does not require text'
   await host.locator('[data-action="back"]').click()
   await host.locator('[data-action="open"][data-qid="'+ids[2]+'"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await host.locator('[data-action="reveal"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
   await expect(guest.locator('.bq-answer-view .answer')).to_contain_text('Nur Textantwort')

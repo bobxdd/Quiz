@@ -57,6 +57,7 @@ async def main():
   alice.on('pageerror',lambda e:errors.append('guest: '+str(e)))
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-big-buzzer')).to_be_visible(timeout=12000)
   # The icon and the separate controls are available to guest and host.
   for page in (host,alice):
@@ -108,6 +109,9 @@ async def main():
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=10000)
   h2=await count(host);a2=await count(alice)
   await host.locator('[data-action="buzz-correct"]').click()
+  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
+  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
+  await host.locator('[data-action="reveal"]').click()
   await alice.wait_for_function("() => window.__probe.info().publicState.buzzerJudgements?.['1']?.result==='correct'",timeout=10000)
   assert await count(host)==h2+2 and await count(alice)==a2+2,(await count(host),await count(alice))
   # Mute blocks preview, changes only this device, and survives navigation redraw.

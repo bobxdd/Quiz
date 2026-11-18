@@ -160,6 +160,7 @@ async def main():
   print('PASS: published quiz locked; dynamically created teams persist without republishing',flush=True)
 
   await host.locator('.bq-board-scene .tile:not([disabled])').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await a.locator('.bq-question-scene').wait_for(timeout=12000)
   await b.locator('.bq-question-scene').wait_for(timeout=12000)
   denial=await a.evaluate("""async()=>{try{await window.__probe.getGame().chooseLobbyTeam(window.__probe.room(),'t2');return 'WRONGLY ACCEPTED'}catch(e){return e.message}}""")

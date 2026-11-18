@@ -60,6 +60,7 @@ async def main():
   await second.locator('.bq-lobby').wait_for(timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await host.wait_for_function("() => window.__probe.info().publicState?.phase==='question'",timeout=8000)
   await guest.wait_for_timeout(450)
   await guest.locator('.bq-map-viewport').wait_for(timeout=12000)

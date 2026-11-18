@@ -1,19 +1,42 @@
 // Guarded question lifecycle for host actions. Every question is identified by
 // its unique board ID, not its category/title/position.
 const own=(obj,key)=>obj!=null&&Object.hasOwn(obj,key);
+const boardRound=value=>Number(value?.boardRound)===2?2:1;
+export function remainingBoardQuestions(state,round=boardRound(state)){
+ return Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round&&!cell.used&&!state.used?.[cell.id]);
+}
+export function canAdvanceBoard(state){
+ return state?.phase==='board'&&boardRound(state)===1&&Object.values(state.board||{}).some(cell=>boardRound(cell)===2);
+}
+export function advanceBoardState(state){
+ if(!canAdvanceBoard(state))return null;
+ return {...state,boardRound:2,current:null,deadline:0,pausedRemaining:0,presentation:null};
+}
+export function returnToBoardState(state){
+ if(!state?.current||!['ready','question','answered','paused','review','reveal'].includes(state.phase))return null;
+ const next={...state,phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null,teamEmoji:null,presentation:null};
+ if(state.phase==='ready'){
+  const id=state.current.id;
+  next.used={...state.used};delete next.used[id];
+  next.board={...state.board,[id]:{...state.board[id],used:false}};
+ }
+ return !remainingBoardQuestions(next).length&&canAdvanceBoard(next)?advanceBoardState(next):next;
+}
 export function validQuestionPair(state,question){
   const id=question?.id;
   if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id))return false;
   const cell=state.board[id];
-  return !!cell&&cell.category===question.category&&Number(cell.points)===Number(question.points)&&!cell.used&&!state?.used?.[id];
+  return !!cell&&boardRound(cell)===boardRound(state)&&boardRound(question)===boardRound(state)&&cell.category===question.category&&Number(cell.points)===Number(question.points)&&!cell.used&&!state?.used?.[id];
 }
-export function openQuestionState(state,{expectedRound,question,playerQuestion,participants,deadline=0}){
+export function openQuestionState(state,{expectedRound,question,playerQuestion,participants,deadline=0,covered=false}){
   if(!state||!['board','reveal'].includes(state.phase)||Number(state.round)!==Number(expectedRound))return null;
+  if(state.boardSequence&&state.phase!=='board')return null;
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
-  return {...state,phase:'question',round,current:playerQuestion,deadline:Number(deadline)||0,pausedRemaining:0,buzzerArmed:!state.settings?.manualBuzzer,
-    answerReview:null,answerParticipants:participants||null,audioPlayback:null,
+  const current=covered?{id:question.id,category:question.category,type:question.type,points:question.points,roundMode:playerQuestion.roundMode}:playerQuestion;
+  return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,
+    answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
 export function applyQuestionChanges(state,expectedRound,expectedId,changes,allowedPhases=['question','paused','review']){

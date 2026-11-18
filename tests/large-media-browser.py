@@ -67,6 +67,7 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="large-sound"]').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.current?.audio?.length>500000",timeout=30000)
   assert await guest.evaluate("window.__probe.info().publicState.current.answer") is None
   await expect(guest.locator('.bq-soundquiz')).to_be_visible(timeout=15000)
@@ -81,6 +82,9 @@ async def main():
   await guest.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=12000)
   await host.locator('[data-action="buzz-correct"]').click()
+  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
+  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
+  await host.locator('[data-action="reveal"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
   await expect(guest.locator('.stage .answer')).to_contain_text('Anivias Q')
   assert await guest.evaluate("window.__probe.info().publicState.current.audio.length")==len(audio)

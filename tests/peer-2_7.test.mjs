@@ -345,7 +345,7 @@ test('Correct buzzer judgement reveals the complete answer and score in one host
   assert.equal(await guest1.buzzer(room,'1','spoof team','spoof name'),true);
   const buzzer=host.data.buzzers['1'];assert.equal(buzzer.uid,guest1.uid);
   const before=host.data.public.scores.t1;
-  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct'),/Lösungsfreigabe/);
+  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct',{phase:'reveal'}),/Lösungsfreigabe/);
   assert.equal(host.data.public.phase,'question','failed reveal must not award points');
   assert.equal(host.data.public.scores.t1,before);
   const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};

@@ -24,6 +24,25 @@ export function collectCategories(stored,questions=[]){
  return entries;
 }
 export function questionsInCategory(questions,category){return (questions||[]).filter(q=>categoryKey(q?.category)===categoryKey(category));}
+export const boardRoundOf=question=>Number(question?.boardRound)===2?2:1;
+export const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(question=>boardRoundOf(question)===Number(round));
+export function roundCategories(quiz,round=1){
+ const stored=quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]);
+ return collectCategories(stored,roundQuestions(quiz,round));
+}
+export function boardLayoutIssues(quiz){
+ const issues=[];
+ for(const round of [1,2]){
+  const categories=roundCategories(quiz,round),questions=roundQuestions(quiz,round);
+  if(categories.length>6)issues.push({id:null,label:'Runde '+round,reason:'Maximal sechs Kategorien pro Spielbrett. Kategorien ins andere Brett verschieben.'});
+  for(const category of categories){
+   const list=questionsInCategory(questions,category);
+   if(list.length>6)issues.push({id:list[6].id,label:'Runde '+round+' · '+category,reason:'Maximal sechs Fragen je Kategorie. Fragen ins andere Brett verschieben.'});
+  }
+ }
+ if(roundQuestions(quiz,2).length&&!roundQuestions(quiz,1).length)issues.push({id:null,label:'Runde 1',reason:'Zuerst mindestens eine Frage in Runde 1 anlegen.'});
+ return issues;
+}
 export function suggestedTemplate(category){const key=categoryKey(category);return CATEGORY_SUGGESTIONS.find(s=>categoryKey(s.name)===key)?.template||'text';}
 export function assertNewCategory(categories,name,except=''){
  const cleaned=cleanCategoryName(name);

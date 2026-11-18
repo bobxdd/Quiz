@@ -500,3 +500,10 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-emoji-result-icons { font-size: 1.35rem; }
 .bq-team-emoji #team-emoji-guess-form { max-width: 32rem; }
 .bq-team-emoji .bq-answer-view { margin: 0; }
+.bq-question-covered { display: grid; place-content: center; gap: 1.2rem; min-height: 48vh; text-align: center; }
+.bq-question-covered .row { justify-content: center; }
+.bq-round-transition { display: flex; justify-content: flex-end; padding: .5rem 0; }
+.bq-round-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .8rem 0; }
+.bq-round-picker span { font-size: .82rem; color: #b7c8c2; }
+.se-category-move { white-space: normal !important; font-size: .75rem; }
+.bq-rehearsal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .75rem; }

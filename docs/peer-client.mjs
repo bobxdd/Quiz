@@ -7,7 +7,7 @@ import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
-import {openQuestionState,applyQuestionChanges} from './question-flow.mjs';
+import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz} from './backup-store.mjs';
 import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
@@ -159,7 +159,7 @@ function guestIdentity(room){
  }
  return item;
 }
-function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
+function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 export class PeerGame{
  constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
@@ -638,17 +638,52 @@ export class PeerGame{
  async answer(room,round,team,text){if(this.mode==='guest')return this._rpc('answer',{round,text});throw Error('Antworten nur für Teilnehmer.')}
  async message(room,team,name,text){if(this.mode==='guest')return this._rpc('message',{text});const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Unbekanntes Team.');const id='m_'+randomHex(9);d.messages[team]??={};d.messages[team][id]={uid:this.uid,name:'HOST',text:safeText(text,500),at:Date.now()};const keys=Object.keys(d.messages[team]);for(const key of keys.slice(0,-80))delete d.messages[team][key];this._changed()}
  async setState(room,changes){const d=this._getHostData(room);for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
- async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline){
+ async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
   const d=this._getHostData(room);
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   const next=openQuestionState(d.public,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
-   participants:emoji?null:participants,deadline:emoji?0:deadline});
+   participants:emoji?null:participants,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
   d.public=next;
-  if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
+  if(covered){
+   delete d.teamEmoji;delete next.teamEmoji;
+   d.pendingQuestion={round:next.round,id:question.id,current:clone(playerQuestion),participants:clone(participants),
+    duration:deadline?Math.max(0,deadline-Date.now()):0};
+  }
+  else if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
   else{delete d.teamEmoji;delete next.teamEmoji;}
   this._scheduleTeamEmojiDeadline();
   this._changed();return clone(next);
+ }
+ async uncoverQuestion(room,round,id){
+  const d=this._getHostData(room),pending=d.pendingQuestion;
+  if(d.public.phase!=='ready'||d.public.round!==Number(round)||d.public.current?.id!==id||pending?.round!==Number(round)||pending.id!==id)throw Error('Die ausgewählte Frage hat sich geändert.');
+  const question=this.hostQuiz?.questions.find(item=>item.id===id);
+  if(!question)throw Error('Die Originalfrage fehlt im Host-Quiz.');
+  const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
+  d.public={...d.public,phase:'question',current:clone(pending.current),
+   answerParticipants:emoji?null:pending.participants,
+   deadline:!emoji&&pending.duration?Date.now()+pending.duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
+  if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
+  delete d.pendingQuestion;
+  this._changed();return clone(d.public);
+ }
+ async returnToBoard(room,round,id){
+  const d=this._getHostData(room);
+  if(d.public.round!==Number(round)||d.public.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
+  const previous=d.public,next=returnToBoardState(previous);
+  if(!next)throw Error('Keine aktive Frage.');
+  if(previous.phase==='ready')delete d.questionHistory[String(previous.round)];
+  d.public=next;delete d.pendingQuestion;delete d.teamEmoji;
+  this._scheduleTeamEmojiDeadline();this._changed();
+  return clone(next);
+ }
+ async advanceBoard(room,round){
+  const d=this._getHostData(room);
+  if(d.public.round!==Number(round))throw Error('Das Spielbrett hat sich geändert.');
+  const next=advanceBoardState(d.public);
+  if(!next)throw Error('Runde 2 kann nur von der Übersicht aus gestartet werden.');
+  d.public=next;this._changed();return clone(next);
  }
  async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Die Emoji-Teamrunde hat eine eigene Phasensteuerung.');const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
  async recordQuestion(room,round,entry){const d=this._getHostData(room);d.questionHistory[String(round)]=clone(entry);this._changed()}
@@ -700,7 +735,7 @@ export class PeerGame{
   const d=this._getHostData(room),emoji=d.teamEmoji,p=d.public;
   if(!emoji||emoji.id!==id||emoji.phase!==phase)return false;
   const questionId=p.current.id;
-  const next=applyQuestionChanges(p,p.round,questionId,{phase:'board',current:null,teamEmoji:null,deadline:0},['question','reveal']);
+  const next=returnToBoardState(p);
   if(!next)return false;
   if(emoji.phase==='roles'){
    delete next.used[questionId];
@@ -733,7 +768,9 @@ export class PeerGame{
   const d=this._getHostData(room),before=clone(this._getHostData(room).public);
   const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
   let finalState=next.state;
-  if(result==='correct'){
+  if(result==='correct'&&!revealPatch){
+   finalState={...next.state,phase:'answered',deadline:0,pausedRemaining:0};
+  }else if(result==='correct'){
    // Publish the score, winning buzzer, question answer and closing phase as ONE
    // authoritative snapshot. No intermediate "correct points, hidden answer".
    if(!revealPatch||revealPatch.phase!=='reveal'||revealPatch.deadline!==0||
@@ -762,7 +799,7 @@ export class PeerGame{
  }
  async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
- async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
+ async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];delete d.pendingQuestion;delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
  async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}
   for(const ctx of this.projectorConnections){try{ctx.conn.send({t:'closed'});}catch{}}
   this.data=null;this.shutdown();await (this.checkpointWrites||Promise.resolve()).catch(()=>null);

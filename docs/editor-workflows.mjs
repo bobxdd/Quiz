@@ -1,5 +1,5 @@
 /* Pure, host-only editor helpers. No public question payload is modified here. */
-import {categoryKey} from './category-model.mjs';
+import {categoryKey,boardRoundOf,boardLayoutIssues} from './category-model.mjs';
 import {validateQuestion} from './core.mjs';
 
 export function selectionSummary(quiz, ids) {
@@ -27,16 +27,16 @@ export function reuseQuestion(quiz, sourceId, destination, newId) {
  quiz.questions.push(copy);return copy;
 }
 export function quizAudit(quiz) {
- const questions=quiz?.questions||[], errors=[], warnings=[];
+ const questions=quiz?.questions||[], errors=boardLayoutIssues(quiz), warnings=[];
  if(!questions.length)errors.push({id:null,label:'Quiz',reason:'Noch keine Fragen angelegt.'});
  const seenTitles=new Set(), seenTiles=new Set();
  for(const q of questions){
   const label=`${q.category||'Ohne Kategorie'} · ${q.title||'Unbenannte Frage'}`;
   const problem=validateQuestion(q,quiz.scoreMode);
   if(problem)errors.push({id:q.id,label,reason:problem});
-  const titleKey=`${categoryKey(q.category)}|${String(q.title||'').trim().toLocaleLowerCase('de')}`;
+  const titleKey=`${boardRoundOf(q)}|${categoryKey(q.category)}|${String(q.title||'').trim().toLocaleLowerCase('de')}`;
   if(seenTitles.has(titleKey))warnings.push({id:q.id,label,reason:'Fragentitel ist in dieser Kategorie doppelt.'});seenTitles.add(titleKey);
-  const tileKey=`${categoryKey(q.category)}|${q.points}`;
+  const tileKey=`${boardRoundOf(q)}|${categoryKey(q.category)}|${q.points}`;
   if(seenTiles.has(tileKey))warnings.push({id:q.id,label,reason:'Mehrere Fragen haben denselben Punktwert in dieser Kategorie.'});seenTiles.add(tileKey);
  }
  return {errors,warnings,ready:errors.length===0,questionCount:questions.length};

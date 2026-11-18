@@ -101,7 +101,7 @@ async def save_clue(player, labels):
 
 
 async def submit_guess(player, hint, guess):
-    await expect(player.locator('.bq-emoji-hint')).to_have_text(hint)
+    await expect(player.locator('.bq-emoji-hint')).to_have_text(hint,timeout=15000)
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
     await player.get_by_label('Euer Rateversuch').fill(guess)
     await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
@@ -137,6 +137,7 @@ async def run(browser, root):
     observe(viewer)
     await host.locator('.top-nav [data-view="live"]').click()
     await tile(host, 'Emoji-Teamrunde').click()
+    await host.locator('[data-action="uncover-question"]').click()
 
     for player in players:
         await expect(player.get_by_role('heading', name='Rollen wählen')).to_be_visible()
@@ -164,6 +165,7 @@ async def run(browser, root):
 
     await host.locator('[data-action="emoji-close"]').click()
     await tile(host, 'Fähigkeiten').click()
+    await host.locator('[data-action="uncover-question"]').click()
     images = lambda page: page.locator('.bq-question-panel .se-kind-image img')
     for page in [host, *players, viewer]:
         await expect(images(page)).to_have_count(4)

@@ -39,6 +39,7 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="map-buzzer"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.current?.id==='map-buzzer'",timeout=12000)
   assert 'mapTargetX' not in await guest.evaluate('window.__probe.info().publicState.current')
   assert await guest.locator('.bq-quiz-verdict').count()==0
@@ -55,6 +56,9 @@ async def main():
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{}).some(v=>!!v.text)",timeout=12000)
   assert await guest.locator('.bq-map-pin.is-solution').count()==0
   await host.locator('[data-action="buzz-correct"]').click()
+  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
+  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
+  await host.locator('[data-action="reveal"]').click()
   for page in (host,guest):
    await page.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
    await expect(page.locator('.bq-review-winner')).to_be_visible()

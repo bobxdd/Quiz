@@ -87,7 +87,7 @@ test('Answer view has a dedicated reveal screen while retaining original map, so
  assert.match(app,/renderAnswerView\(q\)/);
  assert.match(app,/bq-answer-context/);
  assert.match(app,/case 'buzz-correct':case 'buzz-wrong':/);
- assert.match(app,/buildRevealPatch\(quiz\.questions/);
+ assert.match(app,/buildRevealPatch\(q\)/);
  assert.match(editor,/data-pane="answer"/);
  assert.match(editor,/data-se-upload="answer-image"/);
  assert.match(editor,/id="se-answer-text"/);
