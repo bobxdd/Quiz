@@ -477,3 +477,11 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-projector-page .bq-projector-scene .bq-session-scene{max-width:100%;min-width:0}
 .bq-projector-page .bq-projector-scene .bq-answer-view{max-width:1200px}
 @media(max-width:600px){.bq-projector-page #projector-root{padding:10px}.bq-projector-page .bq-projector-scores .scoreline{display:flex;justify-content:space-between}}
+.bq-guest-receipt {
+  margin: 0 0 .7rem;
+  padding: .55rem .8rem;
+  border: 1px solid currentColor;
+  border-radius: .55rem;
+}
+.bq-guest-receipt:empty { display: none; }
+.bq-guest-receipt.pending { color: #ffdf9a; }

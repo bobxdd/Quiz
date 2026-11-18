@@ -30,3 +30,26 @@ async function access(key,mode,value){
 export const saveHostCheckpoint=(key,value)=>access(key,'write',structuredClone(value));
 export const loadHostCheckpoint=key=>access(key,'read');
 export const deleteHostCheckpoint=key=>access(key,'delete');
+
+export function saveLocalHostQuiz(room,quiz,savedAt=Date.now()){
+ try{
+  localStorage.setItem('bq-quiz-'+room,JSON.stringify({...quiz,_bqSavedAt:savedAt}));
+  return true;
+ }catch{return false;}
+}
+
+export function loadLocalHostQuiz(room){
+ try{
+  const saved=JSON.parse(localStorage.getItem('bq-quiz-'+room)||'null');
+  if(!Array.isArray(saved?.questions))return null;
+  const {_bqSavedAt,...quiz}=saved;
+  return {quiz,savedAt:Number(_bqSavedAt)||0};
+ }catch{return null;}
+}
+
+export async function loadBestHostQuiz(room){
+ const local=loadLocalHostQuiz(room);
+ const backup=await loadHostCheckpoint('quiz-'+room).catch(()=>null);
+ if(Array.isArray(backup?.quiz?.questions)&&(!local||backup.savedAt>local.savedAt))return backup.quiz;
+ return local?.quiz||null;
+}

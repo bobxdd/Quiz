@@ -102,11 +102,12 @@ export function createStudioEditor(api){
    +(item.answerImage?'<button type="button" class="se-answer-remove" data-se-action="answer-image-remove">✕ Antwortbild entfernen</button>':'')
    +input('answerImageAlt','Bildbeschreibung für Barrierefreiheit',item.answerImageAlt||'')
    +input('explanation','Zusätzliche Erklärung (optional)',item.explanation||'',{rows:3})
-   +'<details class="se-host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe; die Bewertung bleibt beim Host.</p>'
+   +'<details class="se-host-metadata" data-bq-persist="host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe; die Bewertung bleibt beim Host.</p>'
    +input('acceptedAnswers','Weitere akzeptierte Lösungen · eine pro Zeile',item.acceptedAnswers||'',{rows:3})
    +input('hostNotes','Notizen für die Moderation · nur Host',item.hostNotes||'',{rows:4})
    +input('sourceUrl','Quellenlink (https://)',item.sourceUrl||'')
    +input('sourcePatch','LoL-Patch / Bezugsjahr / Datenstand',item.sourcePatch||'')
+   +input('sourceCheckedOn','Geprüft am (JJJJ-MM-TT)',item.sourceCheckedOn||'')
    +'</details>'
    +(automatic?'<p class="se-muted">Die vorhandene Musterlösung dieses Fragetyps wird automatisch übernommen. Du kannst sie mit eigenem Text oder einem Bild ergänzen.</p>':'')
    +(!ready?'<p class="se-answer-warning" role="alert">Vor dem Veröffentlichen bitte mindestens Text oder ein Bild für die Antwort hinterlegen.</p>':'')
@@ -213,7 +214,29 @@ export function createStudioEditor(api){
    ${item&&editorPane==='question'?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
    <input type="file" id="import-quiz" accept=".json,.brainquiz" hidden>${contextMenuHTML()}${libraryMenuHTML()}</div>`;
  }
- function draw(){if(redrawPending)return;redrawPending=true;requestAnimationFrame(()=>{redrawPending=false;const root=document.getElementById('se-root');if(!root)return;const parent=root.parentElement;const scrollTop=root.querySelector('.se-questions')?.scrollTop||0;const navScroll=root.querySelector('.se-category-nav')?.scrollTop||0;const inspectorTop=root.querySelector('.se-inspector')?.scrollTop||0;const extrasOpen=!!root.querySelector('.se-extras[open]');const advancedOpen=!!root.querySelector('.se-more-properties[open]');const filesOpen=!!root.querySelector('.se-file-actions[open]');const editorToolsOpen=!!root.querySelector('.bq-editor-extras[open]');parent.innerHTML=html();const next=parent.querySelector('.se-questions');if(next)next.scrollTop=scrollTop;parent.querySelector('.se-category-nav')?.scrollTo(0,navScroll);const inspector=parent.querySelector('.se-inspector');if(inspector)inspector.scrollTop=inspectorTop;if(extrasOpen)parent.querySelector('.se-extras')?.setAttribute('open','');if(advancedOpen)parent.querySelector('.se-more-properties')?.setAttribute('open','');if(editorToolsOpen)parent.querySelector('.bq-editor-extras')?.setAttribute('open','');if(filesOpen)parent.querySelector('.se-file-actions')?.setAttribute('open','');mount(parent.querySelector('#se-root'));if(menu)parent.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});});}
+ function draw(){
+  if(redrawPending)return;
+  redrawPending=true;
+  requestAnimationFrame(()=>{
+   redrawPending=false;
+   const root=document.getElementById('se-root');
+   if(!root)return;
+   const parent=root.parentElement;
+   const scrolling=['.se-questions','.se-category-nav','.se-inspector'].map(selector=>
+    [selector,root.querySelector(selector)?.scrollTop||0]);
+   const expanded=['.se-extras','.se-more-properties','.se-file-actions','.bq-editor-extras','.se-host-metadata']
+    .filter(selector=>root.querySelector(selector+'[open]'));
+   root.outerHTML=html();
+   const editor=parent.querySelector('#se-root');
+   for(const selector of expanded)editor.querySelector(selector)?.setAttribute('open','');
+   for(const [selector,top] of scrolling){
+    const element=editor.querySelector(selector);
+    if(element)element.scrollTop=top;
+   }
+   mount(editor);
+   if(menu)editor.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});
+  });
+ }
  function choose(id,{issue=false}={}){
   flushDraft();
   const problem=issue?quizAudit(quiz()).errors.find(row=>row.id===id)?.reason||'':'';
@@ -223,7 +246,7 @@ export function createStudioEditor(api){
  function updateField(field,value){const item=current(),el=find();if(!item)return;
   if(field==='mapPrompt'&&item.scene?.template==='map'){const heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');if(heading)heading.text=String(value).slice(0,950);item.prompt=String(value).slice(0,950);deferDraft();return;}
   if(field.startsWith('hint-')){const i=Number(field.slice(5));if(Number.isInteger(i)&&i>=0&&i<4){item.hints??=[];item.hints[i]=String(value).slice(0,220);}return;}
-  if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
+  if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='sourceCheckedOn'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
    if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex','mapTargetX','mapTargetY'].includes(field)?Number(value):value;
     if(field==='answerText'&&!['multiple','order','estimate','map','imposter'].includes(item.type))item.answer=value;
   }else if(el){if(['x','y','w','h','font','step'].includes(field))el[field]=Number(value);else if(['text','alt','fill','bg','align','shape','role'].includes(field)){el[field]=value;if(field==='role'&&(value==='question'||value==='clue')){for(const other of item.scene.elements){if(other.id!==el.id&&other.role===value)other.role='content';}}}

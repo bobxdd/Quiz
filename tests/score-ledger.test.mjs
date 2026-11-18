@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {scoreEvent,appendScoreEvent,latestUndoableEvent,undoScoreEvent} from '../docs/score-ledger.mjs';
+import {scoreEvent,appendScoreEvent,latestUndoableEvent,undoScoreEvent,regradeScoreEvent} from '../docs/score-ledger.mjs';
 const before={scores:{t1:200,t2:50},playerScores:{p:{total:60,rounds:{},history:[]}}};
 const after={scores:{t1:300,t2:50},playerScores:{p:{total:160,rounds:{},history:[]}}};
 test('ledger records only affected people/teams; last active event undoes atomically',()=>{
@@ -30,3 +30,17 @@ test('stale concurrent point totals and out-of-order undo fail safely',()=>{
  assert.equal(latestUndoableEvent(rolled.events).id,'e1');
 });
 test('no-op events do not fill the score ledger',()=>{assert.equal(scoreEvent(before,before,{id:'n',kind:'manual-team',team:'t1'}),null);});
+
+test('regrading a buzzer replaces its verdict and preserves later team adjustments',()=>{
+ const initial={scores:{t1:0,t2:20}};
+ const wrong={scores:{t1:-50,t2:20}};
+ const event=scoreEvent(initial,wrong,{id:'wrong',kind:'buzzer-judgement',round:1,team:'t1',points:100,verdict:'wrong'});
+ const current={scores:{t1:-25,t2:200}};
+ const corrected=regradeScoreEvent(current,[event],'wrong',{newId:'correct'});
+ assert.deepEqual(corrected.state.scores,{t1:125,t2:200});
+ assert.equal(corrected.events[0].supersededBy,'correct');
+ assert.throws(()=>regradeScoreEvent(corrected.state,corrected.events,'wrong',{newId:'again'}),/aktuell/);
+ const reverted=undoScoreEvent(corrected.state,corrected.events,'correct');
+ assert.deepEqual(reverted.state,current);
+ assert.equal(latestUndoableEvent(reverted.events).id,'wrong');
+});

@@ -164,3 +164,33 @@ body:has(.bq-host-lobby-page) .topbar .header-primary{align-items:center;gap:9px
  .bq-host-lobby-team-section .bq-host-lobby-summary::before,
  .bq-host-lobby-team-section .bq-host-lobby-summary::after{display:none!important}
 }
+.bq-projector-toolbar, .bq-probe-scores, .bq-probe-submission {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .7rem;
+}
+.bq-projector-toolbar {
+  justify-content: flex-end;
+  margin-block: 0 1rem;
+}
+.bq-projector-toolbar p { margin: 0; }
+.bq-projector-toolbar p:empty { display: none; }
+#projector-clock { font-variant-numeric: tabular-nums; font-size: 1.3rem; }
+.bq-projector-slide {
+  min-height: 13rem;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+.bq-projector-slide h1 { font-size: clamp(2rem, 5vw, 4.5rem); }
+.bq-projector-slide p { max-width: 32rem; }
+.bq-projector-page .tile { cursor: default; }
+.bq-projector-page .board-scroll { overflow-x: auto; }
+.bq-rehearsal { margin-block: 1rem; }
+.bq-rehearsal .row + .row { margin-top: .75rem; }
+.bq-probe-scores { padding: 0; list-style: none; }
+.bq-probe-scores li { padding: .5rem .8rem; border: 1px solid currentColor; border-radius: .5rem; }
+.bq-probe-compact { max-width: min(100%, 390px); margin-inline: auto; }
+.bq-rehearsal ~ .presenter-stage audio { max-width: 100%; }

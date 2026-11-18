@@ -12,7 +12,7 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
-  return {...state,phase:'question',round,current:playerQuestion,deadline:Number(deadline)||0,pausedRemaining:0,
+  return {...state,phase:'question',round,current:playerQuestion,deadline:Number(deadline)||0,pausedRemaining:0,buzzerArmed:!state.settings?.manualBuzzer,
     answerReview:null,answerParticipants:participants||null,audioPlayback:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }

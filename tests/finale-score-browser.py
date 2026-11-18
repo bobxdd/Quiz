@@ -24,8 +24,11 @@ async def main():
   await host.locator('[data-se-field="title"]').blur()
   await host.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
   await host.locator('#se-answer-text').fill('Anivia')
+  await host.locator('.se-host-metadata > summary').click()
   await host.locator('[data-se-field="hostNotes"]').fill('Privat: Nur der Host darf das lesen.')
   await host.locator('[data-se-field="hostNotes"]').blur()
+  await expect(host.locator('.se-host-metadata')).to_have_attribute('open','')
+  await expect(host.locator('[data-se-field="hostNotes"]')).to_have_value('Privat: Nur der Host darf das lesen.')
   await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
   await host.locator('[data-action="publish"]').click()
   await expect(host.locator('.bq-board-scene .tile')).to_have_count(1,timeout=15000)
@@ -53,18 +56,23 @@ async def main():
   await host.locator('[data-action="undo-last-score"]').click()
   await host.wait_for_function("() => window.__probe.info().publicState?.scores?.t1===100")
   await expect(host.locator('.bq-score-ledger')).to_contain_text('zurückgenommen')
+  await guest.wait_for_function("() => window.__probe.info().publicState?.scores?.t1===100")
   assert await guest.evaluate("window.__probe.info().publicState.scores.t1")==100
   print('PASS: private audit, guarded last-score undo and synchronized score on guest')
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="finish-game"]').click()
+  await expect(host.locator('[data-action="finale-all"]')).to_be_visible()
+  await host.locator('[data-action="finale-all"]').click()
   for page in (host,guest):
    await page.wait_for_function("() => window.__probe.info().publicState?.phase==='finished'",timeout=15000)
    await expect(page.locator('.bq-finale')).to_be_visible()
    await expect(page.locator('.bq-finale-results')).to_contain_text('100 Punkte')
   assert await guest.locator('[data-action="resume-final"]').count()==0
   await guest.set_viewport_size({'width':390,'height':844})
-  metrics=await guest.locator('.bq-finale').bounding_box()
-  assert metrics and metrics['x']>=-2 and metrics['x']+metrics['width']<=392,metrics
+  await guest.wait_for_function("""()=>{
+   const box=document.querySelector('.bq-finale')?.getBoundingClientRect();
+   return box && box.width>0 && box.x>=-2 && box.right<=392;
+  }""")
   await host.locator('[data-action="resume-final"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.phase==='board'",timeout=15000)
   assert await guest.evaluate("window.__probe.info().publicState.scores.t1")==100

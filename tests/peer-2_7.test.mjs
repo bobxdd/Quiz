@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {PeerGame} from '../docs/peer-client.mjs';
+import {PeerGame,turnServer} from '../docs/peer-client.mjs';
 import {quickBoard,emptyQuiz,publicQuestion} from '../docs/core.mjs';
 
 const instances=new Map();let nextId=0;
@@ -32,6 +32,50 @@ async function setup(){
  await host.hostAssign(room,guest1.uid,host.data.members[guest1.uid],'t1');await host.hostAssign(room,guest2.uid,host.data.members[guest2.uid],'t2');
  await sleep(60);return {host,guest1,guest2};
 }
+
+test('a committed action whose receipt is lost gets replayed once after the host resumes',async()=>{
+ const {host,guest1,guest2}=await setup();
+ guest2.shutdown();
+ const ctx=host.guestConnections.get(guest1.uid);
+ const send=ctx.conn.send.bind(ctx.conn);
+ let release;
+ const disconnected=new Promise(resolve=>{release=resolve;});
+ ctx.conn.send=packet=>{
+  if(packet.t==='ack'&&packet.ok){ctx.conn.close();release();return;}
+  send(packet);
+ };
+ const sending=guest1.message(room,'t1','Alice','Einmal zustellen');
+ await disconnected;
+ host.shutdown();
+ const resumed=new PeerGame();
+ try{
+  await resumed.resumeHost(room);
+  assert.equal(await sending,true);
+  assert.equal(Object.values(resumed.data.messages.t1).filter(m=>m.text==='Einmal zustellen').length,1);
+  assert.equal(resumed.data.roster[guest1.uid].team,'t1');
+ }finally{
+  guest1.shutdown();resumed.shutdown();
+ }
+});
+
+test('private TURN settings accept UDP, TCP/TLS and IPv6, with separate credentials',()=>{
+ const credentials={username:'player',credential:'test-only'};
+ for(const url of ['turn:relay.example:3478','turns:relay.example:443?transport=tcp','turn:[2001:db8::1]:3478']){
+  assert.deepEqual(turnServer({url,...credentials}),{urls:url,...credentials});
+ }
+ for(const url of ['stun:relay.example','https://relay.example','turn:user@relay.example','turn:relay.example?transport=ftp']){
+  assert.throws(()=>turnServer({url,...credentials}),/TURN-Adresse/);
+ }
+});
+
+test('concurrent identical guest actions share a receipt without a second mutation',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const send=()=>guest1.message(room,'t1','Alice','Einmal trotz Doppelklick');
+  assert.deepEqual(await Promise.all([send(),send()]),[true,true]);
+  assert.equal(Object.values(host.data.messages.t1).length,1);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
 
 test('PeerJS host authorizes distinct members, never transmits host solutions, history or other team messages',async()=>{
  const {host,guest1,guest2}=await setup();

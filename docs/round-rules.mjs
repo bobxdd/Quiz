@@ -4,7 +4,7 @@ export const roundMode=q=>q?.roundMode==='written'?'written':'buzzer';
 export const scoreMode=state=>state?.scoreMode==='individual'?'individual':'team';
 export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  const round=String(state?.round||0);
- return !!uid&&!!team&&state?.phase==='question'&&roundMode(state.current)==='buzzer'&&state.settings?.buzzerEnabled!==false&&(!state.deadline||state.deadline>=time)
+ return !!uid&&!!team&&state?.phase==='question'&&roundMode(state.current)==='buzzer'&&state.buzzerArmed!==false&&state.settings?.buzzerEnabled!==false&&(!state.deadline||state.deadline>=time)
   &&!buzzers?.[round]&&!state?.buzzerResolved?.[round]&&!state?.buzzerBlocked?.[round]?.[uid]
   &&!(scoreMode(state)==='team'&&state?.buzzerBlockedTeams?.[round]?.[team]);
 }

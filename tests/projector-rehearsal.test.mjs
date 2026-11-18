@@ -6,13 +6,17 @@ test('projector page uses read-only channel with no host credentials or editable
  const receiver=file('projector.mjs'),page=file('projector.html'),app=file('app.mjs');
  assert.match(receiver,/BroadcastChannel/);
  assert.ok(!receiver.includes('localStorage'));
- assert.ok(!receiver.includes('peer-client.mjs'));
+ assert.match(receiver,/watchProjector\(room,key,showFrame,showStatus\)/);
+ assert.ok(!receiver.includes('new PeerGame'));
  assert.ok(!receiver.includes('hostQuiz'));
  assert.ok(!receiver.includes('memberSecrets'));
  assert.match(page,/Content-Security-Policy/);
  assert.match(app,/function projectorFrame\(\)/);
  assert.match(app,/function openProjector\(\)/);
  assert.match(app,/role!=='host'\|\|isOffline\(\)/);
+ const frame=app.slice(app.indexOf('function projectorFrame(){'),app.indexOf('function pushProjector('));
+ assert.doesNotMatch(frame,/renderChat|boardScene|sessionFooter|hostPrivateSolution/);
+ assert.match(frame,/renderBoard\(true\)/);
 });
 test('rehearsal remains separate from multiplayer and renders the current final answer',()=>{
  const app=file('app.mjs');

@@ -27,8 +27,17 @@ export function historyRows(history,answers,scores,people){
 }
 export function responseStatus(status){return status==='correct'?{label:'Richtig',icon:'✓'}:status==='wrong'?{label:'Falsch',icon:'✕'}:{label:'Nicht bewertet',icon:'–'};}
 export function csvSafeCell(value){const s=safe(value,1200);const guarded=/^[=+@\-\t\r]/.test(s)?"'"+s:s;return '"'+guarded.replaceAll('"','""')+'"';}
-export function historyCsv(rows,solutionLookup={}){
- const lines=[['Runde','Kategorie','Frage','Punkte','Person','Antwort','Bewertung','Punkteänderung','Musterlösung']];
- for(const row of rows){const participants=row.participants.length?row.participants:[{name:'',answer:'',status:'open',delta:null}];for(const p of participants){lines.push([row.round,row.category,row.prompt||row.title,row.points,p.name,p.answer,responseStatus(p.status).label,p.delta??'',row.solution||solutionLookup[row.questionId]||'']);}}
+export function historyCsv(rows,solutionLookup={},metadataLookup={}){
+ const lines=[['Runde','Kategorie','Frage','Punkte','Person','Antwort','Bewertung','Punkteänderung','Musterlösung','Antwortbild','Akzeptierte Varianten','Host-Notizen','Quelle','Patch / Bezugsjahr','Geprüft am']];
+ for(const row of rows){
+  const participants=row.participants.length?row.participants:[{name:'',answer:'',status:'open',delta:null}];
+  const meta=Object.hasOwn(metadataLookup,row.questionId)?metadataLookup[row.questionId]:{};
+  const solution=Object.hasOwn(solutionLookup,row.questionId)?solutionLookup[row.questionId]:row.solution||'';
+  for(const p of participants){
+   lines.push([row.round,row.category,row.prompt||row.title,row.points,p.name,p.answer,
+    responseStatus(p.status).label,p.delta??'',solution,meta.answerImage?meta.answerImageAlt||'Enthalten':'',
+    meta.acceptedAnswers,meta.hostNotes,meta.sourceUrl,meta.sourcePatch,meta.sourceCheckedOn]);
+  }
+ }
  return '\ufeff'+lines.map(line=>line.map(csvSafeCell).join(';')).join('\r\n');
 }
