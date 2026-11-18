@@ -1290,7 +1290,7 @@ const studio=createStudioEditor({
   quiz.questions.push(q);selected=q.id;saveLocal();
  },
  quickset:(cats,boardRound=1)=>{const items=quickBoard(cats).map(question=>({...question,boardRound}));if(quiz.questions.length+items.length>180)throw Error('Maximal 180 Fragen.');snapshotLayout();quiz.questions.push(...items);quiz.categories=collectCategories(quiz.categories,quiz.questions);selected=items[0]?.id||selected;saveLocal();},
- copyQuestion:(targetId)=>{const q=(targetId?quiz.questions.find(x=>x.id===targetId):null)||currentQuestion();if(!q)return;if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');snapshotLayout();const next=JSON.parse(JSON.stringify(q));next.id=uid();next.title+=' (Kopie)';quiz.questions.push(next);selected=next.id;saveLocal();},
+ copyQuestion:(targetId)=>{const q=(targetId?quiz.questions.find(x=>x.id===targetId):null)||currentQuestion();if(!q)return;if(roundQuestions(quiz,boardRoundOf(q)).filter(item=>categoryKey(item.category)===categoryKey(q.category)).length>=6)throw Error('Maximal sechs Fragen in dieser Kategorie. Wähle das andere Spielbrett.');snapshotLayout();const next=JSON.parse(JSON.stringify(q));next.id=uid();next.title+=' (Kopie)';quiz.questions.push(next);selected=next.id;saveLocal();},
  deleteQuestion:()=>{const old=currentQuestion();if(!old)return;snapshotLayout();quiz.questions=quiz.questions.filter(x=>x.id!==old.id);selected=quiz.questions[0]?.id||'';saveLocal();}
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
@@ -1436,7 +1436,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'select-q':selected=button.dataset.qid;editingBlock='';previewRevealed=false;previewImage='';lastEditAt=0;schedule();return;
  case 'new-q':{snapshotLayout();const q=makeQuestion();quiz.questions.push(q);selected=q.id;previewOpen=false;saveLocal();schedule();return;}
  case 'move-up':case 'move-down':{snapshotLayout();const i=quiz.questions.findIndex(x=>x.id===selected),j=i+(action==='move-up'?-1:1);if(i<0||j<0||j>=quiz.questions.length)return;[quiz.questions[i],quiz.questions[j]]=[quiz.questions[j],quiz.questions[i]];saveLocal();schedule();return;}
- case 'clone-q':{const q=currentQuestion();if(!q)return;snapshotLayout();const copy=JSON.parse(JSON.stringify(q));copy.id=uid();copy.title+=' (Kopie)';quiz.questions.push(copy);selected=copy.id;saveLocal();schedule();return;}
+ case 'clone-q':{const q=currentQuestion();if(!q)return;if(roundQuestions(quiz,boardRoundOf(q)).filter(item=>categoryKey(item.category)===categoryKey(q.category)).length>=6)throw Error('Maximal sechs Fragen in dieser Kategorie.');snapshotLayout();const copy=JSON.parse(JSON.stringify(q));copy.id=uid();copy.title+=' (Kopie)';quiz.questions.push(copy);selected=copy.id;saveLocal();schedule();return;}
  case 'delete-q':{const q=currentQuestion();if(!q||!confirm(`Frage „${q.title}“ wirklich löschen?`))return;snapshotLayout();quiz.questions=quiz.questions.filter(x=>x.id!==q.id);selected=quiz.questions[0]?.id||'';saveLocal();schedule();return;}
  case 'preview-q':{previewOpen=!previewOpen;previewRevealed=false;previewImage='';const q=currentQuestion();if(previewOpen&&q?.type==='splash')previewImage=await splashPreview(q.image,q,false);schedule();return;}
  case 'preview-reveal':previewRevealed=!previewRevealed;schedule();return;

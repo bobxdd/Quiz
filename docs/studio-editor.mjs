@@ -246,8 +246,7 @@ export function createStudioEditor(api){
  function draw(){
   if(redrawPending)return;
   redrawPending=true;
-  requestAnimationFrame(()=>{
-   redrawPending=false;
+  try{
    const root=document.getElementById('se-root');
    if(!root)return;
    const parent=root.parentElement;
@@ -274,7 +273,7 @@ export function createStudioEditor(api){
     replacement.focus({preventScroll:true});
     if(Number.isInteger(selection[0]))replacement.setSelectionRange(...selection);
    }
-  });
+  }finally{redrawPending=false;}
  }
  function choose(id,{issue=false}={}){
   flushDraft();

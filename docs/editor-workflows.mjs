@@ -1,5 +1,5 @@
 /* Pure, host-only editor helpers. No public question payload is modified here. */
-import {categoryKey,boardRoundOf,boardLayoutIssues} from './category-model.mjs';
+import {categoryKey,boardRoundOf,boardLayoutIssues,roundQuestions,roundCategories} from './category-model.mjs';
 import {validateQuestion} from './core.mjs';
 
 export function selectionSummary(quiz, ids) {
@@ -12,6 +12,15 @@ export function changeSelectedQuestions(quiz, ids, {category,points}={}) {
  if(!selected.size)throw Error('Bitte zuerst mindestens eine Frage auswählen.');
  if(category!==undefined && !(quiz.categories||[]).some(c=>categoryKey(c)===categoryKey(category)))throw Error('Bitte eine vorhandene Kategorie wählen.');
  if(points!==undefined && (!Number.isInteger(Number(points))||Number(points)<0||Number(points)>10000))throw Error('Punkte müssen eine ganze Zahl zwischen 0 und 10.000 sein.');
+ if(category!==undefined){
+  const rounds=new Set((quiz.questions||[]).filter(q=>selected.has(q.id)).map(boardRoundOf));
+  for(const round of rounds){
+   const questions=roundQuestions(quiz,round),names=roundCategories(quiz,round);
+   const count=questions.filter(q=>selected.has(q.id)||categoryKey(q.category)===categoryKey(category)).length;
+   if(count>6)throw Error('Die Zielkategorie würde mehr als sechs Fragen enthalten.');
+   if(!names.some(name=>categoryKey(name)===categoryKey(category))&&names.length>=6)throw Error('Pro Spielbrett sind sechs Kategorien möglich.');
+  }
+ }
  let count=0;
  for(const q of quiz.questions||[]){if(!selected.has(q.id))continue;if(category!==undefined)q.category=category;if(points!==undefined)q.points=Number(points);count++;}
  if(!count)throw Error('Die ausgewählten Fragen sind nicht mehr vorhanden.');

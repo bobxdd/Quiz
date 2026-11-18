@@ -15,6 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,34 +34,34 @@ jobs:
           python -m pip install --disable-pip-version-check playwright==1.65.2
           python -m playwright install --with-deps chromium
           failed=0
-          python tests/board-workspace-browser.py || failed=1
-          python tests/map-step3-browser.py || failed=1
-          python tests/publish-lock-lobby-exit-browser.py || failed=1
-          python tests/saved-quiz-host-lobby-browser.py || failed=1
-          python tests/host-flow-clarity-browser.py || failed=1
-          python tests/map-step3-peer-browser.py || failed=1
-          python tests/map-distance-browser.py || failed=1
-          python tests/original-arm-browser.py || failed=1
-          python tests/uncovered-ui-audit-browser.py || failed=1
-          python tests/features-3_4-browser.py || failed=1
-          python tests/team-lobby-step4-browser.py || failed=1
-          python tests/ui-step3-layout-browser.py || failed=1
-          python tests/step5-characters-browser.py || failed=1
-          python tests/step6-question-cover-browser.py || failed=1
-          python tests/soundquiz-browser.py || failed=1
-          python tests/sound-effects-browser.py || failed=1
-          python tests/buzzer-auto-reveal-browser.py || failed=1
-          python tests/answer-tab-browser.py || failed=1
-          python tests/team-emoji-browser.py || failed=1
-          python tests/board-rounds-browser.py || failed=1
-          python tests/finale-score-browser.py || failed=1
-          python tests/recovery-projector-browser.py || failed=1
-          python tests/editor-qol-audit-browser.py || failed=1
-          python tests/large-media-browser.py || failed=1
-          python tests/map-buzzer-review-browser.py || failed=1
-          python tests/editor-3_1-browser.py || failed=1
-          python tests/image-drop-browser.py || failed=1
-          python tests/categories-3_0-browser.py || failed=1
+          timeout -k 10s 120s python tests/board-workspace-browser.py || failed=1
+          timeout -k 10s 120s python tests/map-step3-browser.py || failed=1
+          timeout -k 10s 120s python tests/publish-lock-lobby-exit-browser.py || failed=1
+          timeout -k 10s 120s python tests/saved-quiz-host-lobby-browser.py || failed=1
+          timeout -k 10s 120s python tests/host-flow-clarity-browser.py || failed=1
+          timeout -k 10s 120s python tests/map-step3-peer-browser.py || failed=1
+          timeout -k 10s 120s python tests/map-distance-browser.py || failed=1
+          timeout -k 10s 120s python tests/original-arm-browser.py || failed=1
+          timeout -k 10s 120s python tests/uncovered-ui-audit-browser.py || failed=1
+          timeout -k 10s 120s python tests/features-3_4-browser.py || failed=1
+          timeout -k 10s 120s python tests/team-lobby-step4-browser.py || failed=1
+          timeout -k 10s 120s python tests/ui-step3-layout-browser.py || failed=1
+          timeout -k 10s 120s python tests/step5-characters-browser.py || failed=1
+          timeout -k 10s 120s python tests/step6-question-cover-browser.py || failed=1
+          timeout -k 10s 120s python tests/soundquiz-browser.py || failed=1
+          timeout -k 10s 120s python tests/sound-effects-browser.py || failed=1
+          timeout -k 10s 120s python tests/buzzer-auto-reveal-browser.py || failed=1
+          timeout -k 10s 120s python tests/answer-tab-browser.py || failed=1
+          timeout -k 10s 120s python tests/team-emoji-browser.py || failed=1
+          timeout -k 10s 120s python tests/board-rounds-browser.py || failed=1
+          timeout -k 10s 120s python tests/finale-score-browser.py || failed=1
+          timeout -k 10s 120s python tests/recovery-projector-browser.py || failed=1
+          timeout -k 10s 120s python tests/editor-qol-audit-browser.py || failed=1
+          timeout -k 10s 120s python tests/large-media-browser.py || failed=1
+          timeout -k 10s 120s python tests/map-buzzer-review-browser.py || failed=1
+          timeout -k 10s 120s python tests/editor-3_1-browser.py || failed=1
+          timeout -k 10s 120s python tests/image-drop-browser.py || failed=1
+          timeout -k 10s 120s python tests/categories-3_0-browser.py || failed=1
           exit "$failed"
       - name: Firefox and WebKit recovery and projector checks
         run: |

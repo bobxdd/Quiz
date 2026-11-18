@@ -116,6 +116,33 @@ async def run(browser,root):
     await context.close()
 
 
+
+async def limits(browser,root):
+    context=await browser.new_context(viewport={'width':1440,'height':950},reduced_motion='reduce')
+    try:
+        page=await context.new_page()
+        await page.goto(root)
+        await page.locator('[data-action="create-new-quiz"]').click()
+        await page.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
+        for n in range(1,7):
+            await question(page,f'Feld {n}',n*100,f'Antwort {n}')
+        await expect(page.locator('.se-qrow')).to_have_count(6)
+        for action in ['copy-q','new']:
+            await page.locator('[data-se-action="'+action+'"]').first.click()
+            await expect(page.locator('#toaster')).to_contain_text('sechs Fragen')
+            await expect(page.locator('.se-qrow')).to_have_count(6)
+        await page.locator('[data-se-action="board-round"][data-board-round="2"]').click()
+        await page.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
+        await question(page,'Zweite Runde',100,'Antwort')
+        await expect(page.locator('.se-qrow')).to_have_count(1)
+        await page.locator('[data-se-action="board-round"][data-board-round="1"]').click()
+        await page.locator('[data-se-action="category-select"][data-category="Champions"]').first.click()
+        await expect(page.locator('.se-qrow')).to_have_count(6)
+        print('PASS: rapid six-question editing, create/duplicate capacity guards and independent second-round category',flush=True)
+    finally:
+        await context.close()
+
+
 async def main():
     server=http.ThreadingHTTPServer(('127.0.0.1',0),http.Handler)
     threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -124,6 +151,7 @@ async def main():
             browser=await p.chromium.launch(args=['--no-sandbox','--no-proxy-server'])
             try:
                 await run(browser,f'http://127.0.0.1:{server.server_port}/')
+                await limits(browser,f'http://127.0.0.1:{server.server_port}/')
             finally:
                 await browser.close()
     finally:

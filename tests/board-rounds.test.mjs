@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion,pageBoardColumns} from '../docs/core.mjs';
+import {changeSelectedQuestions} from '../docs/editor-workflows.mjs';
 import {boardLayoutIssues,roundCategories,roundQuestions} from '../docs/category-model.mjs';
 import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair} from '../docs/question-flow.mjs';
 
@@ -65,4 +66,20 @@ test('a board has at most six columns and six rows on every screen',()=>{
   assert.ok(pages.every(page=>page.columns.length<=6&&page.columns.every(column=>column.items.length<=6)));
   assert.equal(pages.flatMap(page=>page.columns.flatMap(column=>column.items)).length,56);
  }
+});
+
+
+test('batch category moves enforce six cells per round before changing questions or points',()=>{
+ const q=normalizedQuiz({categories:['Voll','Quelle'],questions:[
+  ...Array.from({length:6},(_,i)=>({id:'full'+i,category:'Voll',points:100,prompt:'Frage',answer:'Antwort'})),
+  {id:'move',category:'Quelle',points:200,prompt:'Frage',answer:'Antwort'},
+  {id:'round2',category:'Voll',boardRound:2,points:300,prompt:'Frage',answer:'Antwort'}
+ ]});
+ const original=structuredClone(q);
+ assert.throws(()=>changeSelectedQuestions(q,['move'],{category:'Voll',points:900}),/sechs Fragen/);
+ assert.deepEqual(q,original,'rejected batch must leave every question unchanged');
+ assert.equal(changeSelectedQuestions(q,['round2'],{category:'Quelle',points:500}),1);
+ assert.equal(q.questions.at(-1).boardRound,2);
+ assert.equal(q.questions.at(-1).points,500);
+ assert.equal(q.questions.at(-1).category,'Quelle');
 });
