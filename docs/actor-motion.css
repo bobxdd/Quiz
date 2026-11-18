@@ -11,6 +11,9 @@
 .bq-screen-watcher::after{content:"";position:absolute;right:0;bottom:0;width:35px;height:5px;background:linear-gradient(180deg,#91808e,#413b44);box-shadow:inset 0 1px #dcc4d338;pointer-events:none}
 /* Board cameo exists only in 1 of 7 rounds; card z=3 hides its body at z=2. */
 .bq-scene-cameos{position:absolute;top:10px;right:clamp(135px,18vw,300px);z-index:2;width:58px;height:75px;pointer-events:none;user-select:none}
+.bq-board-frame{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;isolation:isolate}
+.bq-board-frame.has-cameo{padding-top:40px}
+.bq-board-frame>.bq-scene-cameos{top:0}
 .bq-cameo{display:block;position:relative;width:58px;height:75px;overflow:hidden;pointer-events:none}
 .bq-cameo .bq-actor{width:75px;height:75px;transform:translate(-8px,0);filter:drop-shadow(0 3px 3px #0008)}
 /* Pixel fingertips rest on the top rim, while the original sprite remains behind. */
@@ -50,6 +53,7 @@
 .bq-auxiliary[open]>.glass.panel,.bq-auxiliary[open]>.bq-host-detail{z-index:160!important}
 @media(max-width:1000px),(max-height:600px){.bq-screen-watcher{display:none!important}}
 @media(max-width:760px){.bq-scene-cameos,.bq-peek-fingers{display:none!important}}
+@media(max-width:760px){.bq-board-frame.has-cameo{padding-top:0}}
 @media(prefers-reduced-motion:reduce){.bq-question-curtain{display:none!important}}
 @media(forced-colors:active){.bq-screen-watcher,.bq-scene-cameos,.bq-peek-fingers{display:none!important}}
 @media print{.bq-screen-watcher,.bq-scene-cameos,.bq-peek-fingers{display:none!important}}
