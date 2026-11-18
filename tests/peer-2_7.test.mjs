@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {PeerGame,turnServer} from '../docs/peer-client.mjs';
+import {PeerGame,turnServer,peerError,connectionAdvice,peerOptions,configureTurnRelay,hasTurnRelay,testTurnRelay} from '../docs/peer-client.mjs';
 import {selectingTeam} from '../docs/question-flow.mjs';
 import {quickBoard,emptyQuiz,publicQuestion} from '../docs/core.mjs';
 
@@ -474,4 +474,86 @@ test('fixed team turns reserve one field while every team can buzz and only the 
   await assert.rejects(host.returnToBoard(room,1,q.id),/nicht mehr aktiv/);
   assert.equal(selectingTeam(host.data.public),'t2');
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+test('connection errors distinguish a missing host from an occupied host peer ID', async()=>{
+ assert.match(peerError({type:'peer-unavailable'},'guest'),/Host.*nicht erreichbar/);
+ assert.match(peerError({type:'unavailable-id'},'host'),/Raumcode.*vergeben/);
+ assert.match(peerError({type:'webrtc'},'guest'),/TURN-Relay/);
+ assert.match(connectionAdvice({iceState:'failed',relay:false}),/CGNAT\/Firewall/);
+ assert.match(connectionAdvice({iceState:'failed',relay:true}),/Host UND Gast/);
+ const missing=new PeerGame();
+ try{
+  await assert.rejects(missing.connect('ZZZZZZZZZZZZZZZZ','Guest'),/Host.*nicht erreichbar/);
+  assert.equal(missing.diagnostics().phase,'failed');
+ }finally{missing.shutdown();}
+});
+
+test('public STUN defaults and optional TURN credentials are privacy-safe and confined to this tab',()=>{
+ configureTurnRelay(null);
+ const base=peerOptions();
+ assert.equal(base.config.iceTransportPolicy,'all');
+ assert.ok(base.config.iceServers.some(server=>server.urls.includes('stun:stun.cloudflare.com:3478')));
+ assert.equal(base.config.iceServers.some(server=>String(server.urls).startsWith('turn:')),false);
+ assert.equal(hasTurnRelay(),false);
+ configureTurnRelay({url:'turns:relay.example:443?transport=tcp',username:'tester',credential:'VERY_SECRET_DO_NOT_LEAK'});
+ try{
+  assert.equal(hasTurnRelay(),true);
+  const opts=peerOptions();
+  assert.ok(opts.config.iceServers.some(server=>server.username==='tester'&&server.credential==='VERY_SECRET_DO_NOT_LEAK'));
+  const data=new PeerGame().diagnostics();
+  assert.equal(data.turnConfigured,true);
+  assert.ok(!JSON.stringify(data).includes('VERY_SECRET_DO_NOT_LEAK'));
+  assert.ok(!JSON.stringify(data).includes('relay.example'));
+ }finally{configureTurnRelay(null);}
+});
+
+test('TURN probe validates a real relay candidate without needing to send IPs or credentials to peers',async()=>{
+ configureTurnRelay({url:'turn:relay.example:3478',username:'test',credential:'test'});
+ const initial=globalThis.RTCPeerConnection;
+ let configured;
+ class FakeConnection{
+  constructor(options){configured=options;this.events=new Map();this.closed=false;}
+  addEventListener(name,listener){this.events.set(name,listener)}
+  createDataChannel(label){assert.equal(label,'brainquiz-turn-test')}
+  async createOffer(){return {type:'offer',sdp:'test'}}
+  async setLocalDescription(){queueMicrotask(()=>this.events.get('icecandidate')?.({candidate:{type:'relay',candidate:'candidate:fake typ relay'}}))}
+  close(){this.closed=true;}
+ }
+ globalThis.RTCPeerConnection=FakeConnection;
+ try{
+  assert.equal(await testTurnRelay(1000),true);
+  assert.equal(configured.iceTransportPolicy,'relay');
+  assert.equal(configured.iceServers.length,1);
+ }finally{globalThis.RTCPeerConnection=initial;configureTurnRelay(null);}
+});
+
+test('host can restart its transport without wiping scores or guest identities',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.score(room,'t1',350);
+  const oldId=guest1.uid;
+  await host.restartHostTransport(room);
+  await Promise.all([guest1.retryGuestNow(),guest2.retryGuestNow()]);
+  await sleep(80);
+  assert.equal(host.connected,true);
+  assert.equal(host.data.public.scores.t1,350);
+  assert.equal(guest1.uid,oldId);
+  assert.equal(guest1.guestData.members[oldId].status,'approved');
+  assert.equal(guest2.guestData.public.scores.t1,350);
+  assert.equal(host.guestConnections.size,2);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('unverified peer channels are removed when they disconnect',async()=>{
+ const {host,guest1,guest2}=await setup();
+ const anonymous=new MockPeer(),id='brainquiz27-'+room.toLowerCase();
+ try{
+  const unauthenticated=anonymous.connect(id);
+  await sleep(25);
+  assert.equal(host.unverifiedConnections.size,1);
+  unauthenticated.close();
+  await sleep(30);
+  assert.equal(host.unverifiedConnections.size,0);
+ }finally{anonymous.destroy();guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
