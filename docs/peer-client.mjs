@@ -9,6 +9,7 @@ import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,updatePlayerS
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent} from './score-ledger.mjs';
+import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint} from './backup-store.mjs';
 
 const HOST_PREFIX='brainquiz27-';
 const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
@@ -92,6 +93,15 @@ export class PeerGame{
  constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.requestNo=0;this.reconnectTimer=null;this.snapshotTimer=null;this.incomingWire=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
  async init(){return this;}
  serverNow(){return Date.now()+this.offset;}
+ diagnostics(){
+  return {mode:this.mode,connected:!!this.connected,error:String(this.netError||'').slice(0,160),
+   lastBackupPending:!!this.checkpointWrites,
+   peers:this.mode==='host'?[...this.guestConnections.entries()].map(([uid,ctx])=>({
+    uid,name:String(this.data?.members?.[uid]?.name||'Spieler').slice(0,28),
+    connected:!!ctx.conn?.open,lastReceived:ctx.lastSeenAt||0,lastSent:ctx.lastSentAt||0,
+    bufferedBytes:Number(ctx.conn?.dataChannel?.bufferedAmount)||0
+   })):[]};
+ }
  _emit(){for(const entry of [...this.listeners]){try{entry.cb(this._read(entry.path))}catch(error){console.error('[BrainQuiz Peer watcher]',error)}}}
  _read(path){if(path==='.info/connected')return this.connected;if(path==='.info/serverTimeOffset')return this.offset;const prefix='rooms/'+this.room;if(!path.startsWith(prefix+'/'))return null;return clone(pathValue(this.mode==='host'?this.data:this.guestData,path.slice(prefix.length+1)))??null;}
  watch(path,cb){const entry={path,cb};this.listeners.push(entry);queueMicrotask(()=>{if(this.listeners.includes(entry))cb(this._read(path))});return ()=>{this.listeners=this.listeners.filter(e=>e!==entry)};}
@@ -120,8 +130,13 @@ export class PeerGame{
  }
  _persist(){if(this.mode!=='host'||!this.data)return;
   // Only the host browser receives this backup. Complete quiz media remain in bq-quiz-<room>.
-  try{localStorage.setItem('bq-p2p-session-'+this.room,JSON.stringify({uid:this.uid,data:this.data,secrets:this.memberSecrets,savedAt:Date.now()}));}
-  catch{this.netError='Lokaler Spielstand konnte nicht gesichert werden. Host-Quiz als Datei exportieren.';}
+  const room=this.room,checkpoint={uid:this.uid,data:clone(this.data),secrets:clone(this.memberSecrets),savedAt:Date.now()};
+  try{localStorage.setItem('bq-p2p-session-'+room,JSON.stringify(checkpoint));}
+  catch{this.netError='Lokaler Spielstand konnte nicht gespeichert werden. IndexedDB-Wiederherstellung prüfen und Host-Datei exportieren.';}
+  // Serialize asynchronous checkpoints so an older round can never overwrite a newer one.
+  this.checkpointWrites=(this.checkpointWrites||Promise.resolve()).catch(()=>null)
+   .then(()=>saveHostCheckpoint('session-'+room,checkpoint))
+   .catch(error=>{console.warn('[BrainQuiz] Zweites Host-Backup fehlgeschlagen:',error);});
  }
  _changed(){this._persist();this._emit();if(!this.snapshotTimer)this.snapshotTimer=setTimeout(()=>{this.snapshotTimer=null;for(const ctx of this.guestConnections.values())this._sendSnapshot(ctx)},25)}
  async create(room,quiz,options={}){if(this.mode!=='idle')this.shutdown();if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');
@@ -130,16 +145,25 @@ export class PeerGame{
  }
  async resumeHost(room){if(this.mode!=='idle')this.shutdown();let previous=null;
   try{previous=JSON.parse(localStorage.getItem('bq-p2p-session-'+room)||'null')}catch{}
+  const checkpoint=await loadHostCheckpoint('session-'+room).catch(()=>null);
+  if(checkpoint?.data?.owner===checkpoint.uid&&(!previous||Number(checkpoint.savedAt)>Number(previous.savedAt||0)))previous=checkpoint;
   if(!previous||!previous.data||!safeUid(previous.uid)||previous.data.owner!==previous.uid)throw Error('Kein Host-Spielstand in diesem Browser vorhanden.');
   this.uid=previous.uid;this.data=previous.data;this.memberSecrets=previous.secrets||{};
   try{const q=JSON.parse(localStorage.getItem('bq-quiz-'+room)||'null');this.hostQuiz=q?.questions?q:null}catch{this.hostQuiz=null}
+  if(!this.hostQuiz){const recovered=await loadHostCheckpoint('quiz-'+room).catch(()=>null);this.hostQuiz=recovered?.quiz?.questions?recovered.quiz:null;}
   this.data.presence={};await this._openHostPeer(room);this._persist();return room;
  }
  async saveHostQuiz(room,quiz){this._assertHost(room);if(!quiz||!Array.isArray(quiz.questions)||quiz.questions.length>180)throw Error('Ungültiges Host-Quiz.');
   if(new TextEncoder().encode(JSON.stringify(quiz)).length>8_000_000)throw Error('Host-Quiz überschreitet 8 MB. Medien verkleinern.');
-  this.hostQuiz=clone(quiz);try{localStorage.setItem('bq-quiz-'+room,JSON.stringify(quiz))}catch{throw Error('Lokaler Host-Speicher voll. Host-Quiz bitte als Datei exportieren.')}
+  this.hostQuiz=clone(quiz);let localSaved=true;
+  try{localStorage.setItem('bq-quiz-'+room,JSON.stringify(quiz))}catch{localSaved=false}
+  let extraSaved=false;try{extraSaved=!!await saveHostCheckpoint('quiz-'+room,{quiz:clone(quiz),savedAt:Date.now()});}catch(error){console.warn('[BrainQuiz] Quiz-Backup fehlgeschlagen:',error);}
+  if(!localSaved&&!extraSaved)throw Error('Host-Quiz konnte nicht gespeichert werden. Bitte als Datei exportieren.');
+  if(!localSaved)this.netError='Quiz in IndexedDB gesichert; lokaler Standard-Speicher voll. Bitte Datei-Backup exportieren.';
  }
- async getHostQuiz(room){this._assertHost(room);if(this.hostQuiz)return clone(this.hostQuiz);try{return JSON.parse(localStorage.getItem('bq-quiz-'+room)||'null')}catch{return null}}
+ async getHostQuiz(room){this._assertHost(room);if(this.hostQuiz)return clone(this.hostQuiz);
+  try{const q=JSON.parse(localStorage.getItem('bq-quiz-'+room)||'null');if(q?.questions)return q;}catch{}
+  const saved=await loadHostCheckpoint('quiz-'+room).catch(()=>null);return saved?.quiz?.questions?clone(saved.quiz):null;}
  _assertHost(room){if(this.mode!=='host'||this.room!==room||!this.data)throw Error('Nur der Host darf diese Aktion ausführen.');}
  _ensureGuest(room){if(this.mode!=='guest'||this.room!==room||!this.conn?.open||!this.connected)throw Error('Verbindung zum Host unterbrochen.');}
  async connect(room,name=''){if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');if(this.mode!=='idle')this.shutdown();this.mode='guest';this.room=room;
@@ -226,6 +250,7 @@ export class PeerGame{
     if(i%8===7)await wireTick();
    }
    if(audioKey)ctx.sentQuizAudioKey=audioKey;
+   ctx.lastSentAt=Date.now();
   });
   ctx.wireChain=sent.catch(error=>{
    console.warn('[BrainQuiz] Live-Spielstand nicht vollständig übertragen:',error);
@@ -249,7 +274,7 @@ export class PeerGame{
   })();
  }
  _disconnectGuest(ctx){if(!ctx.ready||!this.data||this.mode!=='host')return;const current=this.guestConnections.get(ctx.uid);if(current!==ctx)return;this.guestConnections.delete(ctx.uid);delete this.data.presence[ctx.uid];this._changed()}
- _receiveFromGuest(ctx,msg){if(!msg||typeof msg!=='object'||Array.isArray(msg))return;
+ _receiveFromGuest(ctx,msg){if(!msg||typeof msg!=='object'||Array.isArray(msg))return;ctx.lastSeenAt=Date.now();
   try{if(JSON.stringify(msg).length>MAX_MESSAGE_BYTES){ctx.conn.close();return}}catch{return}
   if(!ctx.ready){
    if(msg.t!=='hello'||msg.room!==this.room||!safeUid(msg.uid)||!TOKEN_RE.test(msg.secret||'')){ctx.conn.send({t:'denied',reason:'Ungültiger Beitritt.'});ctx.conn.close();return}
@@ -396,6 +421,10 @@ export class PeerGame{
  async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
  async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];this._changed()}
- async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}this.data=null;this.shutdown();try{localStorage.removeItem('bq-p2p-session-'+room)}catch{}}
+ async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}
+  this.data=null;this.shutdown();await (this.checkpointWrites||Promise.resolve()).catch(()=>null);
+  try{localStorage.removeItem('bq-p2p-session-'+room)}catch{}
+  await deleteHostCheckpoint('session-'+room).catch(()=>null);
+ }
  shutdown(){this.quitting=true;clearTimeout(this.reconnectTimer);clearTimeout(this.snapshotTimer);for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Verbindung geschlossen.'))}this.pending.clear();try{this.conn?.close()}catch{};try{this.peer?.destroy()}catch{};this.connected=false;this.mode='idle';this.guestConnections.clear();this._emit()}
 }
