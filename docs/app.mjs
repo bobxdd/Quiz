@@ -92,7 +92,21 @@ async function sendGuestAction(label,send){
  }finally{schedule();}
 }
 function guestReceiptMarkup(){
- return `<div class="bq-guest-receipt ${guestReceipt?.tone||''}" role="status" aria-atomic="true">${e(!connected?'Verbindung unterbrochen. Wiederverbindung läuft …':guestReceipt?.text||'')}</div>`;
+ const retry=!connected&&game?.mode==='guest';
+ const diagnostic=game?.diagnostics?.();
+ const status=connected?guestReceipt?.text||'':diagnostic?.error||'Verbindung unterbrochen. Wiederverbindung läuft …';
+ return `<div class="bq-guest-receipt ${guestReceipt?.tone||''}" role="status" aria-atomic="true">${e(status)}
+  ${retry?`<span class="bq-reconnect-actions">${btn('Erneut verbinden','retry-connect','small primary')}${btn('Fehlerbericht kopieren','copy-connection-report','small')}</span>`:''}</div>`;
+}
+function connectionReport(){
+ const d=game?.diagnostics?.()||{};
+ // No room tokens, member secrets, IP addresses or TURN credentials.
+ return JSON.stringify({application:'BrainQuiz Studio',at:new Date().toISOString(),
+  browser:navigator.userAgent.slice(0,180),online:navigator.onLine,
+  role:d.mode||role,connected:!!d.connected,phase:d.phase||'unknown',
+  iceState:d.iceState||'unknown',iceErrorCode:d.iceErrorCode||0,
+  turnConfigured:!!d.turnConfigured,reconnectAttempts:d.reconnectAttempts||0,
+  message:d.error||'',advice:d.guidance||'',participantCount:d.peers?.length||0},null,2);
 }
 function preserveForm(draw){
  const focused=document.activeElement,id=focused?.id,value=focused?.value,selection=(()=>{try{return [focused.selectionStart,focused.selectionEnd]}catch{return null}})();
@@ -376,6 +390,7 @@ async function maybeOpenSelectedQuestion(){
 }
 function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;playerEmoji=null;emojiDraft=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
+ game.watch('.info/diagnostics',()=>{if(!connected||view==='setup')schedule();});
  if(canHost()){
   game.watch('.info/diagnostics',()=>{if(view==='setup')schedule();});
   game.watchRoom(room,'picks',v=>{picks=v||{};schedule();});
@@ -630,12 +645,12 @@ function landing(){
  ${!invite?savedQuizzesStart(drafts,workspaceError,hostCode):''}
   <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
  </div>
- <details class="bq-online-setup bq-start-connectivity"><summary>Verbindung & Datenschutz</summary><div class="glass panel"><h3>PeerJS / WebRTC</h3>${turnRelaySetup()}<p class="small muted">Keine Datenbank und kein eigenes Konto nötig. Für eine Live-Runde muss der Browser des Hosts geöffnet und mit dem Internet verbunden bleiben. Der Verbindungsaufbau erfolgt über PeerJS Cloud; manche restriktiven Netzwerke benötigen einen zusätzlichen TURN-Relayserver.</p></div></details></main></div>`;
+ <details class="bq-online-setup bq-start-connectivity"><summary>Verbindung & Datenschutz</summary><div class="glass panel"><h3>PeerJS / WebRTC</h3>${turnRelaySetup()}<p class="small muted">Host-Browser muss geöffnet bleiben. PeerJS Cloud vermittelt nur die Verbindung, nicht den Spielstand. Bei CGNAT/Firewalls ist ein eigener TURN-Dienst für eine verlässliche Verbindung erforderlich; das Quiz kann keinen TURN-Zugang automatisch bereitstellen.</p></div></details></main></div>`;
 }
 
 function turnRelaySetup(){
- return `<details class="bq-auxiliary"><summary>Eigenen TURN-Relay einrichten</summary>
-  <p>Nutze die Zugangsdaten deines TURN-Dienstes. Die Einstellung gilt für neue Verbindungen in diesem Tab.</p>
+ return `<details class="bq-auxiliary" data-bq-persist="turnsetup"><summary>Eigenen TURN-Relay einrichten</summary>
+  <p>Bei CGNAT oder restriktiven Firewalls müssen Host und Gäste einen erreichbaren TURN-Server mit gültigen Zugangsdaten konfigurieren. Die Einstellung wird nur in diesem Browser-Tab gespeichert und gilt für neue Peer-Verbindungen. Ein normaler STUN-Server allein ersetzt TURN nicht.</p>
   <form id="turn-relay-form" class="formgrid">
    <label class="field span2">TURN-Adresse<input name="url" type="text" placeholder="turns:relay.example:443?transport=tcp" maxlength="300" required></label>
    <label class="field">Nutzername<input name="username" type="text" maxlength="512" autocomplete="off" required></label>
@@ -1054,6 +1069,10 @@ function renderSetup(){
   ${diagnostics?.lastBackupAt?`<p class="small muted">Spielstand gesichert um ${formatTime(diagnostics.lastBackupAt)}</p>`:''}
   ${diagnostics?.backupError?`<p role="alert">${e(diagnostics.backupError)}</p>`:''}
   ${diagnostics?.error?`<p role="status">${e(diagnostics.error)}</p>`:''}
+  <p class="small muted">Phase: ${e(diagnostics?.phase||'–')} · ICE: ${e(diagnostics?.iceState||'–')} · TURN: ${diagnostics?.turnConfigured?'Konfiguriert':'Nicht konfiguriert'} · Wiederholungen: ${Number(diagnostics?.reconnectAttempts)||0}</p>
+  <p class="small muted">${e(diagnostics?.guidance||'')}</p>
+  <div class="row">${btn('Fehlerbericht kopieren','copy-connection-report','small')}${btn('Host-Verbindung neu starten','restart-host-transport','small')}</div>
+  <details class="bq-auxiliary" data-bq-persist="turnsetup-host"><summary>TURN-Relay für neue Verbindungen einrichten</summary>${turnRelaySetup()}<p class="small muted">Nach einer Änderung „Host-Verbindung neu starten“ wählen, damit sie auf dem Host wirksam wird. Die Gäste müssen ebenfalls die Zugangsdaten einrichten.</p></details>
  </div>`;
  const manual=publicState?.settings?.manualBuzzer===true;
  const buzzSettings=canHost()&&!isOffline()?`<section class="glass panel"><div class="panelhead"><h3>Buzzer-Freigabe</h3></div>
@@ -1482,7 +1501,22 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'lobby-ready':{if(role!=='guest')return;await sendGuestAction('Bereitschaft',()=>game.setLobbyReady(room,button.dataset.ready==='true'));notice(button.dataset.ready==='true'?'Bereit gemeldet.':'Bereitschaft zurückgenommen.');return;}
  case 'clear-turn-relay':{
   const {configureTurnRelay}=await import('./peer-client.mjs');
-  configureTurnRelay(null);notice('TURN-Einstellung entfernt.');return;
+  configureTurnRelay(null);notice('TURN-Einstellung entfernt. Bei laufendem Host erst nach Netzwerk-Neustart wirksam.');if(view==='setup')schedule();return;
+ }
+ case 'restart-host-transport':{
+  if(!canHost()||isOffline()||!game?.restartHostTransport)throw Error('Nur für einen geöffneten Live-Hostraum verfügbar.');
+  if(!confirm('Host-Netzwerk mit den aktuellen TURN-Einstellungen neu starten? Teilnehmer sind kurz getrennt und verbinden sich automatisch erneut. Punktestand und Fragen bleiben erhalten.'))return;
+  await game.restartHostTransport(room);notice('Host-Verbindung neu aufgebaut. Teilnehmer verbinden sich erneut.');return;
+ }
+ case 'retry-connect':{
+  if(role!=='guest'||!game?.retryGuestNow)return;
+  await game.retryGuestNow();notice('Mit dem Host wieder verbunden.');return;
+ }
+ case 'copy-connection-report':{
+  const report=connectionReport();
+  try{await navigator.clipboard.writeText(report);notice('Verbindungsbericht ohne Schlüssel, IP-Adressen oder Quizlösungen kopiert.');}
+  catch{safeDownload('BrainQuiz_Verbindungsbericht.txt',report);notice('Verbindungsbericht als Datei gespeichert.');}
+  return;
  }
  case 'create':await createRoom();return;
  case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(projectorChannel){projectorChannel.postMessage({t:'closed'});projectorChannel.close();projectorChannel=null;projectorRoom='';}if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
@@ -1660,10 +1694,13 @@ document.addEventListener('click',async ev=>{if(ev.target.closest('.question-set
 document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form','turn-relay-form','team-emoji-guess-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='team-emoji-guess-form'){await doAction('emoji-guess',ev.target);return;}if(ev.target.id==='turn-relay-form'){
  const data=Object.fromEntries(new FormData(ev.target));
  const {configureTurnRelay}=await import('./peer-client.mjs');
- configureTurnRelay(data);ev.target.reset();notice('TURN-Einstellung für diesen Tab gespeichert.');return;
+ configureTurnRelay(data);ev.target.reset();notice(canHost()?'TURN gespeichert. Damit der Host sie nutzt, Netzwerk in den Einstellungen neu starten.':'TURN für neue Verbindungen in diesem Tab gespeichert.');if(view==='setup')schedule();return;
  }if(ev.target.id==='host-team-create-form'){if(!canHost()||isOffline())throw Error('Nur der Host des Live-Raums kann Teams erstellen.');const input=$('bq-host-team-name');const created=await game.hostCreateLobbyTeam(room,input?.value||'');if(input){input.value='';input.blur();input.closest('details')?.removeAttribute('open');}notice('Team „'+created.name+'“ erstellt.');}if(ev.target.id==='lobby-create-form'&&role==='guest'){const name=$('bq-new-team')?.value||'';await sendGuestAction('Teamname',()=>game.createLobbyTeam(room,name));notice('Teamname übernommen. Der Host bestätigt deine Auswahl.');}if(ev.target.id==='join-form')await enterRoom($('join-room').value,$('join-name').value,true);if(ev.target.id==='chat-form')await handleMessage(ev.target);if(ev.target.id==='answer-form'&&!canHost()&&(!myResponse||activeQuestion()?.type==='map'))await doAction('submit-answer',ev.target);}catch(err){error(err);}});
 document.addEventListener('input',ev=>{const input=ev.target;if(input.dataset.blockfield){blockPropertyUpdate(input);return;}if(input.id==='history-search'){historyFilter=input.value;schedule();return;}if(input.id==='editor-search'){editorSearch=input.value;schedule();return;}if(input.id?.startsWith('q-')||['quiz-title','quiz-description','quiz-teams','quiz-manual-players'].includes(input.id)){updateDraftField(input);clearTimeout(updateDraftField.timer);updateDraftField.timer=setTimeout(schedule,350);}});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&cloudDirty)void flushHostCloudSave();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&cloudDirty)void flushHostCloudSave();
+ if(document.visibilityState==='visible'&&role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});
+});
+window.addEventListener('online',()=>{if(role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});});
 window.addEventListener('storage',event=>{
  if(!isOffline()||!boardId||event.key!=='bq-board-workspace-'+boardId)return;
  try{const current=loadBoard(localStorage,boardId);if(current.revision===boardRevision)return;}catch{}
