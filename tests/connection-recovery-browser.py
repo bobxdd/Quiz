@@ -52,7 +52,7 @@ async def main():
     await host.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
     await rounds.question(host,'Host-Netzwerkcheck',100,'Antwort')
     await host.locator('[data-action="host-current-board"]').click()
-    await host.wait_for_url(re.compile(r'\\?room=[A-Z2-9]{16}'))
+    await host.wait_for_url(re.compile(r'\?room=[A-Z2-9]{16}'))
     room=parse_qs(urlparse(host.url).query)['room'][0]
 
     guest=await context.new_page()
