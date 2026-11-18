@@ -359,7 +359,8 @@ export class PeerGame{
    const previous=this.peer;this.peer=null;
    for(const ctx of this.guestConnections.values())try{ctx.conn?.close()}catch{}
    for(const ctx of this.projectorConnections)try{ctx.conn?.close()}catch{}
-   this.guestConnections.clear();this.projectorConnections.clear();
+   for(const ctx of this.unverifiedConnections){clearTimeout(ctx.helloTimer);try{ctx.conn?.close()}catch{}}
+   this.guestConnections.clear();this.projectorConnections.clear();this.unverifiedConnections.clear();
    this.data.presence={};
    try{previous?.destroy()}catch{}
    // PeerJS Cloud needs a brief release window before the old host ID
