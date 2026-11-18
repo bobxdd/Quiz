@@ -70,6 +70,7 @@ async def main():
    await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(1,timeout=15000)
    assert 'Luftlinie' in await guest.locator('.review-summary').inner_text()
    assert 'entscheidet weiterhin selbst' in await guest.locator('.review-summary').inner_text()
+  await expect(host.locator('.review-card')).to_have_count(2,timeout=15000)
   cards=await host.evaluate("""() => Array.from(document.querySelectorAll('.review-card')).map(card=>({
     name:card.querySelector('.review-name')?.textContent,
     distance:card.querySelector('.bq-review-map-distance strong')?.textContent
