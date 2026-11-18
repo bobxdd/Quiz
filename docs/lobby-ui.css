@@ -87,3 +87,35 @@
 .bq-host-team-create .bq-lobby-create{border:0;border-top:1px solid #758b8d6a;border-radius:0 0 10px 10px;margin:0}
 .bq-host-team-create:focus-within{outline-offset:2px}
 @media(max-width:600px){.bq-host-team-create .bq-lobby-create-row>button{width:100%}}
+
+/* Connection recovery QoL: a failed join must remain actionable after the
+   toast disappears. Do not cover the buzzer or hide room-code inputs. */
+.bq-join-error{
+ grid-column:1/-1;display:block;color:#ffd0c8;background:#492d3080;
+ border:1px solid #bd756f;border-radius:9px;padding:10px 12px;
+ line-height:1.45;font-size:13px;margin:6px 0 0;overflow-wrap:anywhere
+}
+.bq-reconnect-actions{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:8px;vertical-align:middle}
+.bq-reconnect-actions>.btn{min-height:34px;padding:5px 9px;font-size:12px}
+.bq-guest-receipt:has(.bq-reconnect-actions){
+ display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+ max-width:100%;white-space:normal;overflow-wrap:anywhere
+}
+.bq-connection-audit>.row{gap:6px;flex-wrap:wrap;margin:8px 0}
+.bq-connection-audit .bq-auxiliary[data-bq-persist="turnsetup-host"]{
+ max-width:100%;margin-top:6px
+}
+.bq-connection-audit .bq-auxiliary[data-bq-persist="turnsetup-host"]>summary{
+ white-space:normal
+}
+.bq-connection-audit .bq-auxiliary[data-bq-persist="turnsetup-host"][open]{
+ position:relative;z-index:1
+}
+.bq-connection-audit .bq-auxiliary[data-bq-persist="turnsetup-host"] .bq-auxiliary{
+ position:relative;max-width:100%
+}
+@media(max-width:520px){
+ .bq-reconnect-actions{display:flex;width:100%;margin-left:0}
+ .bq-reconnect-actions>.btn{flex:1 1 auto}
+ .bq-connection-audit .bq-auxiliary .formgrid{grid-template-columns:minmax(0,1fr)}
+}

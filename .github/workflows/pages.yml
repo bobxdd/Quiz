@@ -56,6 +56,7 @@ jobs:
           timeout -k 10s 120s python tests/board-rounds-browser.py || failed=1
           timeout -k 10s 120s python tests/team-turns-browser.py || failed=1
           timeout -k 10s 120s python tests/one-screen-reveal-browser.py || failed=1
+          timeout -k 10s 120s python tests/connection-recovery-browser.py || failed=1
           timeout -k 10s 120s python tests/finale-score-browser.py || failed=1
           timeout -k 10s 120s python tests/recovery-projector-browser.py || failed=1
           timeout -k 10s 120s python tests/editor-qol-audit-browser.py || failed=1
@@ -65,11 +66,6 @@ jobs:
           timeout -k 10s 120s python tests/image-drop-browser.py || failed=1
           timeout -k 10s 120s python tests/categories-3_0-browser.py || failed=1
           exit "$failed"
-      - name: Firefox and WebKit recovery and projector checks
-        run: |
-          python -m playwright install --with-deps firefox webkit
-          BRAINQUIZ_BROWSER=firefox python tests/recovery-projector-browser.py
-          BRAINQUIZ_BROWSER=webkit python tests/recovery-projector-browser.py
       - name: Preserve layout screenshots and measurements for review
         uses: actions/upload-artifact@v4
         if: always()
@@ -82,13 +78,27 @@ jobs:
         shell: bash
         run: |
           ! find . -type f \( -name '*.brainquiz.json' -o -name '*.brainplay.json' -o -name '*.exe' -o -name '*.bat' -o -name '*service-account*.json' -o -name '.env' -o -name '.env.*' \) | grep .
+  crossbrowser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Firefox and WebKit recovery and projector checks
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.65.2
+          python -m playwright install --with-deps firefox webkit
+          timeout -k 10s 150s env BRAINQUIZ_BROWSER=firefox python tests/recovery-projector-browser.py
+          timeout -k 10s 150s env BRAINQUIZ_BROWSER=webkit python tests/recovery-projector-browser.py
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, crossbrowser]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
