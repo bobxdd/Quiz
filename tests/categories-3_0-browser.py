@@ -5,7 +5,7 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','answer-view.mjs','score-ledger.mjs','backup-store.mjs','final-results.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
+files=['app.mjs','answer-view.mjs','score-ledger.mjs','backup-store.mjs','final-results.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','team-emoji.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -35,6 +35,10 @@ async def install(page):
   Object.defineProperty(window,'sessionStorage',{configurable:true,value:storage(session)});
   window.history.replaceState=()=>{};
   const blob=body=>URL.createObjectURL(new Blob([body],{type:'text/javascript'}));
+  const emoji=blob(src['team-emoji.mjs']);
+  for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs']){
+   src[path]=src[path].replace("from './team-emoji.mjs'",`from '${emoji}'`);
+  }
   const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));const category=blob(src['category-model.mjs']);
   const review=blob(src['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs']);const dagger=blob(src['map-dagger-animation.mjs']);

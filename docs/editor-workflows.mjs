@@ -32,7 +32,7 @@ export function quizAudit(quiz) {
  const seenTitles=new Set(), seenTiles=new Set();
  for(const q of questions){
   const label=`${q.category||'Ohne Kategorie'} · ${q.title||'Unbenannte Frage'}`;
-  const problem=validateQuestion(q);
+  const problem=validateQuestion(q,quiz.scoreMode);
   if(problem)errors.push({id:q.id,label,reason:problem});
   const titleKey=`${categoryKey(q.category)}|${String(q.title||'').trim().toLocaleLowerCase('de')}`;
   if(seenTitles.has(titleKey))warnings.push({id:q.id,label,reason:'Fragentitel ist in dieser Kategorie doppelt.'});seenTitles.add(titleKey);

@@ -485,3 +485,18 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 .bq-guest-receipt:empty { display: none; }
 .bq-guest-receipt.pending { color: #ffdf9a; }
+
+.bq-team-emoji { display: grid; gap: .9rem; min-width: 0; }
+.bq-team-emoji h3, .bq-team-emoji p { margin: 0; }
+.bq-team-emoji .panelhead { flex-wrap: wrap; align-items: center; gap: .65rem; }
+.bq-emoji-target { display: grid; gap: .3rem; }
+.bq-emoji-target strong { font-size: clamp(1.35rem, 4vw, 2.15rem); overflow-wrap: anywhere; }
+.bq-emoji-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: .35rem; max-width: 46rem; }
+.bq-emoji-palette .btn, .bq-emoji-selection .btn { min-height: 44px; min-width: 44px; padding: .2rem; font-size: 1.45rem; }
+.bq-emoji-selection { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; min-height: 50px; }
+.bq-emoji-hint { padding: .75rem; border-radius: .65rem; background: rgba(155, 186, 171, .13); font-size: clamp(1.55rem, 5vw, 2.7rem); overflow-wrap: anywhere; }
+.bq-emoji-progress, .bq-emoji-results { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.bq-emoji-progress li, .bq-emoji-results li { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .85rem; padding: .6rem .75rem; border: 1px solid #425653; border-radius: .55rem; overflow-wrap: anywhere; }
+.bq-emoji-result-icons { font-size: 1.35rem; }
+.bq-team-emoji #team-emoji-guess-form { max-width: 32rem; }
+.bq-team-emoji .bq-answer-view { margin: 0; }

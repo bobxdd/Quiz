@@ -1,14 +1,14 @@
 /* BrainQuiz 1.6: standalone question canvas schema. No HTML accepted, no secret answer sent before reveal. */
 import {mapMarkup} from './map-viewport.mjs';
 export const SCENE_WIDTH=1000,SCENE_HEIGHT=560;
-export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
+export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji','team-emoji':'Emoji-Teamrunde',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
 const TYPES=new Set(['text','image','shape','choice','order']);
 const COLORS=new Set(['#ffffff','#d4d6e2','#adb0c5','#9c8cff','#ff95a7','#75d7b6','#20212d','#343644']);
 const safeHexColor=(value,fallback)=>typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value)?value.toLowerCase():fallback;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cap=(v,n=1000)=>String(v??'').slice(0,n);
 const num=(v,a,b,def)=>Number.isFinite(Number(v))?Math.min(b,Math.max(a,Number(v))):def;
-const safeImage=s=>typeof s==='string'&&/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(s)&&s.length<450000?s:'';
+const safeImage=(s,limit=450000)=>typeof s==='string'&&/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(s)&&s.length<limit?s:'';
 export const elemId=()=>`el${Math.random().toString(36).slice(2,11)}`;
 export function element(kind='text',overrides={}){
  return normalizeElement({id:elemId(),kind,x:85,y:95,w:430,h:95,text:kind==='image'?'':kind==='shape'?'':'Text',font:32,step:0,fill:'#ffffff',bg:'#252c30',align:'left',shape:'rect',letter:'',src:'',role:'content',...overrides});
@@ -29,21 +29,30 @@ export function normalizeScene(raw){if(!raw||typeof raw!=='object')return null;
 }
 const question=(text='Frage eingeben')=>element('text',{role:'question',x:58,y:34,w:884,h:106,font:38,text,align:'center',bg:'#252c30'});
 export function templateScene(name='text',q={}){
- const template=Object.hasOwn(TEMPLATE_NAMES,name)?name:'text';let elements=[question(q.prompt||'Frage eingeben')];
+ const template=Object.hasOwn(TEMPLATE_NAMES,name)?name:'text';
+ const prompt=template==='team-emoji'?'Welchen Champion oder Begriff beschreibt dein Team?':q.prompt||'Frage eingeben';
+ const elements=[question(prompt)];
  const options=(q.options||[]).filter(Boolean);
  if(template==='multiple')elements.push(...'ABCD'.split('').map((letter,i)=>element('choice',{letter,x:80+(i%2)*430,y:200+Math.floor(i/2)*138,w:400,h:111,text:options[i]||`Antwort ${letter}`,font:25,bg:'#363e43'})));
  if(template==='order')elements.push(...'ABCDEFG'.split('').map((letter,i)=>element('order',{letter,x:70+(i%2)*450,y:155+Math.floor(i/2)*80,w:416,h:70,text:q.orderDisplayItems?.[i]||q.orderItems?.[i]||`Eintrag ${letter}`,font:21,bg:'#363e43'})));
  if(template==='hints')elements.push(...[1,2,3,4].map((n,i)=>element('text',{x:90+(i%2)*420,y:180+Math.floor(i/2)*143,w:395,h:112,text:`Hinweis ${n}`,step:n,bg:'#363e43'}))); 
  if(template==='image')elements.push(element('image',{x:140,y:164,w:720,h:340,alt:'Bild hinzufügen'}));
- if(template==='imposter')elements.push(...'PQWER'.split('').map((letter,i)=>element('image',{letter:letter==='P'?'A':letter,x:40+i*194,y:185,w:178,h:210,alt:['Passiv','Q','W','E','R'][i]})));
+ if(template==='imposter'){
+  const icons=Array.isArray(q.icons)&&q.icons.some(Boolean)?q.icons.slice(0,8):['','','',''];
+  const labels=icons.length===4?['Q','W','E','R']:['Passiv','Q','W','E','R'];
+  const slotWidth=920/icons.length;
+  elements.push(...icons.map((src,i)=>element('image',{letter:'ABCDEFGH'[i],x:40+i*slotWidth,y:185,w:slotWidth-16,h:210,
+   src,alt:src&&q.abilityNames?.[i]||labels[i]||`Bild ${i+1}`})));
+ }
  if(template==='quote')elements.push(element('text',{role:'clue',x:110,y:192,w:780,h:165,font:32,text:q.clue||'Zitat eingeben',align:'center',bg:'#363e43'}));
  if(template==='emoji')elements.push(element('text',{role:'clue',x:130,y:195,w:740,h:165,font:65,text:q.clue||'🦊 🔥 ✨',align:'center',bg:'#363e43'}));
  if(template==='estimate')elements.push(element('text',{x:180,y:230,w:640,h:120,font:28,text:'Wert schätzen',align:'center'}));
  if(template==='audio')elements.push(element('text',{x:180,y:230,w:640,h:120,font:28,text:'Audioquiz',align:'center'}));
  return normalizeScene({template,elements,sortCorrect:'ABCDEFG'.split('')});
 }
-export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='multiple'?'multiple':q.type==='order'?'order':q.type==='quote'?'quote':q.type==='emoji'?'emoji':q.type==='imposter'?'imposter':q.type==='audio'?'audio':q.type==='estimate'?'estimate':q.type==='splash'?'image':q.type==='map'?'map':'text',q);return q.scene;}
+export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='splash'?'image':q.type,q);return q.scene;}
 export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!scene)return q;q.scene=scene;
+ if(scene.template==='team-emoji'){q.type='team-emoji';q.roundMode='team-emoji';return q;}
  const heading=scene.elements.find(x=>x.kind==='text'&&x.role==='question')||scene.elements.find(x=>x.kind==='text'&&x.step===0);
  if(heading)q.prompt=heading.text;
  if(scene.template==='multiple'){
@@ -59,6 +68,16 @@ export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!sce
 }
 export function publicScene(raw,step=0,showAnswers=false){const scene=normalizeScene(raw);if(!scene)return null;
  return {version:2,template:scene.template,elements:scene.elements.filter(el=>showAnswers||el.step<=step).map(el=>({...el})),step:showAnswers?6:num(step,0,5,0),...(showAnswers?{sortCorrect:scene.sortCorrect}: {})};
+}
+export function imposterPublicScene(scene,index,replacement,step=0){
+ const view=publicScene(scene,step);
+ const src=safeImage(replacement,900000);
+ if(src&&view){
+  const slot=scene.elements.filter(element=>element.kind==='image')[index];
+  const visible=view.elements.find(element=>element.id===slot?.id);
+  if(visible)visible.src=src;
+ }
+ return view;
 }
 export function sceneHasStep(q,currentStep=0){return !!q?.scene?.elements?.some(x=>x.step>currentStep&&x.step<6);}
 export function renderScene(scene,{editing=false,selected='',revealed=false,interactive=false,canAnswer=false,picked=[],correctIndex=0,mapCanPick=false,mapCanEdit=false,mapPin=null,mapEditorPoint=null,mapSolution=null,mapPublicPins=[],mapView=null,mapPrompt=''}={}){

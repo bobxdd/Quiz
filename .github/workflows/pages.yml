@@ -50,6 +50,7 @@ jobs:
           python tests/sound-effects-browser.py
           python tests/buzzer-auto-reveal-browser.py
           python tests/answer-tab-browser.py
+          python tests/team-emoji-browser.py
           python tests/finale-score-browser.py
           python tests/recovery-projector-browser.py
           python tests/editor-qol-audit-browser.py
@@ -107,7 +108,7 @@ jobs:
           test -n "$PAGES_URL"
           published="$(mktemp)"
           trap 'rm -f "$published"' EXIT
-          for asset in app.mjs projector.html sw.js; do
+          for asset in app.mjs team-emoji.mjs projector.html sw.js; do
             verified=false
             for attempt in $(seq 1 12); do
               if curl -fsS --max-time 10 "${PAGES_URL%/}/$asset?release=$GITHUB_SHA-$attempt" -o "$published" && cmp -s "docs/$asset" "$published"; then

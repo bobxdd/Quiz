@@ -2,6 +2,7 @@
 // Preserve legacy quiz files that stored only question.category strings.
 export const CATEGORY_SUGGESTIONS = Object.freeze([
   {name:'Champions',description:'Champions erkennen und zuordnen',template:'text'},
+  {name:'Emoji-Teamrunde',description:'Champions im Team mit Emojis erklären und erraten',template:'team-emoji'},
   {name:'Lorefragen',description:'Runeterra, Geschichten und Hintergründe',template:'text'},
   {name:'Schätzen',description:'Zahlen und Werte schätzen',template:'estimate'},
   {name:'Splash-Art',description:'Bild- und Detailfragen',template:'image'},

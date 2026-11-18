@@ -15,7 +15,7 @@ test('3.6 live: version, hints and shared team chat stay expanded after updates'
 });
 test('3.6: image imposter supports 8 independently named images, no original answer leakage',()=>{
  const scene=templateScene('imposter',{prompt:'Finde das falsche Bild'});
- for(let i=5;i<8;i++)scene.elements.push(element('image',{x:50+(i-5)*260,y:380,w:200,h:150,alt:'Bild '+(i+1)}));
+ for(let i=4;i<8;i++)scene.elements.push(element('image',{x:40+(i-4)*230,y:380,w:180,h:150,alt:'Bild '+(i+1)}));
  const img='data:image/png;base64,aGVsbG8=';
  const images=scene.elements.filter(e=>e.kind==='image');
  assert.equal(images.length,8);
