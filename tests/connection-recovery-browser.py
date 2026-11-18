@@ -38,6 +38,12 @@ async def main():
     await missing.locator('#join-room').fill('ZZZZZZZZZZZZZZZZ')
     await missing.locator('#join-name').fill('Testgast')
     await missing.locator('#join-form button[type="submit"]').click()
+    # Our in-browser test transport intentionally does not run a real PeerJS
+    # signaling server. Explicitly simulate its "peer-unavailable" response
+    # once the guest has opened a connection to an absent host.
+    await missing.wait_for_function('window.__netQA?.game()?.peer?.conns?.size > 0')
+    await missing.evaluate("""() => window.__netQA.game().peer.emit(
+      'error',{type:'peer-unavailable',message:'Could not connect to peer'})""")
     await expect(missing.locator('.bq-join-error')).to_contain_text('Host')
     await expect(missing.locator('#join-room')).to_have_value('ZZZZZZZZZZZZZZZZ')
     await expect(missing.locator('#join-form button[type="submit"]')).to_be_enabled()
