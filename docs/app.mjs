@@ -780,10 +780,21 @@ function releasedMapPins(){
   .map(([id,entry])=>({...decodePoint(entry.value),name:entry.name,distanceKm:distances.get(id)??null}));
 }
 function renderMapFallback(q){return renderScene({template:'map',elements:[]},{mapPrompt:q.prompt,mapView:mapCamera,mapCanPick:canMapPick(),mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:publicState?.phase==='reveal'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:releasedMapPins(),revealed:publicState?.phase==='reveal'})}
-function renderStage(readOnly=false){const q=activeQuestion(),isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
+function renderStage(readOnly=false){let q=activeQuestion();const isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
  if(publicState.phase==='ready')return readyQuestionContent(false);
  if(q.type===TEAM_EMOJI&&publicState.teamEmoji)return renderTeamEmoji(readOnly);
  const showAnswer=isReveal&&publicState.solutionVisible!==false;
+ // For a step back, reproduce the previous public question display without
+ // duplicating its media in network snapshots or changing the scored round.
+ const previous=!showAnswer&&isReveal?publicState.preRevealDisplay:null;
+ if(previous&&q){
+  const sceneStep=Math.max(0,Math.min(5,Number(previous.sceneStep)||0));
+  q={...q,
+   scene:q.scene?{...q.scene,step:sceneStep,elements:(q.scene.elements||[]).filter(element=>Number(element.step||0)<=sceneStep)}:q.scene,
+   hints:(q.hints||[]).slice(0,Math.max(0,Number(previous.hintStep)||0)),
+   image:previous.image||q.image,
+   visualStep:Math.max(0,Number(previous.visualStep)||0)};
+ }
  let html=`<div class="stage ${showAnswer?'bq-stage-is-answer':''}">${showAnswer?renderAnswerView(q)+'<section class="bq-answer-context" aria-label="Frage im Rückblick">':''}<div class="eyebrow">${e(q.category)} · ${isReveal?(showAnswer?'FRAGE IM RÜCKBLICK':'LÖSUNG'):publicState.phase==='paused'?'PAUSIERT':'FRAGE OFFEN'}</div>${q.scene?'':(q.prompt?`<h2>${e(q.prompt)}</h2>`:'')}${q.scene?renderScene(q.scene,{revealed:showAnswer,interactive:!canHost(),canAnswer:guestCanAnswer()&&!myResponse,picked:pickedOrder,correctIndex:q.type==='imposter'?(q.imposterIndex||0):(q.correct||0),mapCanPick:canMapPick(),mapView:mapCamera,mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:isReveal&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:q.type==='map'?releasedMapPins():[] }):renderBlocks(q.blocks,{reveal:isReveal})}`;
  if(q.type==='map'&&!q.scene)html+=renderMapFallback(q);
  if(!q.scene&&q.type==='splash')html+=safeImage(q.image)?`<img class="media" src="${safeImage(q.image)}" alt="Rätselbild">`:`<p class="hint">Kein Rätselbild hinterlegt.</p>`;
@@ -1257,7 +1268,14 @@ async function hostOpen(id){
 function buildRevealPatch(q){
  const v=q.type==='order'?publicState.current.displayItems:q.image||'';
  const sceneStep=q.type==='imposter'?Number(publicState.current.scene?.step||0):6;
- const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',solutionVisible:true,deadline:0,pausedRemaining:0};
+ const preRevealDisplay={
+  sceneStep:Number(publicState.current.scene?.step||0),
+  hintStep:Number(publicState.current.hintStep||0),
+  visualStep:Number(publicState.current.visualStep||0),
+  // A splash crop is different from the full answer image and must be kept.
+  ...(q.type==='splash'?{image:publicState.current.image||''}:{})
+ };
+ const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',solutionVisible:true,preRevealDisplay,deadline:0,pausedRemaining:0};
  if(q.type==='map'){
   // Publish all submitted pins atomically with the solution; private until now.
   const answers=responses?.[roundKey()]||{};
