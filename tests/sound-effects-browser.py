@@ -109,9 +109,6 @@ async def main():
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=10000)
   h2=await count(host);a2=await count(alice)
   await host.locator('[data-action="buzz-correct"]').click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   await alice.wait_for_function("() => window.__probe.info().publicState.buzzerJudgements?.['1']?.result==='correct'",timeout=10000)
   assert await count(host)==h2+2 and await count(alice)==a2+2,(await count(host),await count(alice))
   # Mute blocks preview, changes only this device, and survives navigation redraw.

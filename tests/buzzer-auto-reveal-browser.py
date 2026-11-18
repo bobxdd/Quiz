@@ -90,9 +90,6 @@ async def main():
   await bob.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=12000)
   await host.locator('[data-action="buzz-correct"]').click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   for page in (host,alice,bob):
    await check_revealed(page,'Anivia')
    assert await page.evaluate("window.__probe.info().publicState.current.answer")=='Anivia'
@@ -118,9 +115,6 @@ async def main():
   assert (await bob.evaluate("window.__probe.info().publicState.current.answer")) is None
   await alice.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   for page in (host,alice,bob):
    await check_revealed(page,'Caitlyn')
    assert await page.locator('.choices .choice.correct').count()==1
@@ -133,9 +127,6 @@ async def main():
   await host.locator('[data-action="uncover-question"]').click()
   await alice.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   for page in (host,alice,bob):
    await check_revealed(page,'Anivias Q')
    assert await page.locator('[data-action="audio-play"]').count()==0

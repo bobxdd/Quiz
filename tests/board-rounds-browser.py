@@ -61,8 +61,6 @@ async def run(browser,root):
     await host.locator('[data-action="uncover-question"]').click()
     await host.locator('[data-action="probe-buzz"]').first.click()
     await host.locator('[data-action="probe-correct"]').click()
-    await expect(host.locator('.bq-answer-view')).to_have_count(0)
-    await host.locator('[data-action="reveal"]').click()
     await expect(host.locator('.bq-answer-view')).to_contain_text('Geheime Antwort zwei')
     await host.locator('[data-action="back"]').click()
     await expect(host.locator('.bq-board-scene')).to_be_visible()
@@ -98,9 +96,6 @@ async def run(browser,root):
         await host.locator('[data-action="uncover-question"]').click()
         await guest.locator('[data-action="buzz"]').click()
         await host.locator('[data-action="buzz-correct"]').click()
-        await expect(guest.locator('.bq-answer-view')).to_have_count(0)
-        await expect(host.locator('[data-action="reveal"]')).to_be_visible()
-        await host.locator('[data-action="reveal"]').click()
         await expect(guest.locator('.bq-answer-view')).to_be_visible()
         await host.locator('[data-action="back"]').click()
         await expect(guest.locator('.bq-board-scene')).to_be_visible()
@@ -117,7 +112,7 @@ async def run(browser,root):
     await host.locator('[data-action="back"]').click()
     await expect(guest.locator('.bq-board-scene')).to_be_visible()
     assert not errors,errors
-    print('PASS: two-player round carryover, explicit question/solution reveal and covered host recovery',flush=True)
+    print('PASS: two-player round carryover, explicit question reveal, automatic correct solution and covered host recovery',flush=True)
     await context.close()
 
 

@@ -106,9 +106,6 @@ async def main():
   await guest.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').wait_for(timeout=12000)
   await host.locator('[data-action="buzz-correct"]').click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   for page in (host,guest):
    await page.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
    await expect(page.locator('.bq-answer-view .bq-answer-image img')).to_be_visible()

@@ -75,9 +75,9 @@ async def main():
    const btn=document.createElement('button');btn.dataset.action='view';btn.dataset.view='present';
    document.body.append(btn);btn.click();btn.remove();
   }""")
-  await page.get_by_role('button',name='Zurück zum Quizbrett').wait_for()
+  await expect(page.locator('.bq-board-scene')).to_be_visible()
   assert await page.get_by_role('button',name='Zurück zum Editor').count()==0
-  await page.get_by_role('button',name='Zurück zum Quizbrett').click()
+  assert await page.locator('[data-action="present-next"],[data-action="present-prev"]').count()==0
   await page.locator('.bq-board-scene').wait_for()
   await page.get_by_role('button',name='Lobby schließen').click()
   await page.locator('.bq-legacy-options>summary').wait_for(timeout=12000)

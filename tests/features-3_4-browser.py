@@ -95,9 +95,6 @@ async def main():
   await c.locator('[data-action="buzz"]:not([disabled])').wait_for(timeout=12000)
   await c.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').first.click()
-  await host.wait_for_function("() => window.__probe.info().publicState?.phase==='answered'")
-  assert 'answer' not in await host.evaluate("window.__probe.info().publicState.current")
-  await host.locator('[data-action="reveal"]').click()
   data=await host.evaluate('window.__probe.info().publicState')
   assert data['scores']['t1']==-100,data
   assert data['scores']['t2']==200,data

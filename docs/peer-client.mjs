@@ -766,9 +766,7 @@ export class PeerGame{
   const d=this._getHostData(room),before=clone(this._getHostData(room).public);
   const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
   let finalState=next.state;
-  if(result==='correct'&&!revealPatch){
-   finalState={...next.state,phase:'answered',deadline:0,pausedRemaining:0};
-  }else if(result==='correct'){
+  if(result==='correct'){
    // Publish the score, winning buzzer, question answer and closing phase as ONE
    // authoritative snapshot. No intermediate "correct points, hidden answer".
    if(!revealPatch||revealPatch.phase!=='reveal'||revealPatch.deadline!==0||

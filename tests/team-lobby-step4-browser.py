@@ -124,12 +124,18 @@ async def main():
   print('PASS: team changes invalidate readiness and re-ready updates host',flush=True)
 
   # Team-only chat stays confined to the new team's room.
-  await b.locator('.bq-shared-team-chat summary').click()
+  if not await b.locator('.bq-shared-team-chat').evaluate('(e)=>e.open'):
+   await b.locator('.bq-shared-team-chat summary').click()
+  await expect(b.locator('.bq-shared-team-chat')).to_have_attribute('open','')
   await b.locator('#chat-text').fill('Aurora Team Secret')
   await b.locator('#chat-form button[type="submit"]').click()
-  await c.locator('.bq-shared-team-chat summary').click()
+  if not await c.locator('.bq-shared-team-chat').evaluate('(e)=>e.open'):
+   await c.locator('.bq-shared-team-chat summary').click()
+  await expect(c.locator('.bq-shared-team-chat')).to_have_attribute('open','')
   await c.locator('.chatfeed').get_by_text('Aurora Team Secret').wait_for(timeout=12000)
-  await a.locator('.bq-shared-team-chat summary').click()
+  if not await a.locator('.bq-shared-team-chat').evaluate('(e)=>e.open'):
+   await a.locator('.bq-shared-team-chat summary').click()
+  await expect(a.locator('.bq-shared-team-chat')).to_have_attribute('open','')
   await expect(a.locator('.chatfeed').get_by_text('Aurora Team Secret')).to_have_count(0)
   print('PASS: private chat does not follow a player into another team',flush=True)
   

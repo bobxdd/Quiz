@@ -114,7 +114,6 @@ async def rehearse_locally(browser,root):
  await expect(page.locator('.bq-probe-scores')).to_contain_text('-50')
  await page.locator('[data-action="probe-buzz"]').last.click()
  await page.locator('[data-action="probe-correct"]').click()
- await page.locator('[data-action="reveal"]').click()
  await expect(page.locator('.presenter-stage')).to_contain_text('Anivia aus der Generalprobe')
  await page.locator('[data-action="probe-width"]').click()
  await expect(page.locator('.bq-probe-compact')).to_be_visible()
