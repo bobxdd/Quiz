@@ -146,7 +146,7 @@ export class PeerGame{
  async resumeHost(room){if(this.mode!=='idle')this.shutdown();let previous=null;
   try{previous=JSON.parse(localStorage.getItem('bq-p2p-session-'+room)||'null')}catch{}
   const checkpoint=await loadHostCheckpoint('session-'+room).catch(()=>null);
-  if(checkpoint?.data?.owner===checkpoint.uid&&(!previous||Number(checkpoint.savedAt)>Number(previous.savedAt||0)))previous=checkpoint;
+  if(checkpoint&&checkpoint.data?.owner===checkpoint.uid&&(!previous||Number(checkpoint.savedAt)>Number(previous.savedAt||0)))previous=checkpoint;
   if(!previous||!previous.data||!safeUid(previous.uid)||previous.data.owner!==previous.uid)throw Error('Kein Host-Spielstand in diesem Browser vorhanden.');
   this.uid=previous.uid;this.data=previous.data;this.memberSecrets=previous.secrets||{};
   try{const q=JSON.parse(localStorage.getItem('bq-quiz-'+room)||'null');this.hostQuiz=q?.questions?q:null}catch{this.hostQuiz=null}
