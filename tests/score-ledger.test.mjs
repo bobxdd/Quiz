@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {scoreEvent,appendScoreEvent,latestUndoableEvent,undoScoreEvent} from '../docs/score-ledger.mjs';
+const before={scores:{t1:200,t2:50},playerScores:{p:{total:60,rounds:{},history:[]}}};
+const after={scores:{t1:300,t2:50},playerScores:{p:{total:160,rounds:{},history:[]}}};
+test('ledger records only affected people/teams; last active event undoes atomically',()=>{
+ const e=scoreEvent(before,after,{id:'e1',kind:'written-judgement',team:'t1',person:'p',round:2,questionId:'q1'});
+ assert.equal(e.changes.team.after,300);
+ assert.equal(e.changes.person.after.total,160);
+ assert.equal(JSON.stringify(e).includes('answerImage'),false);
+ let events=appendScoreEvent([],e);
+ assert.throws(()=>appendScoreEvent(events,e),/protokolliert/);
+ const changed=structuredClone(after);changed.scores.t2=999;
+ const undo=undoScoreEvent(changed,events,'e1',12345);
+ assert.equal(undo.state.scores.t1,200);
+ assert.equal(undo.state.scores.t2,999);
+ assert.equal(undo.state.playerScores.p.total,60);
+ assert.equal(undo.events[0].undoneAt,12345);
+ assert.equal(latestUndoableEvent(undo.events),null);
+ assert.throws(()=>undoScoreEvent(undo.state,undo.events,'e1'),/letzte/);
+});
+test('stale concurrent point totals and out-of-order undo fail safely',()=>{
+ const e1=scoreEvent(before,after,{id:'e1',kind:'manual-team',team:'t1'});
+ const e2=scoreEvent(after,{scores:{t1:350},playerScores:after.playerScores},{id:'e2',kind:'manual-team',team:'t1'});
+ const events=appendScoreEvent([e1],e2);
+ assert.throws(()=>undoScoreEvent(after,events,'e1'),/letzte/);
+ assert.throws(()=>undoScoreEvent({scores:{t1:999}},events,'e2'),/inzwischen verändert/);
+ const rolled=undoScoreEvent({scores:{t1:350}},events,'e2');
+ assert.equal(rolled.state.scores.t1,300);
+ assert.equal(latestUndoableEvent(rolled.events).id,'e1');
+});
+test('no-op events do not fill the score ledger',()=>{assert.equal(scoreEvent(before,before,{id:'n',kind:'manual-team',team:'t1'}),null);});
