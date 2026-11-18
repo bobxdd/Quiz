@@ -135,3 +135,7 @@
  .se-editor-v3 .se-audit-next{width:100%;justify-content:center}
  .se-editor-v3 .se-q-status{min-width:27px;height:27px}
 }
+
+/* One-click full-question rehearsal, kept distinct from live multiplayer. */
+.bq-editor-probe-bar{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;margin:4px 0 16px;background:rgba(28,44,46,.7);border:1px solid #536e66;border-radius:10px}
+@media(max-width:620px){.bq-editor-probe-bar .btn{width:100%;min-height:43px}}
