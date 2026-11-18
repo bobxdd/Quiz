@@ -66,7 +66,25 @@ const randomHex=(bytes=20)=>Array.from(crypto.getRandomValues(new Uint8Array(byt
 const peerId=room=>HOST_PREFIX+room.toLowerCase();
 const pathValue=(data,path)=>path.split('/').filter(Boolean).reduce((v,key)=>v==null?undefined:v[key],data);
 function setPath(data,path,value){const keys=path.split('/').filter(Boolean);if(!keys.length)throw Error('Leerer Datenpfad');let target=data;for(const key of keys.slice(0,-1)){if(!target[key]||typeof target[key]!=='object')target[key]={};target=target[key];}if(value===null||value===undefined)delete target[keys.at(-1)];else target[keys.at(-1)]=clone(value);}
-function peerError(error){const type=String(error?.type||'');if(type==='peer-unavailable'||type==='unavailable-id')return 'Dieser Raumcode ist bereits in Benutzung.';if(type==='network'||type==='server-error')return 'PeerJS-Signalserver nicht erreichbar. Internetverbindung prüfen.';return String(error?.message||error||'WebRTC-Verbindungsfehler').slice(0,220);}
+// PeerJS uses DIFFERENT errors for a missing guest destination vs. an
+// occupied host ID. Mixing these up previously sent users down the wrong path.
+export function peerError(error,role='guest'){
+ const type=String(error?.type||'');
+ if(type==='peer-unavailable')return 'Der Host ist unter diesem Raumcode derzeit nicht erreichbar. Host-Fenster und Raumcode prüfen.';
+ if(type==='unavailable-id')return role==='host'?'Dieser Raumcode ist schon vergeben. Den alten Host-Tab schließen oder einen neuen Raum erstellen.':'Diese Peer-ID wird bereits verwendet.';
+ if(['network','server-error','socket-error','socket-closed'].includes(type))return 'Der PeerJS-Signalserver ist nicht erreichbar. Netzwerk prüfen und anschließend erneut verbinden.';
+ if(['webrtc','negotiation-failed'].includes(type))return 'Der WebRTC-Datenkanal konnte nicht aufgebaut werden. Bei CGNAT oder strengen Firewalls ist ein TURN-Relay erforderlich.';
+ return String(error?.message||error||'WebRTC-Verbindungsfehler').slice(0,220);
+}
+export function connectionAdvice({iceState='unknown',relay=false,phase='connecting'}={}){
+ if(iceState==='failed')return relay
+   ?'WebRTC-ICE fehlgeschlagen. TURN-Adresse, Port und Zugangsdaten auf Host UND Gast prüfen.'
+   :'Keine direkte WebRTC-Route gefunden. Häufig bei CGNAT/Firewall: TURN-Relay bei Host UND Gast konfigurieren.';
+ if(phase==='signaling')return 'Verbindung zum Signalserver wird aufgebaut. Raumcode und Internetzugang prüfen.';
+ if(phase==='handshake')return 'Datenkanal offen; der vollständige Spielstand wird vom Host erwartet.';
+ return relay?'TURN als Ausweichweg eingerichtet; der Server muss für beide Seiten erreichbar sein.':'Direkte Verbindung via STUN; ohne TURN ist restriktives NAT nicht zuverlässig erreichbar.';
+}
+function networkFailure(message,kind='rtc'){const error=new Error(message);error.connectionKind=kind;return error;}
 let loadingPeer=null;
 export async function loadPeerJS(){
  if(typeof globalThis.Peer==='function')return globalThis.Peer;
@@ -81,6 +99,12 @@ export async function loadPeerJS(){
  return loadingPeer;
 }
 const TURN_STORAGE='bq-turn-relay-v1';
+const BASE_ICE=[{urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302']}];
+const CONNECT_TIMEOUT_MS=26000;
+export function hasTurnRelay(){
+ try{const stored=JSON.parse(sessionStorage.getItem(TURN_STORAGE)||'null');return !!stored&&!!turnServer({url:stored.urls,username:stored.username,credential:stored.credential});}
+ catch{return false;}
+}
 
 export function turnServer({url,username,credential}){
  const urls=String(url||'').trim();
@@ -95,15 +119,13 @@ export function configureTurnRelay(input){
  const relay=turnServer(input);
  sessionStorage.setItem(TURN_STORAGE,JSON.stringify(relay));
 }
-function peerOptions(){
+export function peerOptions(){
+ const iceServers=BASE_ICE.map(row=>({...row,urls:[...row.urls]}));
  try{
   const stored=JSON.parse(sessionStorage.getItem(TURN_STORAGE)||'null');
-  if(stored){
-   const relay=turnServer({url:stored.urls,username:stored.username,credential:stored.credential});
-   return {debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},relay]}};
-  }
+  if(stored)iceServers.push(turnServer({url:stored.urls,username:stored.username,credential:stored.credential}));
  }catch{}
- return {debug:0};
+ return {debug:0,config:{iceServers,iceCandidatePoolSize:4,iceTransportPolicy:'all'}};
 }
 
 export function watchProjector(room,token,onFrame,onStatus){
@@ -162,11 +184,15 @@ function guestIdentity(room){
 function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 export class PeerGame{
- constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';}
+ constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';this.connectionPhase='idle';this.iceState='unknown';this.iceErrorCode=0;this.retryPromise=null;this.connectAttempt=null;}
  async init(){return this;}
  serverNow(){return Date.now()+this.offset+(this.emojiClockOffset||0);}
  diagnostics(){
   return {mode:this.mode,connected:!!this.connected,error:String(this.netError||'').slice(0,160),
+    phase:this.connectionPhase||'idle',iceState:this.iceState||'unknown',
+    iceErrorCode:Number(this.iceErrorCode)||0,turnConfigured:hasTurnRelay(),
+    reconnectAttempts:this.mode==='host'?this.hostReconnectAttempts||0:this.guestReconnectAttempts||0,
+    guidance:connectionAdvice({iceState:this.iceState,relay:hasTurnRelay(),phase:this.connectionPhase}),
     lastBackupAt:this.lastBackupAt||0,backupError:this.backupError||'',
     peers:this.mode==='host'?Object.entries(this.data?.members||{}).filter(([,member])=>member.status!=='removed').map(([uid,member])=>{
      const ctx=this.guestConnections.get(uid);
@@ -174,7 +200,7 @@ export class PeerGame{
       uid,name:String(member.name||'Spieler').slice(0,28),
       connected:!!ctx?.conn?.open,lastReceived:ctx?.lastSeenAt||0,lastSent:ctx?.lastSentAt||0,
       lastAck:ctx?.lastAckAt||0,synced:!!ctx?.lastAckAt&&ctx.ackVersion===ctx.snapshotVersion,
-      bufferedBytes:Number(ctx?.conn?.dataChannel?.bufferedAmount)||0
+      bufferedBytes:Number(ctx?.conn?.dataChannel?.bufferedAmount)||0,iceState:ctx?.iceState||'unknown'
      };
     }):[]};
  }
@@ -189,6 +215,40 @@ export class PeerGame{
  watchRoom(room,path,cb){if(room!==this.room)throw Error('Falscher Raum.');return this.watch('rooms/'+room+'/'+path,cb)}
  clearWatchers(){this.listeners=[];}
  async _preparePeer(){const Peer=await loadPeerJS();return Peer;}
+ _health(phase,issue){
+  this.connectionPhase=phase;
+  if(typeof issue==='string')this.netError=issue;
+  this._emit('.info/diagnostics');
+ }
+ _watchIce(conn,ctx=null){
+  // Connection health is only metadata. NEVER include gathered ICE addresses,
+  // local/network IPs, TURN passwords or full getStats() in guest snapshots.
+  const attach=()=>{
+   const pc=conn?.peerConnection;
+   if(!pc||typeof pc.addEventListener!=='function')return;
+   const current=()=>{
+    const state=String(pc.iceConnectionState||'unknown');
+    if(ctx){ctx.iceState=state;}else{
+     if(conn!==this.conn)return;
+     this.iceState=state;
+     if(state==='failed')this.netError=connectionAdvice({iceState:state,relay:hasTurnRelay()});
+     this._emit('.info/diagnostics');
+    }
+   };
+   pc.addEventListener('iceconnectionstatechange',current);
+   pc.addEventListener('icecandidateerror',event=>{
+    const code=Number(event?.errorCode)||0;
+    if(ctx){ctx.iceErrorCode=code;}else if(conn===this.conn){
+     this.iceErrorCode=code;this._emit('.info/diagnostics');
+    }
+   });
+   current();
+  };
+  // PeerJS may assign peerConnection shortly after connect(), but mocked
+  // peers in the Node test suite have no RTC implementation.
+  queueMicrotask(attach);
+  if(typeof RTCPeerConnection==='function'&&!conn?.peerConnection)setTimeout(attach,180);
+ }
  _scheduleHostReconnect(){
   if(this.hostReconnectTimer||this.quitting||this.mode!=='host'||this.connected)return;
   const delay=Math.min(10000,800*2**Math.min(this.hostReconnectAttempts++,4));
@@ -206,6 +266,7 @@ export class PeerGame{
   peer.on('connection',conn=>{
    if(this.mode!=='host'||this.quitting){try{conn.close()}catch{}return}
    const ctx={conn,uid:null,ready:false,lastChat:0,wireSequence:0,sentQuizAudioKey:null,wireChain:Promise.resolve()};
+   this._watchIce(conn,ctx);
    conn.on('data',msg=>this._receiveFromGuest(ctx,msg));
    const disconnected=()=>{
     if(ctx.display)this.projectorConnections.delete(ctx);
@@ -216,7 +277,7 @@ export class PeerGame{
   });
   const lost=()=>{
    if(this.quitting||this.peer!==peer)return;
-   this.connected=false;this.netError='Signalserver getrennt. Wiederverbindung läuft …';
+   this.connected=false;this.netError='Signalserver getrennt. Wiederverbindung läuft …';this.connectionPhase='reconnecting';
    this._emit();this._scheduleHostReconnect();
   };
   peer.on('disconnected',lost);
@@ -224,7 +285,7 @@ export class PeerGame{
   peer.on('open',()=>{
    if(this.quitting||this.peer!==peer)return;
    clearTimeout(this.hostReconnectTimer);this.hostReconnectTimer=null;this.hostReconnectAttempts=0;
-   this.connected=true;this.netError='';this._emit();
+   this.connected=true;this.netError='';this.connectionPhase='connected';this._emit();
   });
   peer.on('error',error=>{if(peer.destroyed||['network','server-error','socket-error','socket-closed'].includes(error?.type))lost();});
  }
@@ -234,7 +295,7 @@ export class PeerGame{
    peer.on('open',()=>{if(!done){done=true;clearTimeout(timer);resolve()}});
    peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error)))}})
   }).catch(err=>{try{peer.destroy()}catch{}throw err});
-  this.mode='host';this.room=room;this.connected=true;this.netError='';this.hostReconnectAttempts=0;this._listenHostPeer(peer);this._emit();
+  this.mode='host';this.room=room;this.connected=true;this.netError='';this.connectionPhase='connected';this.hostReconnectAttempts=0;this._listenHostPeer(peer);this._emit();
  }
  _persist(){if(this.mode!=='host'||!this.data)return;
   // Only the host browser receives this backup. Complete quiz media remain in bq-quiz-<room>.
