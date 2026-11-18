@@ -57,6 +57,7 @@ async def main():
   alice.on('pageerror',lambda e:errors.append('guest: '+str(e)))
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-big-buzzer')).to_be_visible(timeout=12000)
   # The icon and the separate controls are available to guest and host.
   for page in (host,alice):

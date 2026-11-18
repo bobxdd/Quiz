@@ -61,6 +61,7 @@ async def main():
   print('PASS: shared team chat, protected from other team',flush=True)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   for p in [a,b,c]:
    await p.locator('.bq-map-viewport').wait_for(state='visible',timeout=10000)
    await p.locator('.bq-map-viewport').click(position={'x':190,'y':135})
@@ -79,6 +80,7 @@ async def main():
   print('PASS: map pin hidden, individual reveal, correct target only on solution',flush=True)
   await host.locator('[data-action="back"]').first.click()
   await host.locator('.bq-board-scene .tile:not([disabled])').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await host.locator('.bq-question-scene .bq-host-action-bar [data-action="hint-next"]').wait_for(timeout=12000)
   for i,hint in enumerate(['Eis','Fliegt','Freljord','Wiedergeburt'],1):
    assert await a.get_by_text(hint,exact=True).count()==0

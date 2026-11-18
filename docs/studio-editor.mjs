@@ -1,20 +1,26 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
+import {TEAM_EMOJI,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,normalizeTeamEmoji} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
-import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate} from './category-model.mjs';
+import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
 /* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
-import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,validateScene,escape} from './studio-model.mjs';
+import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
- let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='';
+ let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1;
  let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas',editorPane='question';
  let mapCamera={...DEFAULT_MAP_VIEW},mapQuestionId='';
  const q=()=>api.getQuestion();
  const quiz=()=>api.getQuiz();
- const categories=()=>collectCategories(quiz()?.categories,quiz()?.questions);
- const current=()=>{const item=q();if(!activeCategory||categoryKey(item?.category)!==categoryKey(activeCategory))return null;if(item)ensureScene(item);return item;};
+ const categories=()=>roundCategories(quiz(),editorRound);
+ const visibleQuestions=()=>roundQuestions(quiz(),editorRound);
+ const setCategories=names=>{
+  quiz().roundCategories={1:roundCategories(quiz(),1),2:roundCategories(quiz(),2),[editorRound]:names};
+  quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2]],quiz().questions);
+ };
+ const current=()=>{const item=q();if(!activeCategory||boardRoundOf(item)!==editorRound||categoryKey(item?.category)!==categoryKey(activeCategory))return null;if(item)ensureScene(item);return item;};
  const find=()=>current()?.scene?.elements.find(x=>x.id===sel)||null;
  const saveLabel=()=>{const status=api.saveStatus?.()||'Gespeichert';return /fehler|voll|exportieren|konflikt/i.test(status)?'⚠ '+status:'✓ '+status;};
  const libraryMenuHTML=()=>{if(!libraryMenu)return '';const {kind,x,y,id,category}=libraryMenu;const title=kind==='category'?(category||'Kategorie'):(quiz().questions||[]).find(q=>q.id===id)?.title||'Frage';const items=kind==='category'?[['library-open','Öffnen'],['library-new','Neue Frage'],['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-200,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" class="${cls}" data-se-action="${action}">${label}</button>`).join('')}</div>`;};
@@ -48,7 +54,12 @@ export function createStudioEditor(api){
  }
 
  function setType(name){flushDraft();const item=current();if(!item)return; if(item.scene?.elements?.length&&!confirm('Vorlage wechseln? Die bisherigen Elemente dieser Frage werden durch die Vorlage ersetzt.')){draw();return;}
-  snapshot();item.scene=templateScene(name,item);if(name==='map')item.roundMode='written';item.type=name==='multiple'?'multiple':name==='order'?'order':name==='imposter'?'imposter':name==='quote'?'quote':name==='emoji'?'emoji':name==='audio'?'audio':name==='estimate'?'estimate':name==='map'?'map':'text';sel='';reveal=0;preview=false;persist(true);
+  snapshot();item.scene=templateScene(name,item);
+  item.type=['multiple','order','imposter','quote','emoji','audio','estimate','map',TEAM_EMOJI].includes(name)?name:'text';
+  if(name==='map')item.roundMode='written';
+  else if(name===TEAM_EMOJI){item.roundMode=TEAM_EMOJI;item.teamEmoji=normalizeTeamEmoji(item.teamEmoji);}
+  else if(item.roundMode===TEAM_EMOJI)item.roundMode='buzzer';
+  sel='';reveal=0;preview=false;persist(true);
  }
  const input=(name,label,value,{kind='text',min,max,step,rows=0,options}={})=>{
   const id=`se-in-${name}`;
@@ -57,13 +68,29 @@ export function createStudioEditor(api){
   else ctl=`<input id="${id}" data-se-field="${name}" type="${kind}" value="${escape(value)}" ${min!==undefined?`min="${min}"`:''} ${max!==undefined?`max="${max}"`:''} ${step!==undefined?`step="${step}"`:''}>`;
   return `<label class="se-field"><span>${escape(label)}</span>${ctl}</label>`;
  };
+ const mainTemplate=scene=>`<label class="se-field"><span>Vorlage</span><select data-se-template>${Object.entries(TEMPLATE_NAMES).map(([key,label])=>
+  `<option value="${key}" ${scene.template===key?'selected':''}>${escape(label)}</option>`).join('')}</select></label>`;
+ function teamEmojiEditor(item){
+  const settings=normalizeTeamEmoji(item.teamEmoji);
+  const timing={kind:'number',min:EMOJI_TIMER_MIN,max:EMOJI_TIMER_MAX,step:1};
+  return `<section class="se-question-pane se-team-emoji" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}>
+   <div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><h2>Emoji-Teamrunde</h2></div></div>
+   <div class="se-properties"><p>Trage den geheimen Champion oder Begriff im Antwort-Tab ein. Jedes Team erhält denselben Begriff und dieselbe Emoji-Auswahl.</p>
+    <div class="se-two">${input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
+     ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
+    ${input('emojiPalette','Vorgegebene Emojis',settings.palette,{rows:3})}
+    <p class="se-muted">Füge bis zu 48 Emojis ein. Die Hinweisgeber können daraus bis zu fünf Symbole in Reihenfolge speichern.</p>
+    <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
+    ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${mainTemplate(item.scene)}
+   </div></section>`;
+ }
  function propsPanel(item){const el=find(),scene=item.scene;
-  const base=`<section class="se-properties"><h3>Frage</h3><div class="se-two">${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('points','Punkte',item.points,{kind:'number',min:0,max:10000,step:50})}</div>${input('title','Interner Fragetitel',item.title)}<label class="se-field"><span>Spielmodus</span><select data-se-roundmode><option value="buzzer" ${item.roundMode!=='written'?'selected':''}>Buzzer – Antwort durch Host bewerten</option><option value="written" ${item.roundMode==='written'?'selected':''}>Alle schreiben – Antworten verdeckt sammeln</option></select></label><p class="se-muted">Buzzer ist Standard, unabhängig vom Fragetyp. Nur Schreib-Runden sammeln Texte.</p>
-  <label class="se-field"><span>Vorlage</span><select data-se-template>${Object.entries(TEMPLATE_NAMES).map(([key,label])=>`<option value="${key}" ${scene.template===key?'selected':''}>${escape(label)}</option>`).join('')}</select></label>
+  const base=`<section class="se-properties"><h3>Frage</h3><div class="se-two">${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('points','Punkte',item.points,{kind:'number',min:0,max:10000,step:50})}</div>${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${input('title','Interner Fragetitel',item.title)}<label class="se-field"><span>Spielmodus</span><select data-se-roundmode><option value="buzzer" ${item.roundMode!=='written'?'selected':''}>Buzzer – Antwort durch Host bewerten</option><option value="written" ${item.roundMode==='written'?'selected':''}>Alle schreiben – Antworten verdeckt sammeln</option></select></label><p class="se-muted">Buzzer ist Standard, unabhängig vom Fragetyp. Nur Schreib-Runden sammeln Texte.</p>
+  ${mainTemplate(scene)}
   ${scene.template==='multiple'?`<div class="se-subpanel"><h4>Richtige Antwort</h4>${input('correct','Musterlösung',letterList[item.correct||0]||'A',{options:'ABCD'.split('').map(k=>[k,k])})}</div>`:''}
   ${scene.template==='order'?`<div class="se-subpanel"><h4>Richtige Reihenfolge</h4><div class="se-sort-sequence">${scene.sortCorrect.map((key,i)=>`<div class="se-sort-entry"><strong>${i+1}.</strong><b>${key}</b><span>${escape(scene.elements.find(v=>v.kind==='order'&&v.letter===key)?.text||'')}</span><button type="button" data-se-action="sort-up" data-pos="${i}" ${i===0?'disabled':''} title="Nach oben">↑</button><button type="button" data-se-action="sort-down" data-pos="${i}" ${i===scene.sortCorrect.length-1?'disabled':''} title="Nach unten">↓</button></div>`).join('')}</div><div class="se-inline"><button type="button" data-se-action="sort-add" ${scene.sortCorrect.length>=10?'disabled':''}>+ Eintrag</button><button type="button" data-se-action="sort-remove" ${scene.sortCorrect.length<=3?'disabled':''}>− Letzten entfernen</button></div></div>`:''}
   ${scene.template==='estimate'?`${input('estimateTarget','Schätzwert',item.estimateTarget||0,{kind:'number',step:'any'})}${input('estimateUnit','Einheit',item.estimateUnit||'')}`:''}
-  ${scene.template==='imposter'?`${input('imposterIndex','Ersetztes Bild',item.imposterIndex||0,{options:scene.elements.filter(el=>el.kind==='image').map((el,i)=>[String(i),el.alt||`Bild ${i+1}`])})}<label class="se-field" data-se-upload-zone="correct-icon"><span>Originalbild vor dem Austausch (nur Host)</span><small class="se-drop-help">Bild hier ablegen oder auswählen</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="correct-icon"></label>`:''}
+  ${scene.template==='imposter'?`${input('imposterIndex','Slot mit dem fremden Bild',item.imposterIndex||0,{options:scene.elements.filter(el=>el.kind==='image').map((el,i)=>[String(i),el.alt||`Bild ${i+1}`])})}<label class="se-field" data-se-upload-zone="correct-icon"><span>Originalbild für die Auflösung</span><small class="se-drop-help">Das Original ersetzt später genau diesen Slot. Bild hier ablegen oder auswählen.</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="correct-icon"></label>`:''}
   ${scene.template==='map'?`<div class="se-subpanel bq-map-host-point"><h4>Geheimer Zielpunkt (Pflicht)</h4><p>${item.mapTargetSet?'✓ Dolch wurde auf der Karte platziert.':'⚠ Noch kein Zielpunkt gewählt. Zum Veröffentlichen ist ein Pin erforderlich.'}</p><p class="se-muted">Öffne „Bearbeiten“ und tippe auf die graue Weltkarte. Mit +, −, Mausrad oder zwei Fingern kannst du vorher heranzoomen. Der Dolch markiert deinen Antwortpunkt. Teilnehmer sehen ihn erst nach der Lösung.</p>${item.mapTargetSet?`<div class="se-inline"><strong>Position: ${Number(item.mapTargetX).toFixed(3)} / ${Number(item.mapTargetY).toFixed(3)}</strong><button type="button" data-se-action="map-clear">Pin entfernen</button></div>`:''}</div>`:''}
   ${scene.template==='map'?input('mapPrompt','Frage über der Weltkarte',item.prompt||'',{rows:2}):''}
   ${scene.template==='audio'?`${input('audioStart','Start im Original (Sekunden)',item.audioStart||0,{kind:'number',min:0,step:0.5})}${input('audioDuration','Ausschnitt (1–12 Sekunden)',item.audioDuration||8,{kind:'number',min:1,max:12})}<label class="se-field"><span>MP3 / WAV / OGG auswählen</span><input type="file" accept=".mp3,audio/mpeg,.wav,audio/wav,.ogg,audio/ogg" data-se-upload="audio"></label><p class="se-muted">MP3 wird in einen kompakten Clip umgewandelt. Im Live-Spiel startet und wiederholt nur der Host; alle können währenddessen buzzern.</p>${item.audio?`<audio controls src="${item.audio}"></audio>`:''}`:''}
@@ -84,6 +111,7 @@ export function createStudioEditor(api){
 
  function answerEditor(item){
   const info=answerViewContent(item),ready=hasRequiredAnswer(item),automatic=!!(info.text||info.image)&&!item.answerText?.trim()&&!item.answerImage;
+  const teamEmoji=item.type===TEAM_EMOJI,imposter=item.type==='imposter';
   const previewMap=item.type==='map'&&item.mapTargetSet?
    '<div class="se-answer-map-preview"><h4>Kartenlösung</h4>'
     +renderScene(item.scene,{revealed:true,mapView:mapCamera,mapSolution:normalizePoint({x:item.mapTargetX,y:item.mapTargetY})})
@@ -91,18 +119,18 @@ export function createStudioEditor(api){
   const currentText=item.answerText||(!['multiple','order','estimate','map','imposter'].includes(item.type)?item.answer||'':'');
   return '<section class="se-answer-tab-content" id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" tabindex="0">'
    +'<div class="se-answer-sectionhead"><div><span class="se-eyebrow">SCHRITT 2 · VERPFLICHTEND</span><h3>Antwort gestalten</h3>'
-   +'<p>Diese eigenständige Ansicht erscheint erst, wenn der Host die Lösung freigibt oder eine Buzzerantwort als richtig bewertet.</p></div>'
+   +'<p>'+(teamEmoji?'Nur die Hinweisgeber sehen den Begriff während der Emoji-Phase. Nach dem Raten sehen alle die Lösung.':imposter?'Bei der Auflösung wird der gewählte Bildslot durch das Original ersetzt.':'Diese Ansicht erscheint bei der Auflösung.')+'</p></div>'
    +'<span class="se-answer-readiness '+(ready?'is-ready':'is-missing')+'" role="status">'+(ready?'✓ Antwort bereit':'⚠ Antwort fehlt')+'</span></div>'
    +'<div class="se-answer-edit-grid"><div class="se-answer-fields">'
-   +'<label class="se-field"><span>Antworttext</span><textarea id="se-answer-text" data-se-field="answerText" rows="4" maxlength="2000" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
-   +'<p class="se-muted">Der Text ist optional, wenn ein Antwortbild vorhanden ist. Du kannst aber auch beides gleichzeitig verwenden.</p>'
+   +'<label class="se-field"><span>'+(teamEmoji?'Champion oder Begriff (geheim)':'Antworttext')+'</span><textarea id="se-answer-text" data-se-field="answerText" rows="'+(teamEmoji?1:4)+'" maxlength="'+(teamEmoji?100:2000)+'" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
+   +'<p class="se-muted">'+(teamEmoji?'Ein Begriff ist Pflicht. Richtige Teamantworten bringen den vollen Fragewert.':'Der Text ist optional, wenn ein Antwortbild vorhanden ist. Du kannst aber auch beides gleichzeitig verwenden.')+'</p>'
    +'<label class="se-field se-answer-upload" data-se-upload-zone="answer-image"><span>Antwortbild · PNG, JPG oder WebP</span>'
    +'<small class="se-drop-help">Bild auswählen, hier ablegen oder mit Strg+V einfügen (max. 6 MB Original, wird verkleinert)</small>'
    +'<input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="answer-image"></label>'
    +(item.answerImage?'<button type="button" class="se-answer-remove" data-se-action="answer-image-remove">✕ Antwortbild entfernen</button>':'')
    +input('answerImageAlt','Bildbeschreibung für Barrierefreiheit',item.answerImageAlt||'')
    +input('explanation','Zusätzliche Erklärung (optional)',item.explanation||'',{rows:3})
-   +'<details class="se-host-metadata" data-bq-persist="host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe; die Bewertung bleibt beim Host.</p>'
+   +'<details class="se-host-metadata" data-bq-persist="host-metadata"><summary>🔒 Host-Notizen, Alternativantworten & Quellen</summary><p class="se-muted">'+(teamEmoji?'Akzeptierte Varianten zählen bei der automatischen Auswertung als richtig.':'Diese Angaben sieht nur der Host. Akzeptierte Varianten dienen als Entscheidungshilfe bei der Bewertung.')+'</p>'
    +input('acceptedAnswers','Weitere akzeptierte Lösungen · eine pro Zeile',item.acceptedAnswers||'',{rows:3})
    +input('hostNotes','Notizen für die Moderation · nur Host',item.hostNotes||'',{rows:4})
    +input('sourceUrl','Quellenlink (https://)',item.sourceUrl||'')
@@ -110,9 +138,9 @@ export function createStudioEditor(api){
    +input('sourceCheckedOn','Geprüft am (JJJJ-MM-TT)',item.sourceCheckedOn||'')
    +'</details>'
    +(automatic?'<p class="se-muted">Die vorhandene Musterlösung dieses Fragetyps wird automatisch übernommen. Du kannst sie mit eigenem Text oder einem Bild ergänzen.</p>':'')
-   +(!ready?'<p class="se-answer-warning" role="alert">Vor dem Veröffentlichen bitte mindestens Text oder ein Bild für die Antwort hinterlegen.</p>':'')
+   +(!ready?'<p class="se-answer-warning" role="alert">'+(teamEmoji?'Vor dem Veröffentlichen den geheimen Begriff eingeben.':'Vor dem Veröffentlichen bitte mindestens Text oder ein Bild für die Antwort hinterlegen.')+'</p>':'')
    +'</div><div class="se-answer-live-preview"><span class="se-eyebrow">VORSCHAU · SO SEHEN ALLE DIE LÖSUNG</span>'
-   +renderAnswerView(item,{preview:true})+previewMap
+   +(imposter?renderScene(imposterPublicScene(item.scene,item.imposterIndex,item.correctIcon,5)):renderAnswerView(item,{preview:true}))+previewMap
    +'</div></div></section>';
  }
 
@@ -147,7 +175,7 @@ export function createStudioEditor(api){
   const meta=CATEGORY_SUGGESTIONS.find(s=>categoryKey(s.name)===categoryKey(name));
   return `<article class="se-category-card ${created?'':'se-category-suggestion'}">
    <button type="button" class="se-category-open" data-se-action="${created?'category-select':'category-preset'}" data-category="${escape(name)}"><strong>${escape(name)}</strong><small>${created?`${count} ${count===1?'Frage':'Fragen'}`:'Vorlage'}</small><span>${escape(meta?.description||'Eigene Quizkategorie')}</span></button>
-   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button>`:''}
+   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">Nach Runde ${editorRound===1?2:1} verschieben</button>`:''}
   </article>`;
  }
  function overview(all,cats){
@@ -160,7 +188,7 @@ export function createStudioEditor(api){
   </section>`;
  }
  function html(){
-  const all=quiz().questions||[],cats=categories();
+  const all=visibleQuestions(),cats=categories();
   if(activeCategory&&!cats.some(c=>categoryKey(c)===categoryKey(activeCategory)))activeCategory='';
   const item=current(),within=activeCategory?questionsInCategory(all,activeCategory):[];
   if(item?.id!==mapQuestionId){mapQuestionId=item?.id||'';mapCamera={...DEFAULT_MAP_VIEW};}
@@ -201,27 +229,30 @@ export function createStudioEditor(api){
       </div></details>
      </div>
     </div>
+   <nav class="bq-round-picker" aria-label="Spielbrett bearbeiten">${[1,2].map(round=>`<button type="button" data-se-action="board-round" data-board-round="${round}" aria-pressed="${editorRound===round}" class="${editorRound===round?'se-primary':''}">Runde ${round} · ${roundQuestions(quiz(),round).length}/36 Fragen</button>`).join('')}<span>Maximal 6 Kategorien × 6 Fragen je Brett</span></nav>
    ${auditOpen?`<section class="se-audit" aria-label="Quizprüfung"><div class="se-sectionhead"><h3>${audit.ready?'Quiz bereit':'Quiz noch unvollständig'} · ${audit.questionCount} Fragen</h3><button type="button" data-se-action="audit">Schließen</button></div><p>${audit.errors.length} Fehler · ${audit.warnings.length} Hinweise</p>${audit.errors.some(row=>row.id)?`<button type="button" class="se-audit-next" data-se-action="open-next-issue">Nächsten Fehler bearbeiten →</button>`:''}${[...audit.errors,...audit.warnings].slice(0,25).map(a=>`<div class="se-audit-row"><span>${escape(a.label)}: ${escape(a.reason)}</span>${a.id?`<button type="button" data-se-action="select" data-id="${escape(a.id)}">Öffnen</button>`:''}</div>`).join('')}</section>`:''}
-   <div class="se-workgrid ${activeCategory?'se-category-detail se-mobile-tab-'+mobileTab:'se-category-home'}">${activeCategory?`<nav class="se-mobile-editor-tabs" aria-label="Editorbereiche">${[['categories','Bibliothek'],['canvas',editorPane==='answer'?'Antwort':'Bearbeiten'],...(editorPane==='answer'?[]:[['properties','Eigenschaften']])].map(([name,label])=>`<button type="button" data-se-action="mobile-tab" data-mobile-tab="${name}" aria-current="${mobileTab===name?'page':'false'}" class="${mobileTab===name?'active':''}">${label}</button>`).join('')}</nav>`:''}<aside class="se-list"><div class="se-sectionhead"><h3>Bibliothek</h3><button type="button" data-se-action="category-form" title="Kategorie erstellen" aria-label="Neue Kategorie">+ Kategorie</button></div>${categoryForm}${nav}
+   <div class="se-workgrid ${activeCategory?'se-category-detail se-mobile-tab-'+mobileTab:'se-category-home'}">${activeCategory?`<nav class="se-mobile-editor-tabs" aria-label="Editorbereiche">${[['categories','Bibliothek'],['canvas',editorPane==='answer'?'Antwort':'Bearbeiten'],...(editorPane==='answer'||item?.type===TEAM_EMOJI?[]:[['properties','Eigenschaften']])].map(([name,label])=>`<button type="button" data-se-action="mobile-tab" data-mobile-tab="${name}" aria-current="${mobileTab===name?'page':'false'}" class="${mobileTab===name?'active':''}">${label}</button>`).join('')}</nav>`:''}<aside class="se-list"><div class="se-sectionhead"><h3>Bibliothek</h3><button type="button" data-se-action="category-form" title="Kategorie erstellen" aria-label="Neue Kategorie">+ Kategorie</button></div>${categoryForm}${nav}
     ${activeCategory?`<div class="se-category-questions-head"><div><strong>${escape(activeCategory)}</strong><small>${within.length} ${within.length===1?'Frage':'Fragen'}</small></div><div class="se-inline"><button type="button" data-se-action="category-rename" title="Kategorie umbenennen">✎</button><button type="button" data-se-action="category-remove" title="Kategorie mit allen Fragen löschen">✕</button></div></div><button type="button" class="se-primary se-add-question" data-se-action="new">+ Frage hinzufügen</button><input class="se-search" data-se-search aria-label="Fragen dieser Kategorie suchen" placeholder="Fragen suchen …" value="${escape(search)}"><div class="se-questions">${displayed.map(x=>`<div class="se-qwrap"><label class="se-qpick" title="Frage für Sammelbearbeitung auswählen"><input type="checkbox" data-se-multi="${escape(x.id)}" aria-label="${escape(x.title)} auswählen" ${selectedQuestions.has(x.id)?'checked':''}></label><button type="button" class="se-qrow ${x.id===item?.id?'is-active':''}" data-se-library="question" data-se-action="select" data-id="${escape(x.id)}"><span><strong>${escape(x.points)} Punkte</strong><small>${escape(x.title)}</small></span><span class="se-q-status ${invalidIds.has(x.id)?'is-incomplete':'is-complete'}" title="${invalidIds.has(x.id)?'Noch unvollständig':'Zum Veröffentlichen bereit'}" aria-label="${invalidIds.has(x.id)?'Frage unvollständig':'Frage bereit'}">${invalidIds.has(x.id)?'⚠':'✓'}</span></button></div>`).join('')}${!displayed.length?'<p class="se-muted se-empty-filter">Keine Fragen gefunden.</p>':''}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div>
     <details class="se-question-bank" ${bankOpen?'open':''}><summary>Fragenbank · Frage übernehmen</summary><label class="se-field"><span>In anderen Kategorien suchen</span><input data-se-bank-search value="${escape(bankQuery)}" placeholder="Frage oder Kategorie …"></label><div class="se-bank-list">${bankItems.length?bankItems.map(x=>`<div class="se-bank-item"><span><strong>${escape(x.title)}</strong><small>${escape(x.category)} · ${x.points} Punkte</small></span><button type="button" data-se-action="reuse-question" data-id="${escape(x.id)}" aria-label="${escape(x.title)} nach ${escape(activeCategory)} kopieren">Übernehmen</button></div>`).join(''):'<p class="se-muted">Keine passenden Fragen in anderen Kategorien.</p>'}</div></details>
     ${selectedQuestions.size?`<div class="se-batch" aria-label="Mehrere Fragen bearbeiten"><strong>${selectedQuestions.size} ausgewählt</strong><label>Kategorie<select data-se-batch-category><option value="">Unverändert</option>${cats.map(name=>`<option value="${escape(name)}">${escape(name)}</option>`).join('')}</select></label><label>Punkte<input data-se-batch-points type="number" min="0" max="10000" step="1" placeholder="Unverändert"></label><div class="se-inline"><button type="button" data-se-action="batch-apply" class="se-primary">Übernehmen</button><button type="button" data-se-action="batch-clear">Auswahl löschen</button></div></div>`:''}`:`<input class="se-search" data-se-search aria-label="Fragen im Quiz suchen" placeholder="Im Quiz suchen …" value="${escape(search)}"><details class="se-advanced-set"><summary>Mehrere Fragen auf einmal</summary><p>Optional: 5 × 5 Felder pro Kategorie.</p><button type="button" class="se-quick" data-se-action="quickset">5 × 5 Schnellset erstellen</button></details>`}
    </aside>
-   <main class="se-main">${!activeCategory?overview(all,cats):item?`${editorTabs}${editorPane==='answer'?answerEditor(item):'<section id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" hidden></section>'}<div class="se-question-pane" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}><div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">${escape(activeCategory)}</span><h2>${escape(item.title)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview-device" aria-label="Vorschauformat wechseln">${previewDevice==='desktop'?'Handyansicht':'Desktopansicht'}</button><button type="button" data-se-action="open-menu" aria-label="Elementaktionen als Menü öffnen" aria-haspopup="menu" aria-expanded="${menu?'true':'false'}" title="Rechtsklick oder Menü">⋯ Menü</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
-    <div class="se-context-hint">${item.scene.template==='map'?'Tippe auf die Weltkarte, um den richtigen Zielpunkt zu markieren. Der Punkt ist verpflichtend. Die Frage bearbeitest du im Bereich Eigenschaften.':'Dieselbe Fragenfläche wie bei den Zuschauern. Im Bearbeitungsmodus ziehst du Elemente an ihre Position. PNG-, JPG- oder WebP-Dateien kannst du direkt auf die Fragenfläche ziehen. Auf vorhandene Bilder abgelegte Dateien ersetzen das Bild. Rechtsklick für Aktionen.'}</div><div class="se-stage-grid se-stage-grid--single"><section class="se-stage-card"><div class="se-audience-label"><span>${preview?'Live-Zuschauervorschau (nicht bearbeitbar)':'Bearbeitbare Zuschauerfläche'} · ${reveal===6?'Lösung':reveal?'Hinweis '+reveal:'Startansicht'}</span><button type="button" class="se-preview-toggle" data-se-action="toggle-preview" aria-pressed="${preview}">${preview?'✎ Jetzt bearbeiten':'◉ Ohne Markierungen ansehen'}</button></div><div class="se-canvas-wrap se-audience-preview se-audience-${previewDevice}">${preview?renderScene(publicScene(item.scene,reveal,reveal===6),{revealed:reveal===6,correctIndex:item.correct||0,mapView:mapCamera,mapSolution:reveal===6&&item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null}):renderScene(item.scene,{editing:true,selected:sel,revealed:false,correctIndex:item.correct||0,mapView:mapCamera,mapCanEdit:item.scene.template==='map',mapEditorPoint:item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null})}</div>${!preview&&reveal!==0?'<p class="se-muted">Aufdeckungsstufen kontrollierst du über „Ohne Markierungen ansehen“.</p>':''}</section></div>
+   <main class="se-main">${!activeCategory?overview(all,cats):item?`${editorTabs}${editorPane==='answer'?answerEditor(item):'<section id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" hidden></section>'}${item.type===TEAM_EMOJI?teamEmojiEditor(item):`<div class="se-question-pane" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}><div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">${escape(activeCategory)}</span><h2>${escape(item.title)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview-device" aria-label="Vorschauformat wechseln">${previewDevice==='desktop'?'Handyansicht':'Desktopansicht'}</button><button type="button" data-se-action="open-menu" aria-label="Elementaktionen als Menü öffnen" aria-haspopup="menu" aria-expanded="${menu?'true':'false'}" title="Rechtsklick oder Menü">⋯ Menü</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
+    <div class="se-context-hint">${item.scene.template==='map'?'Tippe auf die Weltkarte, um den richtigen Zielpunkt zu markieren. Der Punkt ist verpflichtend. Die Frage bearbeitest du im Bereich Eigenschaften.':'Dieselbe Fragenfläche wie bei den Zuschauern. Im Bearbeitungsmodus ziehst du Elemente an ihre Position. PNG-, JPG- oder WebP-Dateien kannst du direkt auf die Fragenfläche ziehen. Auf vorhandene Bilder abgelegte Dateien ersetzen das Bild. Rechtsklick für Aktionen.'}</div><div class="se-stage-grid se-stage-grid--single"><section class="se-stage-card"><div class="se-audience-label"><span>${preview?'Live-Zuschauervorschau (nicht bearbeitbar)':'Bearbeitbare Zuschauerfläche'} · ${reveal===6?'Lösung':reveal?'Hinweis '+reveal:'Startansicht'}</span><button type="button" class="se-preview-toggle" data-se-action="toggle-preview" aria-pressed="${preview}">${preview?'✎ Jetzt bearbeiten':'◉ Ohne Markierungen ansehen'}</button></div><div class="se-canvas-wrap se-audience-preview se-audience-${previewDevice}">${preview?renderScene(item.type==='imposter'?imposterPublicScene(item.scene,item.imposterIndex,reveal===6?item.correctIcon:'',Math.min(5,reveal)):publicScene(item.scene,reveal,reveal===6),{revealed:reveal===6&&item.type!=='imposter',correctIndex:item.correct||0,mapView:mapCamera,mapSolution:reveal===6&&item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null}):renderScene(item.scene,{editing:true,selected:sel,revealed:false,correctIndex:item.correct||0,mapView:mapCamera,mapCanEdit:item.scene.template==='map',mapEditorPoint:item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null})}</div>${!preview&&reveal!==0?'<p class="se-muted">Aufdeckungsstufen kontrollierst du über „Ohne Markierungen ansehen“.</p>':''}</section></div>
     ${item.scene.template==='map'?'':`<div class="se-tools"><span>Hinzufügen:</span>${[['text','Text'],['image','Bild'],['shape','Form'],['choice','Antwort'],['order','Sortierfeld']].map(([kind,label])=>`<button type="button" data-se-action="add-element" data-kind="${kind}">+ ${label}</button>`).join('')}</div>`}
-    <div class="se-mini"><span>Aufdecken: 0 = sofort · 1–5 = Hinweise · 6 = Lösung</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div></div>`:`<section class="se-empty-category"><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">Kategorie</span><h2>${escape(activeCategory)}</h2><p>Hier gibt es noch keine Frage. Wähle einen Fragetyp oder lege eine einfache Frage an.</p><div class="se-start-templates">${[['text','Textfrage'],['multiple','Multiple Choice'],['estimate','Schätzfrage'],['image','Bildfrage'],['map','Karte auswählen'],['written','Alle schreiben'],['imposter','Imposter'],['quote','Zitat']].map(([type,label])=>`<button type="button" data-se-action="new" data-template="${type}">+ ${label}</button>`).join('')}</div></section>`}</main>
-   ${item&&editorPane==='question'?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
+    <div class="se-mini"><span>Aufdecken: 0 = sofort · 1–5 = Hinweise · 6 = Lösung</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div></div>`}`:`<section class="se-empty-category"><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">Kategorie</span><h2>${escape(activeCategory)}</h2><p>Hier gibt es noch keine Frage. Wähle einen Fragetyp oder lege eine einfache Frage an.</p><div class="se-start-templates">${[['text','Textfrage'],['multiple','Multiple Choice'],['estimate','Schätzfrage'],['image','Bildfrage'],['map','Karte auswählen'],['written','Alle schreiben'],['imposter','Imposter'],[TEAM_EMOJI,'Emoji-Teamrunde'],['quote','Zitat']].map(([type,label])=>`<button type="button" data-se-action="new" data-template="${type}">+ ${label}</button>`).join('')}</div></section>`}</main>
+   ${item&&editorPane==='question'&&item.type!==TEAM_EMOJI?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
    <input type="file" id="import-quiz" accept=".json,.brainquiz" hidden>${contextMenuHTML()}${libraryMenuHTML()}</div>`;
  }
  function draw(){
   if(redrawPending)return;
   redrawPending=true;
-  requestAnimationFrame(()=>{
-   redrawPending=false;
+  try{
    const root=document.getElementById('se-root');
    if(!root)return;
    const parent=root.parentElement;
+   const active=document.activeElement;
+   const field=root.contains(active)&&active.matches('[data-se-field],[data-se-quiztitle]')?active:null;
+   const selection=field?[field.selectionStart,field.selectionEnd,field.selectionDirection]:null;
    const scrolling=['.se-questions','.se-category-nav','.se-inspector'].map(selector=>
     [selector,root.querySelector(selector)?.scrollTop||0]);
    const expanded=['.se-extras','.se-more-properties','.se-file-actions','.bq-editor-extras','.se-host-metadata']
@@ -235,16 +266,47 @@ export function createStudioEditor(api){
    }
    mount(editor);
    if(menu)editor.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});
-  });
+   else if(field?.id){
+    const replacement=editor.querySelector('#'+CSS.escape(field.id));
+    if(!replacement||replacement.closest('[hidden]'))return;
+    if(trackedInput===field)trackedInput=replacement;
+    replacement.focus({preventScroll:true});
+    if(Number.isInteger(selection[0]))replacement.setSelectionRange(...selection);
+   }
+  }finally{redrawPending=false;}
  }
  function choose(id,{issue=false}={}){
   flushDraft();
+  const chosen=quiz().questions.find(question=>question.id===id);
+  if(chosen){editorRound=boardRoundOf(chosen);activeCategory=chosen.category;}
   const problem=issue?quizAudit(quiz()).errors.find(row=>row.id===id)?.reason||'':'';
   api.setSelected(id);mobileTab='canvas';editorPane=problem.includes('Antwort-Tab')?'answer':'question';
   sel='';menu=null;libraryMenu=null;preview=false;reveal=0;draw();
  }
  function updateField(field,value){const item=current(),el=find();if(!item)return;
-  if(field==='mapPrompt'&&item.scene?.template==='map'){const heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');if(heading)heading.text=String(value).slice(0,950);item.prompt=String(value).slice(0,950);deferDraft();return;}
+  if(field==='category'&&categoryKey(value)!==categoryKey(item.category)&&questionsInCategory(visibleQuestions(),value).length>=6){
+   const control=document.querySelector('#se-root [data-se-field="category"]');
+   if(control)control.value=item.category;
+   throw Error('Die Zielkategorie enthält bereits sechs Fragen.');
+  }
+  if(field==='boardRound'){
+   const destination=Number(value)===2?2:1;
+   const questions=roundQuestions(quiz(),destination),cats=roundCategories(quiz(),destination);
+   if(destination===editorRound)return;
+   if(questionsInCategory(questions,item.category).length>=6||!cats.some(cat=>categoryKey(cat)===categoryKey(item.category))&&cats.length>=6)throw Error('Die Zielrunde hat keinen freien Platz für diese Frage.');
+   item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
+   deferDraft();return;
+  }
+  const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds'}[field];
+  if(key){item.teamEmoji={...normalizeTeamEmoji(item.teamEmoji),[key]:value};deferDraft();return;}
+  if(field==='mapPrompt'&&item.scene?.template==='map'){
+   const text=String(value).slice(0,950),heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');
+   if(heading)heading.text=text;
+   item.prompt=text;
+   const previewHeading=document.querySelector('#se-root .bq-map-title h2');
+   if(previewHeading)previewHeading.textContent=text;
+   deferDraft();return;
+  }
   if(field.startsWith('hint-')){const i=Number(field.slice(5));if(Number.isInteger(i)&&i>=0&&i<4){item.hints??=[];item.hints[i]=String(value).slice(0,220);}return;}
   if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='sourceCheckedOn'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
    if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex','mapTargetX','mapTargetY'].includes(field)?Number(value):value;
@@ -258,19 +320,53 @@ export function createStudioEditor(api){
   const target=document.querySelector(`.se-element[data-se-element="${sel}"]`);
   if(target&&el){if(field==='text'){const dest=target.querySelector('.se-content,.se-shape');if(dest)dest.textContent=el.text;}if(['x','y','w','h'].includes(field)){target.style.left=el.x/10+'%';target.style.top=el.y/5.6+'%';target.style.width=el.w/10+'%';target.style.height=el.h/5.6+'%';}if(field==='fill')target.style.color=el.fill;if(field==='bg')target.style.background=el.bg;if(field==='align')target.style.textAlign=el.align;if(field==='font')target.style.fontSize=`clamp(10px,${el.font/10}cqw,${el.font}px)`;}
  }
- function makeCategoryQuestion(name,template='text'){
-  mobileTab='canvas';api.makeQuestion(name,template);sel='';preview=false;reveal=0;search='';draw();
+ function refreshQuestionSummary(){
+  const item=current(),root=document.getElementById('se-root');
+  if(!item||!root)return;
+  const heading=root.querySelector('.se-canvas-top h2');
+  if(heading&&item.type!==TEAM_EMOJI)heading.textContent=item.title+' · '+item.points+' Punkte';
+  const row=[...root.querySelectorAll('.se-qrow')].find(element=>element.dataset.id===item.id);
+  if(!row)return;
+  row.querySelector('strong').textContent=item.points+' Punkte';
+  row.querySelector('small').textContent=item.title;
+  const incomplete=quizAudit(quiz()).errors.some(error=>error.id===item.id);
+  const status=row.querySelector('.se-q-status');
+  if(status){
+   status.classList.toggle('is-incomplete',incomplete);status.classList.toggle('is-complete',!incomplete);
+   status.textContent=incomplete?'⚠':'✓';status.setAttribute('aria-label',incomplete?'Frage unvollständig':'Frage bereit');
+  }
  }
- function addCategory(raw){const name=assertNewCategory(categories(),raw);flushDraft();snapshot();quiz().categories=[...categories(),name];api.save();activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';search='';draw();}
- function renameCategory(raw){if(!activeCategory)return;const from=activeCategory;const name=assertNewCategory(categories(),raw,from);flushDraft();snapshot();quiz().categories=categories().map(c=>categoryKey(c)===categoryKey(from)?name:c);for(const question of quiz().questions){if(categoryKey(question.category)===categoryKey(from))question.category=name;}activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';api.save();draw();}
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){libraryMenu=null;draw();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function makeCategoryQuestion(name,template='text'){
+  if(questionsInCategory(visibleQuestions(),name).length>=6)throw Error('Diese Kategorie enthält bereits sechs Fragen. Wähle das andere Spielbrett.');
+  mobileTab='canvas';api.makeQuestion(name,template,editorRound);sel='';preview=false;reveal=0;search='';draw();
+ }
+ function addCategory(raw){if(categories().length>=6)throw Error('Pro Spielbrett sind sechs Kategorien möglich. Wähle oben das andere Spielbrett.');const name=assertNewCategory(categories(),raw);flushDraft();snapshot();setCategories([...categories(),name]);api.save();activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';search='';draw();}
+ function renameCategory(raw){if(!activeCategory)return;const from=activeCategory;const name=assertNewCategory(categories(),raw,from);flushDraft();snapshot();const names=categories().map(c=>categoryKey(c)===categoryKey(from)?name:c);for(const question of visibleQuestions()){if(categoryKey(question.category)===categoryKey(from))question.category=name;}setCategories(names);activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';api.save();draw();}
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){libraryMenu=null;draw();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
  switch(action){
+  case 'board-round':{
+   const next=Number(button.dataset.boardRound)===2?2:1;
+   flushDraft();editorRound=next;activeCategory='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
+  }
+  case 'category-move':{
+   const name=button.dataset.category||activeCategory;
+   const destination=editorRound===1?2:1,oldNames=categories(),target=roundCategories(quiz(),destination);
+   const moving=questionsInCategory(visibleQuestions(),name);
+   if(!target.some(cat=>categoryKey(cat)===categoryKey(name))&&target.length>=6||questionsInCategory(roundQuestions(quiz(),destination),name).length+moving.length>6)throw Error('Im anderen Spielbrett ist diese Kategorie bereits voll.');
+   flushDraft();snapshot();
+   const sourceRound=editorRound;
+   const sourceNames=oldNames.filter(cat=>categoryKey(cat)!==categoryKey(name));
+   for(const question of moving)question.boardRound=destination;
+   quiz().roundCategories={1:roundCategories(quiz(),1),2:roundCategories(quiz(),2),[sourceRound]:sourceNames,[destination]:collectCategories(target,moving)};
+   quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2]],quiz().questions);
+   activeCategory='';api.save();draw();api.notice?.('Kategorie nach Runde '+destination+' verschoben.');return;
+  }
   case 'map-clear':{if(scene?.template!=='map'||!item?.mapTargetSet)return;flushDraft();snapshot();item.mapTargetSet=false;api.save();draw();return;}
   case 'audit':flushDraft();auditOpen=!auditOpen;draw();return;
   case 'open-next-issue':{const issues=quizAudit(quiz()).errors.filter(row=>row.id);if(!issues.length)return;const index=issues.findIndex(row=>row.id===item?.id),target=issues[(index+1)%issues.length];const chosen=quiz().questions.find(q=>q.id===target.id);if(!chosen)return;activeCategory=chosen.category;auditOpen=true;choose(chosen.id,{issue:true});return;}
   case 'batch-clear':selectedQuestions.clear();draw();return;
   case 'batch-apply':{flushDraft();const cat=document.querySelector('[data-se-batch-category]')?.value||undefined;const raw=document.querySelector('[data-se-batch-points]')?.value;const pts=raw?.trim()?Number(raw):undefined;if(cat===undefined&&pts===undefined)throw Error('Kategorie oder Punktzahl für die Auswahl festlegen.');snapshot();const count=changeSelectedQuestions(quiz(),selectedQuestions,{category:cat,points:pts});selectedQuestions.clear();api.save();if(cat&&item?.id&&categoryKey(item.category)!==categoryKey(activeCategory)){const left=questionsInCategory(quiz().questions,activeCategory);if(left.length)api.setSelected(left[0].id);}api.notice?.(`${count} Fragen aktualisiert.`);draw();return;}
-  case 'reuse-question':{mobileTab='canvas';flushDraft();if(!activeCategory)throw Error('Wähle erst eine Kategorie.');snapshot();const copy=reuseQuestion(quiz(),button.dataset.id,activeCategory,api.newId());api.setSelected(copy.id);sel='';bankQuery='';api.save();api.notice?.('Frage übernommen. Original unverändert.');draw();return;}
+  case 'reuse-question':{mobileTab='canvas';flushDraft();if(!activeCategory)throw Error('Wähle erst eine Kategorie.');if(questionsInCategory(visibleQuestions(),activeCategory).length>=6)throw Error('Maximal sechs Fragen in dieser Kategorie.');snapshot();const copy=reuseQuestion(quiz(),button.dataset.id,activeCategory,api.newId());copy.boardRound=editorRound;api.setSelected(copy.id);sel='';bankQuery='';api.save();api.notice?.('Frage übernommen.');draw();return;}
   case 'preview-device':previewDevice=previewDevice==='desktop'?'mobile':'desktop';draw();return;
   case 'mobile-tab':{if(!['categories','canvas','properties'].includes(button.dataset.mobileTab))return;mobileTab=button.dataset.mobileTab;draw();return;}
   case 'editor-pane':{if(!item||!['question','answer'].includes(button.dataset.pane))return;flushDraft();editorPane=button.dataset.pane;mobileTab='canvas';sel='';preview=false;menu=null;libraryMenu=null;draw();requestAnimationFrame(()=>document.querySelector('.se-editor-pane-tabs [data-pane="'+editorPane+'"]')?.focus({preventScroll:true}));return;}
@@ -279,19 +375,19 @@ export function createStudioEditor(api){
   case 'redo':flushDraft();api.redo?.();sel='';draw();return;
   case 'select':{flushDraft();const chosen=quiz().questions.find(x=>x.id===button.dataset.id);if(chosen)activeCategory=chosen.category;choose(button.dataset.id,{issue:!!button.closest?.('.se-audit')});return;}
   case 'category-overview':flushDraft();selectedQuestions.clear();activeCategory='';sel='';menu=null;preview=false;search='';draw();return;
-  case 'category-select':{mobileTab='canvas';selectedQuestions.clear();bankQuery='';const name=categories().find(c=>categoryKey(c)===categoryKey(button.dataset.category));if(!name)return;flushDraft();activeCategory=name;showCategoryForm=false;renamingCategory=false;const list=questionsInCategory(quiz().questions,name);if(list.length)api.setSelected(list[0].id);search='';sel='';preview=false;draw();return;}
+  case 'category-select':{mobileTab='canvas';selectedQuestions.clear();bankQuery='';const name=categories().find(c=>categoryKey(c)===categoryKey(button.dataset.category));if(!name)return;flushDraft();activeCategory=name;showCategoryForm=false;renamingCategory=false;const list=questionsInCategory(visibleQuestions(),name);if(list.length)api.setSelected(list[0].id);search='';sel='';preview=false;draw();return;}
   case 'category-preset':addCategory(button.dataset.category);return;
   case 'category-form':showCategoryForm=true;renamingCategory=false;categoryDraft='';draw();requestAnimationFrame(()=>document.querySelector('[data-se-category-name]')?.focus());return;
   case 'category-form-cancel':showCategoryForm=false;renamingCategory=false;categoryDraft='';draw();return;
   case 'category-rename':if(!activeCategory)return;renamingCategory=true;showCategoryForm=true;categoryDraft=activeCategory;draw();requestAnimationFrame(()=>document.querySelector('[data-se-category-name]')?.focus());return;
-  case 'category-remove':{if(!activeCategory)return;const count=questionsInCategory(quiz().questions,activeCategory).length;if(!confirm(count?`Kategorie „${activeCategory}“ mit ${count} Frage${count===1?'':'n'} endgültig löschen?`:`Leere Kategorie „${activeCategory}“ löschen?`))return;flushDraft();snapshot();quiz().questions=(quiz().questions||[]).filter(q=>categoryKey(q.category)!==categoryKey(activeCategory));quiz().categories=categories().filter(x=>categoryKey(x)!==categoryKey(activeCategory));selectedQuestions=new Set([...selectedQuestions].filter(id=>(quiz().questions||[]).some(q=>q.id===id)));activeCategory='';api.save();draw();return;}
-  case 'library-open':{if(libraryMenu?.kind==='category'&&libraryMenu.category){const name=categories().find(c=>categoryKey(c)===categoryKey(libraryMenu.category));libraryMenu=null;if(!name)return;activeCategory=name;const list=questionsInCategory(quiz().questions,name);if(list.length)api.setSelected(list[0].id);draw();return;}if(libraryMenu?.kind==='question'&&libraryMenu.id){const chosen=quiz().questions.find(x=>x.id===libraryMenu.id);libraryMenu=null;if(chosen){activeCategory=chosen.category;choose(chosen.id);}return;}return;}
+  case 'category-remove':{if(!activeCategory)return;const count=questionsInCategory(visibleQuestions(),activeCategory).length;if(!confirm(count?`Kategorie „${activeCategory}“ mit ${count} Frage${count===1?'':'n'} endgültig löschen?`:`Leere Kategorie „${activeCategory}“ löschen?`))return;flushDraft();snapshot();quiz().questions=(quiz().questions||[]).filter(q=>boardRoundOf(q)!==editorRound||categoryKey(q.category)!==categoryKey(activeCategory));setCategories(categories().filter(x=>categoryKey(x)!==categoryKey(activeCategory)));selectedQuestions=new Set([...selectedQuestions].filter(id=>(quiz().questions||[]).some(q=>q.id===id)));activeCategory='';api.save();draw();return;}
+  case 'library-open':{if(libraryMenu?.kind==='category'&&libraryMenu.category){const name=categories().find(c=>categoryKey(c)===categoryKey(libraryMenu.category));libraryMenu=null;if(!name)return;activeCategory=name;const list=questionsInCategory(visibleQuestions(),name);if(list.length)api.setSelected(list[0].id);draw();return;}if(libraryMenu?.kind==='question'&&libraryMenu.id){const chosen=quiz().questions.find(x=>x.id===libraryMenu.id);libraryMenu=null;if(chosen){activeCategory=chosen.category;choose(chosen.id);}return;}return;}
   case 'library-new':{if(libraryMenu?.kind==='category'&&libraryMenu.category){const name=categories().find(c=>categoryKey(c)===categoryKey(libraryMenu.category));libraryMenu=null;if(name){activeCategory=name;makeCategoryQuestion(name,suggestedTemplate(name));}return;}return;}
   case 'library-rename':{if(libraryMenu?.kind==='category'&&libraryMenu.category){activeCategory=libraryMenu.category;libraryMenu=null;renamingCategory=true;showCategoryForm=true;categoryDraft=activeCategory;draw();requestAnimationFrame(()=>document.querySelector('[data-se-category-name]')?.focus());return;}return;}
   case 'library-delete':{if(libraryMenu?.kind==='question'&&libraryMenu.id){const target=quiz().questions.find(x=>x.id===libraryMenu.id);libraryMenu=null;if(!target)return;if(!confirm(`Frage „${target.title}“ löschen?`))return;flushDraft();snapshot();quiz().questions=(quiz().questions||[]).filter(q=>q.id!==target.id);selectedQuestions.delete(target.id);if(categoryKey(activeCategory)===categoryKey(target.category)){const remaining=questionsInCategory(quiz().questions,activeCategory);if(remaining.length)api.setSelected(remaining[0].id);}api.save();draw();return;}if(libraryMenu?.kind==='category'&&libraryMenu.category){activeCategory=libraryMenu.category;libraryMenu=null;onAction('category-remove',button);return;}return;}
   case 'category-new-question':{const name=categories().find(c=>categoryKey(c)===categoryKey(button.dataset.category));if(!name)return;flushDraft();activeCategory=name;showCategoryForm=false;makeCategoryQuestion(name,suggestedTemplate(name));return;}
   case 'new':{if(!activeCategory){onAction('category-form',button);return;}makeCategoryQuestion(activeCategory,button.dataset.template||suggestedTemplate(activeCategory));return;}
-  case 'quickset':{const raw=prompt('Kategorien (durch Kommas getrennt)', categories().join(', ')||'Champions, Lorefragen, Schätzen, Splash-Art, Fähigkeiten');if(raw===null)return;const cats=[...new Set(raw.split(',').map(s=>s.trim()).filter(Boolean))].slice(0,10);if(!cats.length)return;api.quickset(cats);quiz().categories=collectCategories(quiz().categories,quiz().questions);activeCategory=cats[0];sel='';draw();return;}
+  case 'quickset':{const raw=prompt('Kategorien für Runde '+editorRound+' (durch Kommas getrennt)', categories().join(', ')||'Champions, Lorefragen, Schätzen, Splash-Art, Fähigkeiten');if(raw===null)return;const cats=[...new Set(raw.split(',').map(s=>s.trim()).filter(Boolean))];if(cats.length>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');if(!cats.length)return;if(cats.some(cat=>questionsInCategory(visibleQuestions(),cat).length))throw Error('Das Schnellset braucht leere Kategorien.');if(new Set([...categories(),...cats]).size>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');api.quickset(cats,editorRound);setCategories(collectCategories(categories(),visibleQuestions()));activeCategory=cats[0];sel='';draw();return;}
   case 'copy-q':{const targetId=libraryMenu?.kind==='question'?libraryMenu.id:undefined;libraryMenu=null;api.copyQuestion(targetId);sel='';draw();return;}
   case 'delete-q':if(!confirm(`Frage „${item.title}“ löschen?`))return;api.deleteQuestion();const remaining=questionsInCategory(quiz().questions,activeCategory);if(remaining.length)api.setSelected(remaining[0].id);sel='';draw();return;
   case 'backup':api.backup();return;
@@ -415,8 +511,8 @@ export function createStudioEditor(api){
   root.addEventListener('submit',event=>{if(!event.target.matches('[data-se-category-form]'))return;event.preventDefault();try{const raw=event.target.querySelector('[data-se-category-name]')?.value||'';if(renamingCategory)renameCategory(raw);else addCategory(raw);}catch(err){api.error(err);}});
   root.addEventListener('click',event=>{if((menu||libraryMenu)&&!event.target.closest('.se-context')){menu=null;libraryMenu=null;if(!event.target.closest('[data-se-action],[data-se-element]')){draw();return;}}const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});
   root.addEventListener('focusout',event=>{if(event.target===trackedInput)trackedInput=null;});
-  root.addEventListener('change',async event=>{const t=event.target;try{if(t.matches('[data-se-multi]')){if(t.checked)selectedQuestions.add(t.dataset.seMulti);else selectedQuestions.delete(t.dataset.seMulti);draw();return;}if(t.matches('.se-question-bank')){bankOpen=t.open;return;}if(t.matches('[data-se-template]')){setType(t.value);return;}if(t.matches('[data-se-roundmode]')){flushDraft();if(!current())return;snapshot();current().roundMode=t.value==='written'?'written':'buzzer';api.save();draw();return;}if(t.matches('[data-se-scoremode]')){flushDraft();snapshot();quiz().scoreMode=t.value==='individual'?'individual':'team';api.save();draw();return;}if(t.matches('[data-se-reveal]')){reveal=Number(t.value);draw();return;}if(t.matches('[data-se-snap]')){snap=t.checked;return;}if(t.matches('[data-se-upload]')){try{await onUpload(t);}finally{t.value='';}return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);flushDraft();draw();}}catch(err){api.error(err)}});
-  root.addEventListener('input',event=>{const t=event.target;if(t.matches('[data-se-search]')){search=t.value;const active=document.activeElement;const pos=active.selectionStart;draw();requestAnimationFrame(()=>{const next=document.querySelector('[data-se-search]');next?.focus();next?.setSelectionRange(pos,pos);});return;}if(t.matches('[data-se-bank-search]')){bankQuery=t.value;bankOpen=true;const position=t.selectionStart;draw();requestAnimationFrame(()=>{const next=document.querySelector('[data-se-bank-search]');next?.focus();next?.setSelectionRange(position,position);});return;}if(t.matches('[data-se-category-name]')){categoryDraft=t.value;return;}if(t.matches('[data-se-quiztitle]')){if(trackedInput!==t){snapshot();trackedInput=t;}quiz().title=t.value.slice(0,100);const heading=root.querySelector('.se-board-context>strong');if(heading){heading.textContent=quiz().title||'Unbenanntes Quizbrett';heading.title=quiz().title;}deferDraft();return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);refreshAnswerPreview();}});
+  root.addEventListener('change',async event=>{const t=event.target;try{if(t.matches('[data-se-multi]')){if(t.checked)selectedQuestions.add(t.dataset.seMulti);else selectedQuestions.delete(t.dataset.seMulti);draw();return;}if(t.matches('.se-question-bank')){bankOpen=t.open;return;}if(t.matches('[data-se-template]')){setType(t.value);return;}if(t.matches('[data-se-roundmode]')){flushDraft();if(!current())return;snapshot();current().roundMode=t.value==='written'?'written':'buzzer';api.save();draw();return;}if(t.matches('[data-se-scoremode]')){flushDraft();snapshot();quiz().scoreMode=t.value==='individual'?'individual':'team';api.save();draw();return;}if(t.matches('[data-se-reveal]')){reveal=Number(t.value);draw();return;}if(t.matches('[data-se-snap]')){snap=t.checked;return;}if(t.matches('[data-se-upload]')){try{await onUpload(t);}finally{t.value='';}return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);flushDraft();refreshQuestionSummary();refreshAnswerPreview();if(['boardRound','category'].includes(t.dataset.seField))draw();}}catch(err){api.error(err)}});
+  root.addEventListener('input',event=>{const t=event.target;if(t.matches('[data-se-search]')){search=t.value;const active=document.activeElement;const pos=active.selectionStart;draw();requestAnimationFrame(()=>{const next=document.querySelector('[data-se-search]');next?.focus();next?.setSelectionRange(pos,pos);});return;}if(t.matches('[data-se-bank-search]')){bankQuery=t.value;bankOpen=true;const position=t.selectionStart;draw();requestAnimationFrame(()=>{const next=document.querySelector('[data-se-bank-search]');next?.focus();next?.setSelectionRange(position,position);});return;}if(t.matches('[data-se-category-name]')){categoryDraft=t.value;return;}if(t.matches('[data-se-quiztitle]')){if(trackedInput!==t){snapshot();trackedInput=t;}quiz().title=t.value.slice(0,100);const heading=root.querySelector('.se-board-context>strong');if(heading){heading.textContent=quiz().title||'Unbenanntes Quizbrett';heading.title=quiz().title;}deferDraft();return;}if(t.matches('[data-se-field]')){if(trackedInput!==t){snapshot();trackedInput=t;}updateField(t.dataset.seField,t.value);refreshQuestionSummary();refreshAnswerPreview();}});
   // Long press matches the right-click actions on touch/pen, including on an element.
   root.addEventListener('pointerdown',event=>{
    if(preview||!['touch','pen'].includes(event.pointerType)||event.button!==0)return;
@@ -450,6 +546,6 @@ export function createStudioEditor(api){
 const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!editable&&['Enter',' '].includes(event.key)&&event.target.matches?.('[data-se-element]')){event.preventDefault();sel=event.target.dataset.seElement;draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='d'&&sel){event.preventDefault();onAction('duplicate');return;}if((event.key==='Delete'||event.key==='Backspace')&&!editable&&sel){event.preventDefault();onAction('remove');return;}if(event.key==='Escape'&&!editable&&sel){sel='';draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='z'){event.preventDefault();onAction(event.shiftKey?'redo':'undo');return;}if(!sel||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)||editable)return;event.preventDefault();const el=find();if(!el)return;snapshot();const n=event.shiftKey?20:5;if(event.key==='ArrowLeft')el.x=Math.max(0,el.x-n);if(event.key==='ArrowRight')el.x=Math.min(1000-el.w,el.x+n);if(event.key==='ArrowUp')el.y=Math.max(0,el.y-n);if(event.key==='ArrowDown')el.y=Math.min(560-el.h,el.y+n);persist(true);});
  }
  return {html,render:()=>html(),mount,flush:flushDraft,
-  focusIssue:id=>{const item=quiz()?.questions?.find(v=>v.id===id);if(!item)return;activeCategory=item.category;auditOpen=true;choose(id,{issue:true});},
+  focusIssue:id=>{const item=quiz()?.questions?.find(v=>v.id===id);if(!item)return;editorRound=boardRoundOf(item);activeCategory=item.category;auditOpen=true;choose(id,{issue:true});},
   reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
 }

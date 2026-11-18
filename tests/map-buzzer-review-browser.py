@@ -39,6 +39,7 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="map-buzzer"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.current?.id==='map-buzzer'",timeout=12000)
   assert 'mapTargetX' not in await guest.evaluate('window.__probe.info().publicState.current')
   assert await guest.locator('.bq-quiz-verdict').count()==0

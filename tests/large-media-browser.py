@@ -67,6 +67,7 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="large-sound"]').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.wait_for_function("() => window.__probe.info().publicState?.current?.audio?.length>500000",timeout=30000)
   assert await guest.evaluate("window.__probe.info().publicState.current.answer") is None
   await expect(guest.locator('.bq-soundquiz')).to_be_visible(timeout=15000)

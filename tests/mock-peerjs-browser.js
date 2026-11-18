@@ -14,6 +14,7 @@
  }
  class Peer extends Emitter {
   constructor(id){super();this.id=id||('test-guest-'+Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''));this.conns=new Map();this.bc=new BroadcastChannel('brainquiz-test-peer-network');this.destroyed=false;
+   window.addEventListener('pagehide',()=>this.destroy(),{once:true});
    this.bc.onmessage=({data:m})=>{
     if(!m||m.to!==this.id)return;
     if(m.t==='offer'){

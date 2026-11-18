@@ -52,6 +52,7 @@ async def main():
    guest.on('pageerror',lambda err,label=name:errors.append(label+': '+str(err)))
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await alice.locator('.bq-map-viewport').wait_for(timeout=12000)
   await bob.locator('.bq-map-viewport').wait_for(timeout=12000)
   await pin_and_submit(alice,.5,.5)

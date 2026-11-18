@@ -39,6 +39,8 @@ async def main():
    await page.locator('.bq-legacy-options>summary').click()
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for(timeout=15000)
+   await page.locator('[data-se-action="category-preset"]').first.click()
+   await page.locator('[data-se-action="new"]').first.click()
    await page.locator('.top-nav [data-view="live"]').click()
    await page.locator('.bq-board-scene').wait_for(timeout=12000)
    await page.evaluate('window.__step6Open(1,"q-one")')

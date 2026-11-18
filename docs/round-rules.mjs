@@ -1,6 +1,6 @@
 /** Round rules kept separate from rendering and transport. */
 import {judgementDelta,updatePlayerScore} from './core.mjs';
-export const roundMode=q=>q?.roundMode==='written'?'written':'buzzer';
+export const roundMode=q=>q?.type==='team-emoji'?'team-emoji':q?.roundMode==='written'?'written':'buzzer';
 export const scoreMode=state=>state?.scoreMode==='individual'?'individual':'team';
 export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  const round=String(state?.round||0);

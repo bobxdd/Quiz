@@ -72,6 +72,7 @@ async def main():
 
   # First answer is wrong: hide solution, deduct -50, unlock Bob's buzzer.
   await host.locator('[data-action="open"][data-qid="normal-text"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-big-buzzer')).to_be_visible(timeout=12000)
   for page in (alice,bob):
    assert (await page.evaluate("window.__probe.info().publicState.current.answer")) is None
@@ -109,6 +110,7 @@ async def main():
 
   # Next multiple-choice question shows right choice and points without manual reveal.
   await host.locator('[data-action="open"][data-qid="normal-multiple"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('[data-action="buzz"]')).to_be_enabled(timeout=12000)
   assert (await bob.evaluate("window.__probe.info().publicState.current.answer")) is None
   await alice.locator('[data-action="buzz"]').click()
@@ -122,6 +124,7 @@ async def main():
 
   # The existing host-controlled soundquiz also gets automatic answer reveal.
   await host.locator('[data-action="open"][data-qid="normal-audio"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await alice.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').click()
   for page in (host,alice,bob):
@@ -132,6 +135,7 @@ async def main():
   # The host can still reveal manually when nobody buzzes; no bogus score.
   before=await host.evaluate("JSON.stringify(window.__probe.info().publicState.scores)")
   await host.locator('[data-action="open"][data-qid="normal-manual"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
   await host.locator('[data-action="reveal"]').click()
   for page in (host,alice,bob):await check_revealed(page,'Garen')
   after=await host.evaluate("JSON.stringify(window.__probe.info().publicState.scores)")

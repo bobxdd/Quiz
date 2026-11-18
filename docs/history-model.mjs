@@ -6,7 +6,8 @@ export function solutionFor(question){
  if(question.type==='estimate')return [question.estimateTarget,question.estimateUnit].filter(x=>x!==undefined&&x!==null&&String(x)!=='').join(' ').slice(0,800);
  if(question.type==='multiple'){const idx=Math.max(0,Math.min(3,Number(question.correct)||0));return `${'ABCD'[idx]} · ${question.options?.[idx]||question.answer||''}`.slice(0,800);}
  if(question.type==='order')return (question.scene?.sortCorrect||[]).join(' → ').slice(0,800)||String(question.answer||'').slice(0,800);
- if(question.type==='imposter')return ['Passiv','Q','W','E','R'][Number(question.imposterIndex)||0]||String(question.answer||'');
+ if(question.type==='imposter')return question.abilityNames?.[question.imposterIndex]||['Passiv','Q','W','E','R'][Number(question.imposterIndex)||0]||String(question.answer||'');
+ if(question.type==='team-emoji')return safe(question.answerText||question.answer,100);
  return safe(question.answer||'',800);
 }
 export function createHistoryEntry(question,round,askedAt=Date.now()){
@@ -18,11 +19,15 @@ export function historyRows(history,answers,scores,people){
  return entries.map(item=>{
   const round=String(item.round),submitted=answers?.[round]||{};
   const ids=new Set([...Object.keys(submitted),...Object.keys(scores||{}).filter(id=>scores[id]?.rounds?.[round])]);
-  const participants=[...ids].map(id=>{
+  const teamResults=Array.isArray(item.emojiResults)?item.emojiResults:null;
+  const participants=(teamResults?teamResults.map(result=>({id:result.id,name:safe(result.name||result.id,35),
+   answer:[...result.clues,result.guess].filter(Boolean).join(' '),status:['correct','wrong'].includes(result.status)?result.status:'open',delta:result.points
+  })):[...ids].map(id=>{
    const judgement=scores?.[id]?.rounds?.[round]||null;
    return {id,name:safe(people?.[id]?.name||submitted[id]?.name||id,28),answer:typeof submitted[id]?.text==='string'?safe(submitted[id].text):'',status:judgement?.result==='correct'?'correct':judgement?.result==='wrong'?'wrong':'open',delta:judgement&&Number.isFinite(Number(judgement.delta))?Number(judgement.delta):null};
-  }).sort((a,b)=>a.name.localeCompare(b.name,'de'));
-  return {...item,participants,submittedCount:Object.values(submitted).filter(v=>v&&typeof v.text==='string').length,correctCount:participants.filter(p=>p.status==='correct').length,wrongCount:participants.filter(p=>p.status==='wrong').length};
+  })).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const submittedCount=teamResults?teamResults.filter(result=>result.guess).length:Object.values(submitted).filter(v=>v&&typeof v.text==='string').length;
+  return {...item,participants,submittedCount,correctCount:participants.filter(p=>p.status==='correct').length,wrongCount:participants.filter(p=>p.status==='wrong').length};
  });
 }
 export function responseStatus(status){return status==='correct'?{label:'Richtig',icon:'✓'}:status==='wrong'?{label:'Falsch',icon:'✕'}:{label:'Nicht bewertet',icon:'–'};}

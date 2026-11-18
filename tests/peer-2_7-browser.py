@@ -112,6 +112,7 @@ async def main():
   assert 'Anivia' not in await guest.locator('body').inner_text(), 'Host answer leaked before reveal'
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await guest.locator('.bq-question-scene').get_by_text('Wer fliegt durch Freljord?').wait_for(timeout=12000)
   assert await guest.locator('.bq-board-scene').count()==0, 'Board must be removed when question appears'
   await host.locator('.bq-question-scene').wait_for(timeout=12000)

@@ -37,6 +37,8 @@ async def main():
    await page.get_by_role('button',name='Quizbrett bearbeiten').click()
    await page.locator('.se-board-context').wait_for(timeout=12000)
    assert await page.locator('.bq-screen-watcher,.bq-scene-cameos').count()==0,'Editor must remain clear'
+   await page.locator('[data-se-action="category-preset"]').first.click()
+   await page.locator('[data-se-action="new"]').first.click()
    await page.locator('.top-nav [data-action="view"][data-view="live"]').click()
    await page.locator('.bq-board-scene').wait_for(timeout=12000)
    await expect(page.locator('.bq-screen-watcher')).to_have_count(1)

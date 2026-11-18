@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {resetBoardGameState} from '../docs/question-flow.mjs';
 import {MAX_PLAYERS,MAX_TEAMS,TEAM_PALETTE,teamColor,validTeamId,canArrangeLobby,cleanTeamName,addLobbyTeam,lobbySnapshot,approval} from '../docs/lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from '../docs/lobby-view.mjs';
 const base=()=>({public:{title:'Demo',phase:'board',round:0,used:{},teams:{t1:'Rot',t2:'Blau'},scores:{t1:0,t2:0}},members:{},roster:{},presence:{}});
@@ -107,6 +108,9 @@ test('Ten participants are preserved in lobby and in secret-answer review',()=>{
 test('Live reset zeroes all current host-created team scores instead of only original editor teams',()=>{
  const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const reset=app.slice(app.indexOf("case 'reset-questions':"),app.indexOf("case 'delete-room':"));
- assert.match(reset,/scores:Object\.fromEntries\(Object\.keys\(publicState\?\.teams\|\|\{\}\)\.map\(id=>\[id,0\]\)\)/);
+ assert.match(reset,/resetBoardGameState\(publicState,buildPublicBoard\(quiz\),roster\)/);
+ const state=base().public;
+ state.teams.t3='Neues Hostteam';state.scores={t1:200,t2:-100,t3:350};
+ assert.deepEqual(resetBoardGameState(state,{}).scores,{t1:0,t2:0,t3:0});
  assert.doesNotMatch(reset,/scores:buildScores\(quiz\)/);
 });

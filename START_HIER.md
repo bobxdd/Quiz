@@ -18,9 +18,15 @@
 1. Website als **Host** öffnen → **Online-Raum erstellen**.
 2. Fragen im Editor anlegen/importieren und **Quiz live veröffentlichen**.
 3. Über **Einladung kopieren** den Link mit Raumcode an Freunde senden. Sie öffnen denselben GitHub-Pages-Link, wählen einen Anzeigenamen und warten auf die Hostfreigabe.
-4. Host und Teilnehmende können Teams gründen oder auswählen (maximal fünf neue Teams); der Host bestätigt die Aufnahme. Dann eine Frage auf dem Quizbrett auswählen. Standardmäßig buzzern die Teilnehmer; der Host bewertet richtig (+Fragewert) oder falsch (−halber Fragewert, Person/Team für diese Runde gesperrt). In ausdrücklich schriftlichen Runden geben alle zunächst verdeckte Antworten ab, die der Host gezielt aufdecken kann.
+4. Host und Teilnehmende können Teams gründen oder auswählen (maximal fünf neue Teams); der Host bestätigt die Aufnahme. Nach „Spiel starten“ wählt das erste besetzte Team eine Frage auf dem Quizbrett; danach wechseln sich die Teams in fester Reihenfolge ab. Das aktive Team kann sein Feld direkt anklicken, der Host kann stellvertretend auswählen. Das Feld bleibt zunächst verdeckt; erst „Frage aufdecken“ startet die Frage und ihren Timer. Standardmäßig buzzern die Teilnehmer; der Host bewertet richtig (+Fragewert) oder falsch (−halber Fragewert, Person/Team für diese Runde gesperrt). Nach „Richtig“ werden Punkte und Lösung gemeinsam veröffentlicht. Mit „Weiter zum Quizbrett“ kehren alle zur Übersicht zurück. Das nächste Team wählt frei das nächste Feld, unabhängig davon, wer die Punkte erhalten hat. Alle Teams dürfen nach der Aufdeckung buzzern; das Auswahlrecht beschränkt nur die Feldauswahl. In ausdrücklich schriftlichen Runden geben alle zunächst verdeckte Antworten ab, die der Host gezielt aufdecken kann.
 5. Buzzer und gemeinsame, teamgetrennte Teamchats werden vom Host kontrolliert; jeder Gast erhält nur seine eigenen noch verdeckten Antworten und Nachrichten seines Teams. Das vollständige Lösungsquiz und private Rundendaten werden **nicht** an andere Browser verteilt.
 6. Host-Fenster offen lassen. Ein Host kann seinen Raum bei Seiten-Neuladen über **Raum fortsetzen** anhand einer lokalen Sicherung wiederaufnehmen; die Gäste können sich danach erneut verbinden. Für kritische Quizsets zusätzlich den Datei-Export benutzen.
+
+## Zwei Runden und Generalprobe
+
+- Im Frageneditor oben **Runde 1 / Runde 2** auswählen. Jede Runde enthält bis zu **sechs Kategorien mit je sechs Fragen**. Fragen lassen sich über „Spielbrett“ und ganze Kategorien über „Nach Runde … verschieben“ zuordnen.
+- Ist Runde 1 fertig gespielt, führt „Weiter zum Quizbrett“ direkt auf das zweite Brett. Teams, gespielte Felder und Punkte bleiben erhalten. Ein vorzeitiger Wechsel zu Runde 2 erfordert eine Bestätigung. Ist Runde 2 leer, bleibt es bei einer Runde.
+- Die **Generalprobe** beginnt ebenfalls auf dem Brett. Felder können beliebig ausgewählt, vom Host aufgedeckt und mit zwei Probespielern getestet werden. Probepunkte und Probefortschritt verändern das gespeicherte Quiz nicht.
 
 ## Was bleibt gespeichert?
 
@@ -41,7 +47,8 @@
 
 - **Tipprunden:** bis zu vier Tipps nacheinander aufdecken; der Tipp-Knopf bleibt in der Hostleiste sichtbar.
 - **Weltkarte:** Teilnehmer setzen per Maus, Touch oder Tastatur einen Pin; die Abgabe bleibt vor der Aufdeckung privat, die Lösung erscheint erst nach Hostfreigabe.
-- **Bild-Imposter:** bis zu acht Grafiken einschließlich einer austauschbaren; das Originalbild und die Auflösung bleiben privat.
+- **Ability-Imposter:** neue Fragen starten mit vier Q/W/E/R-Bildern. Alle sehen dieselben vier Bilder einschließlich desselben falschen Slots. Bei der Lösung wird ausschließlich dieser Slot durch das hinterlegte Original ersetzt. Bestehende Fragen mit bis zu acht Bildern bleiben unterstützt.
+- **Emoji-Teamrunde:** eigene Vorlage im Kategorieneditor. Der geheime Champion/Begriff steht im Antwort-Tab; Emojivorrat sowie Denk- und Ratezeit werden an der Frage eingestellt. Pro Team wählt eine Person die Hinweisgeberrolle, die übrigen raten. Alle Teams bekommen denselben Begriff. Die Hinweise werden erst in der Ratephase ausschließlich im eigenen Team sichtbar. Nach Ablauf der Ratezeit erscheinen alle Ergebnisse gemeinsam; richtige Antworten einschließlich hinterlegter Alternativen erhalten die vollen Fragepunkte, falsche oder fehlende Antworten null Punkte. Dafür benötigt jedes mitspielende Team mindestens zwei zugelassene Mitglieder.
 - **Audio / Bild / Splash / Reihenfolge / Schätzen / Zitate:** im visuellen Editor als Vorlagen anlegen, Buzzer oder ausdrücklichen Schreibmodus unabhängig vom Format auswählen.
 - **Editor:** Kategorien und Fragen per Rechtsklick öffnen, duplizieren oder nach Bestätigung löschen, außerdem Fragenbank, Sammelbearbeitung und Zuschauer-Vorschau.
 - **Charaktere:** vier Originalbilder, dezente Randauftritte und Coverbewegungen; unter „Bewegung reduzieren“ ohne Aufdeckungsanimation.

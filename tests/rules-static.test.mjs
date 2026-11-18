@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
 const client=readFileSync(new URL('../docs/peer-client.mjs',import.meta.url),'utf8');
 const sw=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
-test('PeerJS: Host entscheidet über Beitritt, Punkte und aktuelle Fragen',()=>{for(const p of ['this.memberSecrets[msg.uid]','_assertHost(room)','openQuestionState(d.public','applyQuestionChanges(d.public','updatePlayerScore'])assert.ok(client.includes(p),p)});
+test('PeerJS: Host entscheidet über Beitritt, Punkte und aktuelle Fragen',()=>{for(const p of ['this.memberSecrets[msg.uid]','_assertHost(room)','openQuestionState(state','makeSelectionTurn(d.public,d.roster)','applyQuestionChanges(d.public','updatePlayerScore'])assert.ok(client.includes(p),p)});
 test('Gäste sehen ausschließlich ihren Teamchat und eigene Antworten',()=>{for(const p of ['member.team','ownResponse','this.data.responses?.[round]?.[ctx.uid]','this.data.messages?.[member.team]'])assert.ok(client.includes(p),p);assert.doesNotMatch(client.slice(client.indexOf('_snapshotFor(ctx){'),client.indexOf('_sendSnapshot(ctx){')),/this\.hostQuiz/)});
 test('Host validiert Gästeaktionen bei jeder Nachricht',()=>{for(const p of ['member?.status!==\'approved\'','pub?.phase!==\'question\'','pub?.settings?.chatOpen','round!==String(payload.round)','this.data.buzzers[round]'])assert.ok(client.includes(p),p)});
 test('Signalisierung läuft über PeerJS Cloud und P2P-Verbindungen bleiben hostgesteuert',()=>{assert.match(client,/cdn\.jsdelivr\.net\/npm\/peerjs@1\.5\.5/);assert.match(client,/peer\.connect\(peerId\(this.room\)/);assert.match(client,/conn\.send\(\{t:'hello'/)});

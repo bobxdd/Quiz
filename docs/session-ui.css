@@ -485,3 +485,27 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 .bq-guest-receipt:empty { display: none; }
 .bq-guest-receipt.pending { color: #ffdf9a; }
+
+.bq-team-emoji { display: grid; gap: .9rem; min-width: 0; }
+.bq-team-emoji h3, .bq-team-emoji p { margin: 0; }
+.bq-team-emoji .panelhead { flex-wrap: wrap; align-items: center; gap: .65rem; }
+.bq-emoji-target { display: grid; gap: .3rem; }
+.bq-emoji-target strong { font-size: clamp(1.35rem, 4vw, 2.15rem); overflow-wrap: anywhere; }
+.bq-emoji-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: .35rem; max-width: 46rem; }
+.bq-emoji-palette .btn, .bq-emoji-selection .btn { min-height: 44px; min-width: 44px; padding: .2rem; font-size: 1.45rem; }
+.bq-emoji-selection { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; min-height: 50px; }
+.bq-emoji-hint { padding: .75rem; border-radius: .65rem; background: rgba(155, 186, 171, .13); font-size: clamp(1.55rem, 5vw, 2.7rem); overflow-wrap: anywhere; }
+.bq-emoji-progress, .bq-emoji-results { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.bq-emoji-progress li, .bq-emoji-results li { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .85rem; padding: .6rem .75rem; border: 1px solid #425653; border-radius: .55rem; overflow-wrap: anywhere; }
+.bq-emoji-result-icons { font-size: 1.35rem; }
+.bq-team-emoji #team-emoji-guess-form { max-width: 32rem; }
+.bq-team-emoji .bq-answer-view { margin: 0; }
+.bq-question-covered { display: grid; place-content: center; gap: 1.2rem; min-height: 48vh; text-align: center; }
+.bq-question-covered .row { justify-content: center; }
+.bq-round-transition { display: flex; justify-content: flex-end; padding: .5rem 0; }
+.bq-round-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .8rem 0; }
+.bq-round-picker span { font-size: .82rem; color: #b7c8c2; }
+.se-category-move { white-space: normal !important; font-size: .75rem; }
+.bq-rehearsal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .75rem; }
+
+.bq-selection-turn{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;padding:12px 16px;margin:0 0 12px;border:1px solid var(--line);border-left:4px solid #ffd86b}.bq-selection-turn strong{color:#ffd86b}.bq-selection-turn span{font-size:.88rem;color:var(--muted)}

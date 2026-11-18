@@ -159,6 +159,7 @@ async def main():
   await host.locator('.bq-host-start').click()
   await host.locator('.bq-board-scene').wait_for(timeout=12000)
   await host.locator('.bq-board-scene [data-action="open"]').first.click()
+  await host.locator('[data-action="uncover-question"]').click()
   await host.locator('.bq-question-scene').wait_for(timeout=12000)
   await host.locator('.bq-auxiliary>summary').click()
   await host.screenshot(path=str(OUT/'audit-open-host-question-tools.png'),full_page=True,animations='disabled')

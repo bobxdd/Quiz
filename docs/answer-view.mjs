@@ -22,6 +22,7 @@ export function answerViewContent(q={}){
 }
 export function hasRequiredAnswer(q={}){
  const content=answerViewContent(q);
+ if(q.type==='team-emoji')return !!content.text;
  return !!(content.text||content.image||(q.type==='map'&&q.mapTargetSet===true));
 }
 export function renderAnswerView(q,{preview=false}={}){

@@ -21,6 +21,6 @@ test('projector page uses read-only channel with no host credentials or editable
 test('rehearsal remains separate from multiplayer and renders the current final answer',()=>{
  const app=file('app.mjs');
  assert.match(app,/case 'editor-probe':/);
- assert.match(app,/previewRevealed\?renderAnswerView\(q,\{preview:true\}\)/);
+ assert.match(app,/if\(publicState.phase==='board'\)content=boardScene\(true\)/);
  assert.match(app,/if\(!isOffline\(\)\|\|!canHost\(\)\)/);
 });

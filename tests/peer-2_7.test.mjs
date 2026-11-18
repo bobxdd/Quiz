@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {PeerGame,turnServer} from '../docs/peer-client.mjs';
+import {selectingTeam} from '../docs/question-flow.mjs';
 import {quickBoard,emptyQuiz,publicQuestion} from '../docs/core.mjs';
 
 const instances=new Map();let nextId=0;
@@ -345,7 +346,7 @@ test('Correct buzzer judgement reveals the complete answer and score in one host
   assert.equal(await guest1.buzzer(room,'1','spoof team','spoof name'),true);
   const buzzer=host.data.buzzers['1'];assert.equal(buzzer.uid,guest1.uid);
   const before=host.data.public.scores.t1;
-  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct'),/Lösungsfreigabe/);
+  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct',{phase:'reveal'}),/Lösungsfreigabe/);
   assert.equal(host.data.public.phase,'question','failed reveal must not award points');
   assert.equal(host.data.public.scores.t1,before);
   const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};
@@ -436,4 +437,41 @@ test('12-second 512-KB WAV transfers over capped RTC packets; cache and late gue
    assert.equal(g.guestData.public?.current?.audio,audio);
   }
  }finally{late?.shutdown();host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+
+test('fixed team turns reserve one field while every team can buzz and only the host can score',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.setState(room,{published:true,started:true});await sleep(75);
+  const [q,next]=host.hostQuiz.questions;
+  assert.equal(selectingTeam(host.data.public),'t1');
+  await assert.rejects(guest2.requestPick(room,q.id),/anderes Team/);
+  await assert.rejects(guest1._rpc('pick',{qid:q.id,round:77}),/früheren Runde/);
+  assert.equal(await guest1.requestPick(room,q.id),true);
+  await assert.rejects(guest1.requestPick(room,next.id),/bereits eine Frage/);
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
+  await sleep(60);
+  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht freigegeben|gesperrt/,'no buzzer before host uncovering');
+  await host.uncoverQuestion(room,1,q.id);await sleep(65);
+  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true,'non-selecting team has the same buzzer rights');
+  assert.equal(host.data.public.scores.t2,0,'buzzing must never score automatically');
+  await assert.rejects(guest2._rpc('judgeBuzzer',{result:'correct'}),/nicht erlaubt/);
+  assert.equal(host.data.public.scores.t2,0);
+  await host.judgeBuzzer(room,1,guest2.uid,'wrong');await sleep(65);
+  assert.equal(host.data.public.scores.t2,-50);
+  assert.equal(selectingTeam(host.data.public),'t1','a wrong answer does not change the choosing turn');
+  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/gesperrt/);
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  assert.equal(host.data.public.scores.t1,0,'the next buzz also waits for host judgement');
+  await host.judgeBuzzer(room,1,guest1.uid,'correct',{current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0});
+  await host.returnToBoard(room,1,q.id);await sleep(75);
+  assert.equal(selectingTeam(host.data.public),'t2');
+  assert.equal(host.data.public.scores.t1,100);
+  assert.equal(host.data.public.scores.t2,-50);
+  await assert.rejects(guest1.requestPick(room,next.id),/anderes Team/);
+  assert.equal(await guest2.requestPick(room,next.id),true);
+  await assert.rejects(host.returnToBoard(room,1,q.id),/nicht mehr aktiv/);
+  assert.equal(selectingTeam(host.data.public),'t2');
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });

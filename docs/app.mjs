@@ -1,5 +1,6 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
+import {TEAM_EMOJI,MAX_EMOJI_CLUES,emojiName,normalizeTeamEmoji,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
 import {latestUndoableEvent,mayRegradeScore} from './score-ledger.mjs';
 import {loadLocalHostQuiz,saveLocalHostQuiz} from './backup-store.mjs';
@@ -9,14 +10,14 @@ import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,mapAnswerDistanc
 import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease,checkQuizMedia} from './editor-workflows.mjs';
-import {collectCategories,categoryKey,cleanCategoryName} from './category-model.mjs';
-import {openQuestionState,validQuestionPair,questionMotion} from './question-flow.mjs';
+import {collectCategories,categoryKey,cleanCategoryName,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
+import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,makeSelectionTurn,selectingTeam,resetBoardGameState} from './question-flow.mjs';
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
 import {createHistoryEntry,historyRows,responseStatus,historyCsv,csvSafeCell} from './history-model.mjs';
 import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from './answer-review.mjs';
-import {renderScene,ensureScene,templateScene,reconcileQuestion,sceneHasStep,publicScene,escape as sceneEscape} from './studio-model.mjs';
+import {renderScene,ensureScene,templateScene,reconcileQuestion,sceneHasStep,publicScene,imposterPublicScene,escape as sceneEscape} from './studio-model.mjs';
 import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks,validateBlocks} from './layout.mjs';
 import {sceneForPublicState,isBoardCellPlayed,pageBoardColumns,VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,isAudioData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
 const $=id=>document.getElementById(id),configured=true; // PeerJS/WebRTC requires no Firebase setup.
@@ -26,6 +27,7 @@ let service=null,game=null,room='',role='landing',view='start',member=null,guest
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let projectorChannel=null,projectorRoom='',projectorToken='';
 let guestReceipt=null;
+let playerEmoji=null,emojiDraft=null;
 let rehearsal=null;
 let boardId='',boardRevision=0,boardConflict=false;
 let mapCamera={...DEFAULT_MAP_VIEW},mapCameraQuestion='';
@@ -37,7 +39,7 @@ function applyBoardWorkspace(record){boardConflict=false;saveState='Lokal gesich
 function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');studio.flush?.();if(!saveLocal())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(localStorage,id);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
 function rescueStoredBoard(){if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');studio.flush?.();const created=createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();schedule();notice('Änderungen als eigenes Quizbrett gerettet. Das ursprüngliche bleibt unverändert.');}
 function reloadStoredBoard(){if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');if(!confirm('Die derzeit ungesicherten Änderungen an diesem Quizbrett verwerfen und den zuletzt gespeicherten Stand öffnen?'))return;const record=selectBoard(localStorage,boardId);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Zuletzt gespeicherte Brettversion geladen.');}
-function loadOfflineBoardState(){const session=loadOfflineSession();questionHistory=session.questionHistory||{};publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:session.round||0,board:buildPublicBoard(quiz,session.used),teams:buildTeams(quiz),scores:buildScores(quiz),settings:{buzzerEnabled:true,chatOpen:false,lockOnBuzz:false,timerSeconds:60},manualPlayers:manualPlayerLabels(quiz),playerScores:session.playerScores||{},used:session.used||{},buzzerBlocked:session.buzzerBlocked||{}};}
+function loadOfflineBoardState(){const session=loadOfflineSession();questionHistory=session.questionHistory||{};publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',boardRound:boardRoundOf(session),boardSequence:true,round:session.round||0,board:buildPublicBoard(quiz,session.used),teams:buildTeams(quiz),scores:{...buildScores(quiz),...session.scores},settings:{buzzerEnabled:true,chatOpen:false,lockOnBuzz:false,timerSeconds:60},manualPlayers:manualPlayerLabels(quiz),playerScores:session.playerScores||{},used:session.used||{},buzzerBlocked:session.buzzerBlocked||{}};}
 const pendingTeamChoices=new Map(); // Keep pending team assignments across live re-renders.
 let boardPage=0,scorePage=0; // Purely local pagination; never changes host authority.
 function serializedCloudWrite(targetRoom,snapshot){
@@ -64,10 +66,11 @@ async function restoreHostQuiz(){
  const saved=await game.getHostQuiz(room);
  if(saved){quiz=normalizedQuiz(saved);selected=quiz.questions[0]?.id||'';saveLocal();}
  else{loadLocal();await game.saveHostQuiz(room,normalizedQuiz(quiz));}
- hostCloudReady=true;
+ hostCloudReady=true;void maybeOpenSelectedQuestion();
 }
 const roomFromLink=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,16);
 const canHost=()=>role==='host';
+const isGameView=()=>['play','live'].includes(view)||view==='present'&&!!rehearsal;
 // A published live quiz is a committed game, not an editable draft. This flag
 // lives in the authoritative shared room state and survives host reconnection.
 const isPublished=()=>!isOffline()&&(publicState?.published===true||(()=>{try{return localStorage.getItem('bq-published-'+room)==='1'}catch{return false}})());
@@ -135,7 +138,7 @@ function projectorFrame(){
    <div class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage(true)}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Fragenübersicht</h1>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Runde ${boardRoundOf(p)} · Fragenübersicht</h1>${selectingTeam(p)?`<p>${e(teamName(selectingTeam(p)))} wählt die nächste Frage.</p>`:''}
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>`;
@@ -260,8 +263,8 @@ function backupFilename(prefix='BrainQuiz_Host'){
  const location=isOffline()?boardId.slice(1,8):room;
  return prefix+'_'+title+'_'+(location||'LOKAL')+'.brainquiz.json';
 }
-function saveOfflineSession(){if(!isOffline()||!publicState||!boardId)return;try{localStorage.setItem('bq-session-LOCAL-'+boardId,JSON.stringify({used:publicState.used||{},playerScores:publicState.playerScores||{},round:publicState.round||0,questionHistory,buzzerBlocked:publicState.buzzerBlocked||{}}));}catch{notice('Spielstand konnte nicht gespeichert werden. Bitte Speicherplatz prüfen.');}}
-function loadOfflineSession(){try{const raw=JSON.parse(localStorage.getItem('bq-session-LOCAL-'+boardId)||'{}');if(!raw||typeof raw!=='object')return {};const valid=new Set(quiz.questions.map(q=>q.id));const used=Object.fromEntries(Object.entries(raw.used||{}).filter(([id,v])=>valid.has(id)&&v===true));return {used,playerScores:raw.playerScores&&typeof raw.playerScores==='object'?raw.playerScores:{},questionHistory:raw.questionHistory&&typeof raw.questionHistory==='object'?raw.questionHistory:{},buzzerBlocked:raw.buzzerBlocked&&typeof raw.buzzerBlocked==='object'?raw.buzzerBlocked:{},round:Math.max(0,Math.min(999999,Number(raw.round)||0))};}catch{return {};}}
+function saveOfflineSession(){if(rehearsal||!isOffline()||!publicState||!boardId)return;try{localStorage.setItem('bq-session-LOCAL-'+boardId,JSON.stringify({used:publicState.used||{},boardRound:boardRoundOf(publicState),scores:publicState.scores||{},playerScores:publicState.playerScores||{},round:publicState.round||0,questionHistory,buzzerBlocked:publicState.buzzerBlocked||{}}));}catch{notice('Spielstand konnte nicht gespeichert werden. Bitte Speicherplatz prüfen.');}}
+function loadOfflineSession(){try{const raw=JSON.parse(localStorage.getItem('bq-session-LOCAL-'+boardId)||'{}');if(!raw||typeof raw!=='object')return {};const valid=new Set(quiz.questions.map(q=>q.id));const used=Object.fromEntries(Object.entries(raw.used||{}).filter(([id,v])=>valid.has(id)&&v===true));return {used,boardRound:boardRoundOf(raw),scores:raw.scores||{},playerScores:raw.playerScores&&typeof raw.playerScores==='object'?raw.playerScores:{},questionHistory:raw.questionHistory&&typeof raw.questionHistory==='object'?raw.questionHistory:{},buzzerBlocked:raw.buzzerBlocked&&typeof raw.buzzerBlocked==='object'?raw.buzzerBlocked:{},round:Math.max(0,Math.min(999999,Number(raw.round)||0))};}catch{return {};}}
 function startOffline(explicitBoardId=''){if(explicitBoardId&&!boardList(localStorage).some(b=>b.id===explicitBoardId))throw Error('Das ausgewählte Quizbrett wurde nicht gefunden. Es wurde kein anderes geöffnet.');let preferred=explicitBoardId;try{if(!preferred)preferred=sessionStorage.getItem('bq-board-current-tab')||'';}catch{}const record=resumeBoard(localStorage,emptyQuiz,makeBoardId,preferred);if(explicitBoardId)selectBoard(localStorage,record.id);room='LOCAL';role='host';view='editor';applyBoardWorkspace(record);loadOfflineBoardState();history.replaceState(null,'',location.pathname);notice('Quizbrett „'+quiz.title+'“ geöffnet.');schedule();}
 function isOffline(){return room==='LOCAL';}
 function newStoredBoard(){if(!isOffline())throw Error('Ein neues lokales Brett lässt sich nur im lokalen Editor anlegen.');studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const title=prompt('Name des neuen Quizbretts (maximal 100 Zeichen):','Neues Quizbrett')?.trim().slice(0,100);if(!title)return;const next={...emptyQuiz(),title};const created=createBoard(localStorage,next,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();schedule();notice('Neues Quizbrett „'+title+'“ angelegt. Das vorherige bleibt erhalten.');}
@@ -338,6 +341,7 @@ function publicAudioEvents(next){
       (canHost()||uid===game?.uid))sfx.play(val.result);
   }
  }
+ if(prev&&next&&((prev.phase!=='board'&&next.phase==='board')||(prev.round!==next.round&&next.phase==='ready')))view=canHost()?'live':'play';
  publicState=next;
 }
 function buzzerAudioEvents(v){
@@ -360,13 +364,23 @@ function soundMenu(){
   +'<p class="small muted">Sound-Vorschau startet auch den Ton im Browser.</p></div></details>';
 }
 
-function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;reviewStartPending=-1;questionHistory={};
+async function maybeOpenSelectedQuestion(){
+ const state=publicState,pick=state?.questionPick;
+ if(!canHost()||isOffline()||!hostCloudReady||openingQuestion||state?.phase!=='board'||!pick||pick.round!==state.round||pick.team!==selectingTeam(state))return;
+ view='live';
+ try{await hostOpen(pick.qid);}
+ catch(err){
+  if(publicState?.phase==='board'&&publicState.questionPick?.qid===pick.qid)await game.clearPicks(room).catch(()=>{});
+  error(err);
+ }
+}
+function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;playerEmoji=null;emojiDraft=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
  if(canHost()){
   game.watch('.info/diagnostics',()=>{if(view==='setup')schedule();});
   game.watchRoom(room,'picks',v=>{picks=v||{};schedule();});
   game.watchRoom(room,'questionHistory',v=>{questionHistory=v||{};schedule();});
-  game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();});
+  game.watchRoom(room,'public',v=>{publicAudioEvents(v);schedule();void maybeAutoBeginReview();void maybeOpenSelectedQuestion();});
   game.watchRoom(room,'members',v=>{members=v||{};schedule();});
   game.watchRoom(room,'roster',v=>{roster=v||{};schedule();});
   game.watchRoom(room,'presence',v=>{presence=v||{};schedule();});
@@ -383,6 +397,7 @@ function startGuestListeners(){stopGuestListeners();if(member?.status!=='approve
  const w=(path,callback)=>{const fn=game.watchRoom(room,path,callback);guestListeners.push(fn);};
  w('public',v=>{publicAudioEvents(v);if(publicState?.round!==watchingRound)watchOwnResponse();schedule();});
  w('roster',v=>{roster=v||{};schedule();});w('presence',v=>{presence=v||{};schedule();});w('buzzers',buzzerAudioEvents);
+ w('teamEmoji',v=>{playerEmoji=v||null;schedule();});
  w('messages/'+guestTeam,v=>{messages={[guestTeam]:v||{}};schedule();});
  game.enterPresence(room).catch(error);
 }
@@ -411,7 +426,7 @@ function watcherMarkup(){
 }
 function maybeAnimateQuestion(){
  const q=publicState?.current;
- const key=q?.id&&publicState.phase==='question'&&['play','live'].includes(view)
+ const key=q?.id&&publicState.phase==='question'&&isGameView()
   ?room+':'+publicState.round+':'+q.id:null;
  if(activeQuestionCover&&activeQuestionCover.key!==key){activeQuestionCover.cancel();activeQuestionCover=null;}
  if(!key)return;
@@ -445,7 +460,7 @@ function removeMapThrowRail(){
 /** The only world-map animation: the actor visibly throws at solution release. */
 function maybeAnimateMapDagger(){
  const q=publicState?.current;
- const key=q?.id&&publicState?.phase==='reveal'&&q.type==='map'&&['play','live'].includes(view)
+ const key=q?.id&&publicState?.phase==='reveal'&&q.type==='map'&&isGameView()
   ?room+':'+publicState.round+':'+q.id:null;
  if(activeMapThrow&&activeMapThrow.key!==key){activeMapThrow.handle.cancel();activeMapThrow=null;removeMapThrowRail();}
  if(!key)return;
@@ -566,11 +581,11 @@ function soundQuizMarkup(q){
   +' Du kannst jederzeit während des Sounds buzzern.</p></div>';
 }
 
-function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';const app=$('app');document.body.classList.toggle('bq-game-mode',(view==='play'||view==='live')&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
+function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';const app=$('app');const liveView=isGameView();document.body.classList.toggle('bq-game-mode',liveView&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
  const waiting=Object.values(members||{}).filter(p=>p?.status==='pending').length;
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen bearbeiten'],['live','▦','Vorschau']]:!isPublished()?[['editor','✎','Fragen bearbeiten'],['teams','♙','Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:waitingInLobby()?[['teams','♙',waiting?'Lobby · '+waiting+' Anfrage'+(waiting===1?'':'n'):'Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:[['live','◈','Quiz'],['teams','♙','Teilnehmer'],['present','▣','Präsentation'],['history','▤','Verlauf'],['setup','⚙','Optionen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:rehearsal?'Generalprobe':'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${view==='play'||view==='live'?'page-live bq-session-page':''}">${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}</main>${view==='live'||view==='play'?watcherMarkup():''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${liveView?'page-live bq-session-page':''}">${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}</main>${liveView?watcherMarkup():''}</section></div>`;
  maybeAnimateQuestion();
  const pointsPanel=document.getElementById('review-points-panel');if(pointsPanel)pointsPanel.addEventListener('toggle',()=>{reviewPointsOpen=pointsPanel.open});
  if(view==='editor'&&role==='host')studio.mount(document.getElementById('se-root'));
@@ -646,7 +661,7 @@ function renderHistory(){
  <p class="small muted">Änderungen bleiben nachvollziehbar. Rückgängig setzt nur die zuletzt aktive Punkteänderung zurück; die Frage oder bereits veröffentlichte Lösung bleibt unverändert.</p>
  ${lastChange?btn('Letzte Punkteänderung rückgängig','undo-last-score','small danger',`data-event="${e(lastChange.id)}"`):''}
  <ol>${scoreLog.slice().reverse().map(entry=>`<li class="${entry.undoneAt||entry.supersededBy?'muted':''}">
- <strong>${e(entry.corrects?'Neubewertung':entry.kind==='manual-team'?'Teamkorrektur':entry.kind==='manual-person'?'Spielerkorrektur':entry.kind==='buzzer-judgement'?'Buzzerbewertung':'Schriftliche Bewertung')}</strong>
+ <strong>${e(entry.corrects?'Neubewertung':entry.kind==='manual-team'?'Teamkorrektur':entry.kind==='manual-person'?'Spielerkorrektur':entry.kind==='buzzer-judgement'?'Buzzerbewertung':entry.kind===TEAM_EMOJI?'Emoji-Teamrunde':'Schriftliche Bewertung')}</strong>
  <span>${e(entry.changes?.team?.id?teamName(entry.changes.team.id):entry.changes?.person?.id?roster?.[entry.changes.person.id]?.name||entry.changes.person.id:'')}</span>
  <span>${entry.changes?.team?`${e(entry.changes.team.before??0)} → ${e(entry.changes.team.after??0)}`:entry.changes?.person?`${e(entry.changes.person.before?.total??0)} → ${e(entry.changes.person.after?.total??0)}`:''}</span>
   ${entry.round?`<small>Runde ${e(entry.round)} · ${e(new Date(entry.at).toLocaleTimeString('de-DE'))}</small>`:''}
@@ -664,21 +679,22 @@ function renderHistory(){
  ${r.participants.length?`<div class="history-answers">${r.participants.map(p=>{const status=responseStatus(p.status);return `<div class="history-person"><div class="history-person-name"><b>${e(p.name)}</b><span class="status-tag ${e(p.status)}">${status.icon} ${status.label}</span></div><div class="history-person-answer">${p.answer?e(p.answer):'<span class="muted">Keine gespeicherte Antwort</span>'}</div>${p.delta!==null?`<span class="history-delta">${p.delta>0?'+':''}${p.delta.toLocaleString('de-DE')} Punkte</span>`:''}</div>`}).join('')}</div>`:'<p class="small muted">Keine abgegebenen Antworten oder Bewertungen für diese Runde.</p>'}
  </div></details>`;}).join(''):'<div class="empty">Keine passenden Fragerunden vorhanden. Öffne eine Frage aus dem Quizbrett.</div>'}</div></section>`;
 }
-function boardColumns(){return categoryColumns(Object.values(publicState?.board||{}));}
+function boardColumns(){return categoryColumns(Object.values(publicState?.board||{}).filter(cell=>boardRoundOf(cell)===boardRoundOf(publicState)));}
 function boardPages(){return pageBoardColumns(boardColumns(),window.innerWidth||1280,window.innerHeight||800);}
 function renderBoard(readOnly=false){
  if(!publicState)return '';
  const columns=readOnly?boardColumns():null;
- const pages=readOnly&&columns.length?[{columns,rows:Math.max(...columns.map(column=>column.items.length))}]:boardPages();
+ const pages=readOnly&&columns.length?[{columns:columns.slice(0,6).map(column=>({...column,items:column.items.slice(0,6)})),rows:Math.min(6,Math.max(...columns.map(column=>column.items.length)))}]:boardPages();
  if(!readOnly)boardPage=Math.min(boardPage,Math.max(0,pages.length-1));
  if(!pages.length)return '<div class="empty">Noch keine Fragen veröffentlicht.</div>';
  const page=pages[readOnly?0:Math.min(boardPage,pages.length-1)];
  const choose=canHost()?'open':'request-pick';
+ const canSelect=canHost()||(!publicState.questionPick&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
  const used=isBoardCellPlayed(q,publicState);
  if(readOnly)return `<div class="tile ${used?'used is-played':''}" aria-label="${e(q.points)} Punkte${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(q.points)}</span></div>`;
- return `<button type="button" class="tile ${used?'used is-played':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':''}" ${used||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
+ return `<button type="button" class="tile ${used?'used is-played':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':''}" ${used||!canSelect||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
@@ -732,11 +748,14 @@ function sessionFooter(){
 }
 function boardScene(host=false){
  const p=publicState;
+ const cells=boardColumns().flatMap(column=>column.items);
  const suggestions=host?Object.entries(picks||{}).filter(([,x])=>p.board?.[x.qid]&&!p.board[x.qid]?.used):[];
- return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">QUIZ</span><h2>Fragenübersicht</h2></div><span class="pill">${Object.values(p.board||{}).filter(q=>q.used).length} / ${Object.keys(p.board||{}).length} gespielt</span></div>
- ${sceneCameos('board')}${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section>
+ return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+ ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span></div>`:''}
+ ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${suggestions.length?`<details class="bq-auxiliary"><summary>${suggestions.length} Fragenwunsch${suggestions.length===1?'':'e'} von Teilnehmern</summary><div class="row">${suggestions.slice(-8).map(([,x])=>btn(`${e(x.name||'Spieler')}: ${e(p.board[x.qid]?.category||'')} ${e(p.board[x.qid]?.points||'')}`,'open','small',`data-qid="${e(x.qid)}"`)).join('')}</div></details>`:''}
- ${host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
+ ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
+ ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn('Runde 2 starten','next-board','primary')}</div>`:''}
  ${sessionFooter()}</section>`;
 }
 function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';}
@@ -762,18 +781,21 @@ function releasedMapPins(){
 }
 function renderMapFallback(q){return renderScene({template:'map',elements:[]},{mapPrompt:q.prompt,mapView:mapCamera,mapCanPick:canMapPick(),mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:publicState?.phase==='reveal'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:releasedMapPins(),revealed:publicState?.phase==='reveal'})}
 function renderStage(readOnly=false){const q=activeQuestion(),isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
- let html=`<div class="stage ${isReveal?'bq-stage-is-answer':''}">${isReveal?renderAnswerView(q)+'<section class="bq-answer-context" aria-label="Frage im Rückblick">':''}<div class="eyebrow">${e(q.category)} · ${isReveal?'FRAGE IM RÜCKBLICK':publicState.phase==='paused'?'PAUSIERT':'FRAGE OFFEN'}</div>${q.scene?'':(q.prompt?`<h2>${e(q.prompt)}</h2>`:'')}${q.scene?renderScene(q.scene,{revealed:isReveal,interactive:!canHost(),canAnswer:guestCanAnswer()&&!myResponse,picked:pickedOrder,correctIndex:q.type==='imposter'?(q.imposterIndex||0):(q.correct||0),mapCanPick:canMapPick(),mapView:mapCamera,mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:isReveal&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:q.type==='map'?releasedMapPins():[] }):renderBlocks(q.blocks,{reveal:isReveal})}`;
+ if(publicState.phase==='ready')return readyQuestionContent(false);
+ if(q.type===TEAM_EMOJI&&publicState.teamEmoji)return renderTeamEmoji(readOnly);
+ const showAnswer=isReveal&&q.type!=='imposter';
+ let html=`<div class="stage ${showAnswer?'bq-stage-is-answer':''}">${showAnswer?renderAnswerView(q)+'<section class="bq-answer-context" aria-label="Frage im Rückblick">':''}<div class="eyebrow">${e(q.category)} · ${isReveal?(showAnswer?'FRAGE IM RÜCKBLICK':'LÖSUNG'):publicState.phase==='paused'?'PAUSIERT':'FRAGE OFFEN'}</div>${q.scene?'':(q.prompt?`<h2>${e(q.prompt)}</h2>`:'')}${q.scene?renderScene(q.scene,{revealed:showAnswer,interactive:!canHost(),canAnswer:guestCanAnswer()&&!myResponse,picked:pickedOrder,correctIndex:q.type==='imposter'?(q.imposterIndex||0):(q.correct||0),mapCanPick:canMapPick(),mapView:mapCamera,mapPin:!canHost()?(mapPick||decodePoint(myResponse?.text)):null,mapSolution:isReveal&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null,mapPublicPins:q.type==='map'?releasedMapPins():[] }):renderBlocks(q.blocks,{reveal:isReveal})}`;
  if(q.type==='map'&&!q.scene)html+=renderMapFallback(q);
  if(!q.scene&&q.type==='splash')html+=safeImage(q.image)?`<img class="media" src="${safeImage(q.image)}" alt="Rätselbild">`:`<p class="hint">Kein Rätselbild hinterlegt.</p>`;
  if(!q.scene&&q.type==='multiple')html+=`<div class="choices">${(q.options||[]).map((opt,i)=>`${guestCanAnswer()?`<button type="button" class="choice ${isReveal&&q.correct===i?'correct':''}" data-action="select-choice" data-choice="${'ABCD'[i]}" ${myResponse?'disabled':''}><b>${'ABCD'[i]}</b>${e(opt)}</button>`:`<div class="choice ${isReveal&&q.correct===i?'correct':''}"><b>${'ABCD'[i]}</b>${e(opt)}</div>`}`).join('')}</div>`;
- if(!q.scene&&q.type==='imposter')html+=`<div class="abilities">${(q.icons||[]).map((icon,i)=>`<div class="ability ${isReveal&&q.imposterIndex===i?'correct':''}">${safeImage(icon)?`<img src="${safeImage(icon)}" alt="Fähigkeit ${i+1}">`:`<div class="preview-placeholder">Icon fehlt</div>`}<b>${e(q.abilityNames?.[i]||ABILITIES[i])}</b>${isReveal&&q.imposterIndex===i?'<span class="pill good">IMPOSTER</span>':''}</div>`).join('')}</div>`;
+ if(!q.scene&&q.type==='imposter')html+=`<div class="abilities">${(q.icons||[]).map((icon,i)=>`<div class="ability">${safeImage(icon)?`<img src="${safeImage(icon)}" alt="${e(q.abilityNames?.[i]||'Fähigkeit '+(i+1))}">`:`<div class="preview-placeholder">Icon fehlt</div>`}<b>${e(q.abilityNames?.[i]||ABILITIES[i])}</b></div>`).join('')}</div>`;
  if(!q.scene&&(q.type==='quote'||q.type==='emoji'))html+=`<div class="cluebox ${q.type==='emoji'?'emojiclue':''}" aria-label="Rätselhinweis">${e(q.clue||'')}</div>`;
  if(q.type==='estimate')html+=`<div class="cluebox">Schätze den Zahlenwert${q.estimateUnit?' in '+e(q.estimateUnit):''}.</div>`;
  if(!q.scene&&q.type==='order')html+=`<div class="ordergrid" aria-label="Einträge zum Sortieren">${(q.displayItems||[]).map((item,i)=>`<button class="orderitem ${pickedOrder.includes(i)&&!canHost()?'chosen':''}" data-action="pick-order" data-index="${i}" ${guestCanAnswer()&&!myResponse&&!pickedOrder.includes(i)?'':'disabled'}><b>${String.fromCharCode(65+i)}</b><span>${e(item)}</span>${!canHost()&&pickedOrder.includes(i)?`<strong>${pickedOrder.indexOf(i)+1}.</strong>`:''}</button>`).join('')}</div>${!canHost()&&isOpen()&&!myResponse?`<div class="small muted">Klicke die Einträge in deiner gewünschten Reihenfolge an. ${pickedOrder.length}/${(q.displayItems||[]).length} gewählt.</div>`:''}`;
  if(q.type==='audio')html+=readOnly?'<p class="small muted">Der Host steuert die Wiedergabe.</p>':soundQuizMarkup(q);
  if((q.hints||[]).length)html+=`<div class="hintlist">${q.hints.map((h,i)=>`<p><b>Tipp ${i+1}:</b> ${e(h)}</p>`).join('')}</div>`;
  if(q.type==='splash'&&!isReveal)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
- html+=isReveal?'</section></div>':'</div>';return html;}
+ html+=showAnswer?'</section></div>':'</div>';return html;}
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label],i)=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${TEAM_COLORS[i%TEAM_COLORS.length]}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
 function scoreControls(){const pts=activeQuestion()?.points??100;return Object.entries(publicState?.teams||{}).map(([id,label])=>`<div class="scoreline"><b>${e(label)}</b><div class="row">${btn('−'+pts,'score','small danger',`data-team="${id}" data-amount="-${pts}"`)}${btn('+'+pts,'score','small primary',`data-team="${id}" data-amount="${pts}"`)}</div></div>`).join('');}
 function buzzerStatus(){const b=winner(),locks=Object.values(buzzLocks()),teamLocks=Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{});return `<div class="buzzerbox"><div class="sub">BUZZER / SERVERENTSCHEIDUNG</div>${b?`<h2 style="margin:16px 0 4px">◉ ${e(b.name)}</h2><p>${e(teamName(b.team))} ist zuerst eingegangen und darf antworten.</p>`:`<h2 style="margin:16px 0 4px">○ Noch kein Buzzer</h2><p>${isOpen()?'Frage läuft, Buzzer ist für alle freigegeben.':'Buzzer derzeit nicht aktiv.'}</p>`}<p class="small muted">Gesperrt für diese Runde: ${locks.length?locks.map(x=>e(x.name||x.uid||'Spieler')).join(' · '):'niemand'}${teamLocks.length?' · Teams: '+teamLocks.map(id=>e(teamName(id))).join(', '):''}</p>${canHost()?`<div class="row">${btn('Buzzer zurücksetzen','reset-buzz','small',b?'':'disabled')}${btn('Alle Sperren lösen','unlock-buzz-all','small',locks.length?'':'disabled')}</div>`:''}</div>`;}
@@ -783,7 +805,7 @@ function hostPrivateSolution(){const q=quiz.questions.find(x=>x.id===activeQuest
  return `<details class="bq-host-solution"><summary>🔒 Nur für Host: Lösung ansehen</summary><div class="bq-host-solution-body"><strong>${e(hint)}</strong>${q.acceptedAnswers?`<p><b>Akzeptierte Varianten:</b> ${e(q.acceptedAnswers)}</p>`:''}${q.hostNotes?`<p><b>Host-Notizen:</b> ${e(q.hostNotes)}</p>`:''}${q.sourceUrl?`<p><b>Quelle:</b> ${e(q.sourceUrl)}</p>`:''}${q.sourcePatch?`<p><b>Patch / Bezugsjahr:</b> ${e(q.sourcePatch)}</p>`:''}${q.sourceCheckedOn?`<p>Geprüft am ${e(q.sourceCheckedOn)}</p>`:''}<p class="small muted">Dieser Bereich wird niemals an Teilnehmer gesendet. Die öffentliche Lösung bleibt verborgen, bis du sie freigibst.</p></div></details>`;
 }
 function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=publicState?.buzzerResolved?.[roundKey()];if(roundMode(q)==='written')return `<div class="bq-host-main-status">✍️ Alle Teilnehmer schreiben selbst. ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).submitted} von ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).total} Antworten eingegangen.</div>`;
- if(resolved)return `<div class="bq-host-main-status bq-host-won" role="status">✓ ${e(teamName(resolved.team))} richtig bewertet · +${e(q.points)} Punkte. Die Lösung ist für alle sichtbar. Weiter mit dem Quizbrett.</div>`;
+ if(resolved)return `<div class="bq-host-main-status bq-host-won" role="status">✓ ${e(teamName(resolved.team))} richtig bewertet · +${e(q.points)} Punkte. ${publicState.phase==='reveal'?'Weiter mit der Fragenübersicht.':'Die Lösung über „Lösung zeigen“ aufdecken.'}</div>`;
  if(publicState?.phase==='reveal')return '<div class="bq-host-main-status bq-host-won" role="status">Lösung wurde aufgedeckt. Diese Runde ist beendet – nächstes Feld über das Quizbrett auswählen.</div>';
  if(!b&&isOpen()&&publicState?.settings?.buzzerEnabled!==false&&publicState?.buzzerArmed===false){
   return `<div class="bq-host-main-status"><span>Die Frage ist offen. Der Buzzer wartet auf deine Freigabe.</span>${btn('Buzzer freigeben','arm-buzzer','primary','data-armed="true"')}</div>`;
@@ -791,7 +813,7 @@ function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=public
  if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer freigegeben · Wer zuerst buzzert, erhält das Antwortrecht.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
  return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}</div></div>`;
 }
-function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(publicState?.settings?.lockOnBuzz&&isOpen()&&winner()));}
+function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(activeQuestion()?.type===TEAM_EMOJI||publicState.settings.lockOnBuzz&&winner())));}
 function renderChat(){const teams=Object.entries(publicState?.teams||{});const host=canHost(),selected=host?chatTeam:member?.team;if(host&&selected!=='ALL'&&!publicState?.teams?.[selected])chatTeam='ALL';let all=[];
  for(const [teamId,items]of Object.entries(messages||{})){if(!host&&teamId!==selected)continue;if(host&&selected!=='ALL'&&teamId!==selected)continue;for(const [id,msg]of Object.entries(items||{})){all.push({...msg,id,teamId});}}
  all.sort((a,b)=>(a.at||0)-(b.at||0));all=all.slice(-80);
@@ -820,9 +842,116 @@ function renderFinalResults(host=false){
   </div>`:''}</section>`;
 }
 
+const emojiPhases={
+ roles:['Rollen wählen','Pro Team erklärt eine Person. Die übrigen Teammitglieder können raten.'],
+ clues:['Emoji-Hinweise legen','Die Hinweisgeber verwenden die vorgegebenen Emojis für denselben Begriff.'],
+ guess:['Jetzt raten','Jedes Team hat einen gemeinsamen Rateversuch.'],
+ reveal:['Alle Team-Ergebnisse','']
+};
+function readyQuestionContent(host){
+ const q=activeQuestion();
+ return `<section class="glass panel bq-question-covered" aria-label="Verdeckte Frage">
+  <p class="bq-eyebrow">RUNDE ${boardRoundOf(publicState)}</p><h2>${e(q.category)} · ${e(q.points)} Punkte</h2>
+  <p>Die Frage ist ausgewählt. Der Host deckt sie für alle auf.</p>
+  ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control')}${btn('Zurück zur Übersicht','back','small')}</div>`:''}
+ </section>`;
+}
+function readyQuestionScene(){
+ return `<section class="bq-session-scene bq-question-scene" data-scene="ready">${readyQuestionContent(canHost())}${sessionFooter()}</section>`;
+}
+async function uncoverSelectedQuestion(){
+ if(!canHost()||publicState?.phase!=='ready')return;
+ const q=quiz.questions.find(question=>question.id===activeQuestion()?.id);
+ if(!q)throw Error('Die Originalfrage fehlt.');
+ if(!isOffline()){await game.uncoverQuestion(room,publicState.round,q.id);return;}
+ let visual=q.type==='order'?(q.orderDisplayItems?.length?q.orderDisplayItems:shuffledItems(q.orderItems)):q.image||'';
+ if(q.type==='splash')visual=await splashPreview(q.image,q,false);
+ publicState={...publicState,phase:'question',current:publicQuestion(q,false,visual),deadline:q.seconds?now()+q.seconds*1000:0,buzzerArmed:true};
+ if(rehearsal)startRehearsalQuestion(q);
+ schedule();
+}
+const emojiStatus={correct:'Richtig',wrong:'Falsch','no-roles':'Kein Rollenpaar','no-clues':'Kein Hinweis','no-guess':'Keine Antwort'};
+
+function emojiSelection(own){
+ if(emojiDraft?.id!==own.id)emojiDraft={id:own.id,indices:[...(own.selected||[])]};
+ return emojiDraft.indices;
+}
+
+function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null,local=false){
+ const disabled=!local&&!connected?'disabled':'';
+ if(!own||own.players<2)return '<p>Für diese Teamrunde braucht dein Team mindestens zwei Spieler.</p>';
+ if(round.phase==='roles')return `<div class="stack">
+  <div class="row" role="group" aria-label="Deine Rolle">
+   ${btn('Emojis legen','emoji-role',own.role==='clue'?'primary':'',`data-emoji-role="clue" aria-pressed="${own.role==='clue'}" ${own.clueTaken?'disabled':disabled}`)}
+   ${btn('Raten','emoji-role',own.role==='guess'?'primary':'',`data-emoji-role="guess" aria-pressed="${own.role==='guess'}" ${disabled}`)}
+  </div><p role="status">${own.ready?'Euer Rollenpaar ist bereit.':own.clueTaken?'Die Hinweisrolle ist belegt. Du kannst raten.':'Wählt mindestens je eine Person für beide Rollen.'}</p></div>`;
+ if(!own.active||!own.role)return '<p>Du schaust in dieser Runde zu.</p>';
+ if(round.phase==='clues'){
+  if(own.role!=='clue')return '<p>Euer Hinweisgeber legt einen Hinweis. Die Emojis erscheinen in der Ratephase.</p>';
+  const picks=emojiSelection(own);
+  const saved=JSON.stringify(picks)===JSON.stringify(own.selected)&&picks.length;
+  return `<p class="bq-emoji-target">Dein geheimer Begriff <strong>${e(own.target)}</strong></p>
+   <div class="bq-emoji-selection" role="group" aria-label="Dein Hinweis in Reihenfolge">
+    ${picks.map((index,i)=>btn(e(own.palette[index]),'emoji-remove','small',`data-emoji-index="${i}" aria-label="${e(emojiName(own.palette[index]))} an Position ${i+1} entfernen" ${disabled}`)).join('')||'<span>Wähle bis zu fünf Emojis.</span>'}
+   </div>
+   <div class="bq-emoji-palette" role="group" aria-label="Vorgegebene Emojis">
+    ${own.palette.map((symbol,i)=>btn(e(symbol),'emoji-add','small',`data-emoji-index="${i}" aria-label="${e(emojiName(symbol))}" ${picks.length>=MAX_EMOJI_CLUES?'disabled':disabled}`)).join('')}
+   </div>
+   <div class="row">${btn('Hinweis speichern','emoji-clue','primary',saved||!picks.length?'disabled':disabled)}
+    <span role="status">${saved?'Hinweis gespeichert.':picks.length?picks.length+' von '+MAX_EMOJI_CLUES+' gewählt':''}</span></div>`;
+ }
+ if(own.role!=='guess')return '<p>Dein Team rät jetzt anhand deines Hinweises.</p>';
+ if(!own.clues?.length)return '<p>Für euer Team wurde kein Hinweis gespeichert.</p>';
+ return `<p class="bq-emoji-hint" aria-label="Emoji-Hinweis">${e(own.clues.join(' '))}</p>
+  ${own.answered?'<p role="status">Euer Team hat geantwortet. Die Ergebnisse erscheinen nach Ablauf der Zeit.</p>':
+   `<form id="team-emoji-guess-form" class="stack">
+     <label class="field">Euer Rateversuch<input id="team-emoji-guess" required maxlength="100" autocomplete="off" spellcheck="false" ${disabled}></label>
+     <button type="submit" class="btn primary" ${disabled}>Antwort fürs Team abgeben</button>
+    </form>`}`;
+}
+
+function renderTeamEmoji(readOnly=false){
+ const round=publicState.teamEmoji;
+ const host=!readOnly&&canHost();
+ const [heading,message]=emojiPhases[round.phase];
+ if(round.phase==='reveal')return `<section class="glass panel bq-team-emoji">
+  ${renderAnswerView(activeQuestion())}
+  <h3>${heading}</h3>
+  <ul class="bq-emoji-results">
+   ${round.results.map(result=>`<li><strong>${e(teamName(result.id))}</strong>
+    ${result.clues.length?`<span class="bq-emoji-result-icons">${e(result.clues.join(' '))}</span>`:''}
+    ${result.guess?`<span>${e(result.guess)}</span>`:''}
+    <span class="${result.status==='correct'?'good':'muted'}">${emojiStatus[result.status]} · ${result.points?'+':''}${e(result.points)} Punkte</span></li>`).join('')}
+  </ul>${host?btn('Zurück zum Quizbrett','emoji-close','primary'):''}
+ </section>`;
+ const progress=host?`<ul class="bq-emoji-progress" aria-label="Fortschritt pro Team">
+  ${round.teams.map(team=>`<li><strong>${e(teamName(team.id))}</strong><span>${team.players<2?'Mindestens zwei Spieler nötig':
+   round.phase==='roles'?(team.ready?'Rollen bereit':'Rollenwahl läuft'):
+   !team.ready?'Kein Rollenpaar':round.phase==='clues'?(team.clued?'Hinweis gespeichert':'Hinweis ausstehend'):
+   !team.clued?'Kein Hinweis':team.guessed?'Antwort abgegeben':'Antwort ausstehend'}</span></li>`).join('')}
+ </ul><div class="row">
+  ${round.phase==='roles'?btn('Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):''}
+  ${btn(round.phase==='roles'?'Zurück zum Quizbrett':'Runde abbrechen','emoji-close','small')}
+ </div>`:'';
+ return `<section class="glass panel bq-team-emoji"><div class="panelhead">
+  <div><h3>${heading}</h3><p>${message}</p></div>
+  ${!readOnly&&publicState.deadline?'<span class="pill" id="clock" role="timer" aria-label="Verbleibende Zeit">–:––</span>':''}
+  </div>${host?progress:readOnly?'':renderPlayerEmoji(round)}</section>`;
+}
+
+function teamEmojiScene(){
+ const q=activeQuestion();
+ return `<section class="bq-session-scene bq-question-scene" data-scene="team-emoji-${publicState.teamEmoji.phase}">
+  <div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div></div>
+  ${renderTeamEmoji()}${sessionFooter()}
+ </section>`;
+}
+
 function renderHostLive(){
  if(publicState?.phase==='finished')return renderFinalResults(true);
- if(!hasLiveQuestion())return boardScene(true)+(mayFinishGame(publicState)?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
+ if(publicState?.phase==='ready')return readyQuestionScene();
+ if(activeQuestion()?.type===TEAM_EMOJI&&publicState.teamEmoji)return teamEmojiScene();
+ if(!hasLiveQuestion())return boardScene(true)+(mayFinishGame(publicState)&&!canAdvanceBoard(publicState)?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${isOpen()?'good':''}">${p.phase==='paused'?'Pausiert':isOpen()?'Frage offen':'Auflösung'}</span></div>
@@ -835,6 +964,8 @@ function renderHostLive(){
 function renderResponses(){const list=Object.values(responses?.[roundKey()]||{}).sort((a,b)=>(a.at||0)-(b.at||0));if(!list.length)return '<div class="empty">Noch keine eingegangenen Antworten.</div>';const source=canHost()?quiz.questions.find(q=>q.id===activeQuestion()?.id):null;const ranking=source?.type==='estimate'?rankEstimates(list,source.estimateTarget):[];return `${ranking.length?`<div class="hint"><b>Schätz-Ranking (nur Host):</b> Zielwert ${e(source.estimateTarget)} ${e(source.estimateUnit||'')} · ${ranking.map((r,i)=>`${i+1}. ${e(roster?.[r.uid]?.name||'Spieler')} (${e(r.value)}, Δ${e(Number(r.difference.toFixed(3)))})`).join(' · ')}<br><span class="small">Die Punkte werden bewusst weiterhin vom Host vergeben, damit Gleichstände und Sonderregeln manuell geprüft werden können.</span></div>`:''}<div class="roster">${list.map(r=>`<div class="person"><div><b>${e(roster?.[r.uid]?.name||r.uid.slice(0,7))}</b><small>${e(teamName(r.team))} · ${r.at?new Date(r.at).toLocaleTimeString('de-DE'):''}</small><p style="margin:4px 0 0">${e(r.text)}</p></div><div class="row">${btn('Entfernen','erase-answer','small danger',`data-uid="${e(r.uid)}"`)}</div></div>`).join('')}</div>`;}
 function renderGuestLive(){
  if(publicState?.phase==='finished')return renderFinalResults(false);
+ if(publicState?.phase==='ready')return readyQuestionScene();
+ if(activeQuestion()?.type===TEAM_EMOJI&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion())return boardScene(false);
  if(reviewIsCurrent(publicState))return renderReviewView();
  const q=activeQuestion(),open=isOpen(),b=winner(),written=roundMode(q)==='written',timeUp=!!publicState.deadline&&publicState.deadline<now(),lockedOut=isBuzzLocked(game?.uid);
@@ -923,26 +1054,49 @@ function renderEditor(){return studio.render()+(isOffline()?`<div class="bq-edit
 const REHEARSAL_PLAYERS={
  probe_1:{name:'Probespieler 1',team:'t1'},probe_2:{name:'Probespieler 2',team:'t2'}
 };
+function beginRehearsal(){
+ studio.flush?.();
+ if(!quiz.questions.length)throw Error('Lege zuerst eine Frage an.');
+ if(rehearsal)endRehearsal();
+ rehearsal={rounds:new Map(),compact:false,media:null,checking:false,previous:{publicState,questionHistory,buzzers,responses,roster,selected}};
+ publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
+  board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
+  used:{},playerScores:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
+ roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
+ view='present';boardPage=0;previewRevealed=false;schedule();
+}
+function endRehearsal(){
+ if(!rehearsal)return;
+ const previous=rehearsal.previous;
+ publicState=previous.publicState;questionHistory=previous.questionHistory;buzzers=previous.buzzers;
+ responses=previous.responses;roster=previous.roster;selected=previous.selected;
+ rehearsal=null;
+}
+function startRehearsalQuestion(q){
+ if(q.type===TEAM_EMOJI){
+  rehearsal.emoji=newTeamEmojiRound(q,publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
+  rehearsal.emojiActing='probe_1';emojiDraft=null;
+  publicState.teamEmoji=publicTeamEmoji(rehearsal.emoji);
+ }else rehearsal.rounds.set(q.id,{state:publicState,buzzers:{},answers:{}});
+}
 function rehearsalRound(q){
  let demo=rehearsal.rounds.get(q.id);
  if(!demo){
-  const number=quiz.questions.indexOf(q)+1;
-  demo={state:{round:number,phase:'question',current:q,scoreMode:quiz.scoreMode,
-   teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},playerScores:{}},buzzers:{},answers:{}};
+  demo={state:publicState,buzzers:{},answers:{}};
   rehearsal.rounds.set(q.id,demo);
  }
+ if(publicState.current?.id===q.id)demo.state=publicState;
  return demo;
 }
 function rehearsalTotals(){
- return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>{
-  const points=[...rehearsal.rounds.values()].reduce((total,{state})=>total+
-   (scoreMode(state)==='individual'?state.playerScores[id]?.total||0:state.scores[player.team]||0),0);
-  return {name:scoreMode(quiz)==='individual'?player.name:player.team==='t1'?'Probeteam 1':'Probeteam 2',points};
- });
+ return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>({
+  name:scoreMode(publicState)==='individual'?player.name:publicState.teams[player.team],
+  points:scoreMode(publicState)==='individual'?publicState.playerScores[id]?.total||0:publicState.scores[player.team]||0
+ }));
 }
 function renderRehearsalControls(q){
  const demo=rehearsalRound(q),p=demo.state;
- const buzzer=roundMode(q)==='buzzer',winner=demo.buzzers[p.round];
+ const buzzer=roundMode(q)==='buzzer',winner=p.phase==='question'?demo.buzzers[p.round]:null;
  const players=Object.entries(REHEARSAL_PLAYERS);
  const points=rehearsalTotals().map(row=>`<li>${e(row.name)} <strong>${row.points.toLocaleString('de-DE')}</strong></li>`).join('');
  const submissions=players.map(([id,player])=>{
@@ -957,16 +1111,9 @@ function renderRehearsalControls(q){
    ${btn('Richtig','probe-correct',verdict==='correct'?'small primary':'small',attrs)}
    ${btn('Falsch','probe-wrong',verdict==='wrong'?'small danger':'small',attrs)}</div>`;
  }).join('');
- const medialabel=rehearsal.checking?'Medien werden geprüft …':rehearsal.media?
-  rehearsal.media.checked+' eingebettete Medien geprüft · '+rehearsal.media.failures.length+' Probleme':'';
- const mediaErrors=rehearsal.media?.failures.map(item=>`<li>${e(item.title)} · ${item.kind} konnte nicht geöffnet werden</li>`).join('')||'';
  const audit=quizAudit(quiz);
  return `<section class="glass panel bq-rehearsal" aria-label="Generalprobe">
-  <div class="panelhead"><div><h2>Generalprobe</h2><p class="small muted">Zwei simulierte Teilnehmer in einer lokalen Probe.</p></div></div>
-  <div class="row">${btn(rehearsal.compact?'Normale Breite':'Handybreite testen','probe-width','small',`aria-pressed="${rehearsal.compact}"`)}
-   ${btn('Alle Medien prüfen','probe-media','small',rehearsal.checking?'disabled':'')}
-   ${btn('Frage erneut proben','probe-reset','small')}</div>
-  <p role="status">${e(medialabel)}</p>${mediaErrors?`<ul>${mediaErrors}</ul>`:''}
+  <div class="panelhead"><h3>Probespieler</h3>${btn('Generalprobe neu starten','probe-reset','small')}</div>
   ${audit.errors.length?`<p class="small bad">Quizcheck · ${audit.errors.length} offene Punkte im Editor</p>`:''}
   <div class="row" aria-label="Simulierte Spieleraktionen">${submissions}</div>
   ${winner?`<div class="row"><strong>${e(winner.name)} am Buzzer</strong>
@@ -976,10 +1123,24 @@ function renderRehearsalControls(q){
   <ul class="bq-probe-scores" aria-label="Punktestand der Generalprobe">${points}</ul>
  </section>`;
 }
+function renderEmojiRehearsal(q){
+ const demo=rehearsal.emoji,round=publicState.teamEmoji;
+ const acting=rehearsal.emojiActing;
+ playerEmoji=teamEmojiForPlayer(demo,'t1',acting);
+ const header=`<section class="glass panel bq-rehearsal">
+  <h3>Emoji-Teamrunde proben</h3><div class="row" aria-label="Simulierter Teilnehmer">
+   ${Object.entries(REHEARSAL_PLAYERS).map(([id,person])=>btn(person.name,'probe-emoji-player','small',`data-player="${id}" aria-pressed="${acting===id}"`)).join('')}
+  </div></section>`;
+ const controls=round.phase==='reveal'?renderTeamEmoji(true):`<section class="glass panel bq-team-emoji">
+  <h3>${emojiPhases[round.phase][0]}</h3>${renderPlayerEmoji(round,playerEmoji,true)}
+  ${round.phase==='roles'?btn('Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):
+   btn('Zeitablauf simulieren','probe-emoji-time','small')}
+ </section>`;
+ return header+controls+`<div class="row">${btn('Zurück zur Übersicht','back','primary')}</div>`+sessionFooter();
+}
 async function rehearse(action,button){
  if(!isOffline()||!rehearsal||view!=='present')return;
- const q=currentQuestion();
- if(!q)return;
+ const q=quiz.questions.find(question=>question.id===activeQuestion()?.id);
  if(action==='probe-width'){rehearsal.compact=!rehearsal.compact;schedule();return;}
  if(action==='probe-media'){
   const session=rehearsal;if(session.checking)return;
@@ -989,8 +1150,10 @@ async function rehearse(action,button){
   return;
  }
  if(action==='probe-reset'){
-  rehearsal.rounds.delete(q.id);previewRevealed=false;previewSceneStep=0;schedule();return;
+  if(q&&confirm('Generalprobe neu starten? Die Probepunkte werden zurückgesetzt.'))beginRehearsal();
+  return;
  }
+ if(!q)return;
  const demo=rehearsalRound(q),p=demo.state;
  const id=button.dataset.player,player=REHEARSAL_PLAYERS[id];
  const isBuzzer=roundMode(q)==='buzzer';
@@ -1012,30 +1175,45 @@ async function rehearse(action,button){
    if(!winner||p.phase!=='question')return;
    const judged=applyBuzzerJudgement(p,demo.buzzers,{round:p.round,uid:winner.uid,result});
    demo.state=judged.state;demo.buzzers=judged.buzzers;
-   if(result==='correct'){demo.state.phase='reveal';demo.buzzers={};previewRevealed=true;}
+   if(result==='correct')Object.assign(demo.state,buildRevealPatch(q));
   }else if(player&&p.answerReview?.entries?.[id]?.revealed){
    const before=p.playerScores[id]?.rounds?.[p.round]?.delta||0;
    p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:q.points,result,at:Date.now()});
    if(scoreMode(p)==='team')p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
   }
  }
+ publicState=demo.state;
  schedule();
 }
 
 function renderPresenter(){
- if(publicState?.phase==='finished')return renderFinalResults(true);
- if(reviewIsCurrent(publicState))return renderReviewView();
- const q=isOffline()?currentQuestion():activeQuestion();const live=!isOffline();const idx=quiz.questions.findIndex(x=>x.id===q?.id),n=quiz.questions.length;
- return `<section class="glass panel presenter"><div class="panelhead"><div><h3>${q?e(q.title):'Keine Frage ausgewählt'}</h3></div><div class="row">${btn('Vollbild','fullscreen','small')}${live?btn('Beamerfenster öffnen','open-projector','small'):''}${live?btn('Zurück zum Quizbrett','view','small','data-view="live"'):btn('Zurück zum Editor','view','small','data-view="editor"')}</div></div>
- ${rehearsal&&q?renderRehearsalControls(q):''}<div class="presenter-stage ${rehearsal?.compact?'bq-probe-compact':''}">${q?(live?renderStage():`<div class="stage"><div class="eyebrow">${e(q.category)}</div>${q.scene?renderScene(publicScene(q.scene,previewRevealed?6:previewSceneStep,previewRevealed),{revealed:previewRevealed,correctIndex:q.type==='imposter'?q.imposterIndex:q.correct||0,mapSolution:previewRevealed&&q.type==='map'?normalizePoint({x:q.mapTargetX,y:q.mapTargetY}):null}):`${q.prompt?`<h2>${e(q.prompt)}</h2>`:''}${renderBlocks(q.blocks,{reveal:previewRevealed})}`}${!live&&isAudioData(q.audio)?`<audio controls preload="metadata" aria-label="Soundclip für die Generalprobe" src="${e(q.audio)}"></audio>`:''}${previewRevealed?renderAnswerView(q,{preview:true}):''}</div>`):'<div class="empty">Erstelle oder veröffentliche zunächst eine Frage.</div>'}</div>
- <div class="row presenter-controls">${btn('← Vorherige','present-prev','',idx>0?'':'disabled')}<span class="pill">${Math.max(0,idx+1)} / ${n}</span>${btn('Nächste →','present-next','primary',idx<n-1?'':'disabled')}${q?.scene&&!live&&!previewRevealed&&sceneHasStep(q,previewSceneStep)?btn('Nächster Hinweis','present-step','small'):''}${q?btn(live?(publicState.phase==='reveal'?'Aufgelöst':'Lösung zeigen'):(previewRevealed?'Lösung verbergen':'Lösung zeigen'),'present-reveal','') : ''}</div>
+ if(!isOffline())return renderHostLive();
+ if(!rehearsal)return renderHostLive();
+ const q=quiz.questions.find(question=>question.id===activeQuestion()?.id);
+ const toolbar=`<section class="glass panel bq-rehearsal bq-rehearsal-toolbar"><h2>Generalprobe</h2>
+  <div class="row">${btn('Zurück zum Editor','view','small','data-view="editor"')}
+   ${btn(rehearsal.compact?'Normale Breite':'Handybreite testen','probe-width','small')}
+   ${btn('Alle Medien prüfen','probe-media','small',rehearsal.checking?'disabled':'')}
+  </div>${rehearsal.media?`<p role="status">${rehearsal.media.checked} eingebettete Medien geprüft · ${rehearsal.media.failures.length} Probleme</p>`:''}
  </section>`;
+ let content;
+ if(publicState.phase==='board')content=boardScene(true);
+ else if(publicState.phase==='ready')content=readyQuestionScene();
+ else if(q?.type===TEAM_EMOJI)content=renderEmojiRehearsal(q);
+ else content=`<section class="bq-session-scene bq-question-scene" data-scene="rehearsal">
+  ${q?renderRehearsalControls(q):''}
+  <section class="glass panel bq-question-panel presenter-stage">${renderStage()}</section>
+  <div class="row bq-action-bar">${publicState.phase!=='reveal'?btn('Lösung zeigen','reveal','primary'):''}
+   ${btn('Zurück zur Übersicht','back','primary')}
+   ${q?.scene&&isOpen()&&sceneHasStep(q,Number(activeQuestion().scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}
+  </div>${sessionFooter()}</section>`;
+ return toolbar+`<div class="${rehearsal.compact?'bq-probe-compact':''}">${content}</div>`;
 }
 async function publish(){if(!canHost()||isOffline())throw Error('Zum Live-Veröffentlichen bitte zuerst einen Online-Raum erstellen.');if(isPublished())throw Error('Dieses Quiz ist bereits veröffentlicht. Neue Fragen können erst in einem neuen Quiz erstellt werden.');quiz.questions.forEach(q=>{if(q.scene)reconcileQuestion(q)});const audit=quizAudit(quiz);if(!audit.ready){view='editor';studio.focusIssue?.(audit.errors[0]?.id);schedule();throw Error(`Quizcheck: ${audit.errors.length} Fehler. ${audit.errors.slice(0,3).map(x=>x.label+': '+x.reason).join(' | ')}. Öffne „Quizcheck“ im Editor.`);}if(audit.warnings.length&&!confirm(`${audit.warnings.length} Hinweise im Quizcheck. Trotzdem veröffentlichen?`))return;
  if(Object.keys(roster).length&&!confirm('Das Live-Quizbrett wird neu veröffentlicht: aktuelle Frage, Punkte und bisherige gespielte Kacheln werden zurückgesetzt. Fortfahren?'))return;
  clearTimeout(cloudTimer);cloudTimer=null;await serializedCloudWrite(room,normalizedQuiz(quiz));cloudDirty=false;saveState='Im Host-Browser gesichert';
  const teams={...(publicState?.teams||{}),...buildTeams(quiz)};const teamScores=Object.fromEntries(Object.keys(teams).map(id=>[id,0]));
- const p={title:quiz.title,published:true,scoreMode:quiz.scoreMode||'team',phase:'board',current:null,round:0,deadline:0,pausedRemaining:0,teams,scores:teamScores,manualPlayers:manualPlayerLabels(quiz),playerScores:{_empty:true},board:buildPublicBoard(quiz),used:{_empty:true},answerReview:null,answerParticipants:null,buzzerBlocked:{_empty:true},settings:publicState?.settings||{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60}};
+ const p={title:quiz.title,published:true,scoreMode:quiz.scoreMode||'team',phase:'board',current:null,round:0,boardRound:1,boardSequence:true,deadline:0,pausedRemaining:0,teams,scores:teamScores,manualPlayers:manualPlayerLabels(quiz),playerScores:{_empty:true},board:buildPublicBoard(quiz),used:{_empty:true},answerReview:null,answerParticipants:null,buzzerBlocked:{_empty:true},settings:publicState?.settings||{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60}};
  await game.clearRoomEvents(room);await game.replacePublic(room,p);
  const existing=Object.entries(members||{}).filter(([,m])=>m.status==='approved'&&!p.teams[m.team]);for(const [id,m] of existing){await game.hostAssign(room,id,m,'t1');}
  try{localStorage.setItem('bq-published-'+room,'1')}catch{}scoreTarget='';saveLocal();notice('Quizbrett live veröffentlicht. Alle Clients erhalten die neuen Fragenkacheln.');view='live';schedule();}
@@ -1050,10 +1228,11 @@ function updateDraftField(target){if(!canHost()||view!=='editor'||isPublished())
  saveLocal();}
 async function hostOpen(id){
  if(openingQuestion)throw Error('Eine Frage wird bereits geöffnet.');
- if(!canHost()||!publicState||!['board','reveal'].includes(publicState.phase))throw Error('Beende zuerst die aktuelle Frage.');
+ if(!canHost()||!publicState||publicState.phase!=='board')throw Error('Kehre zuerst zur Fragenübersicht zurück.');
  const q=quiz.questions.find(x=>x.id===id);
  if(!q||!validQuestionPair(publicState,q))throw Error('Dieses Fragenfeld ist nicht mehr verfügbar oder gehört nicht zum aktuellen Quizbrett.');
- const invalid=validateQuestion(q);if(invalid)throw Error('Diese Frage ist noch unvollständig: '+invalid);
+ const invalid=validateQuestion(q,quiz.scoreMode);if(invalid)throw Error('Diese Frage ist noch unvollständig: '+invalid);
+ if(q.type===TEAM_EMOJI&&isOffline()&&!rehearsal)throw Error('Öffne die Generalprobe für diesen Fragetyp.');
  const expectedRound=Number(publicState.round)||0;
  openingQuestion=true;
  try{
@@ -1063,11 +1242,11 @@ async function hostOpen(id){
   const participants=isOffline()||q.roundMode!=='written'?null:participantSnapshot(roster);
   const deadline=!isOffline()&&q.seconds>0?now()+q.seconds*1000:0;
   if(isOffline()){
-   const next=openQuestionState(publicState,{expectedRound,question:q,playerQuestion,participants,deadline});
+   const next=openQuestionState(publicState,{expectedRound,question:q,playerQuestion,participants,deadline,covered:true});
    if(!next)throw Error('Das Fragenfeld wurde inzwischen geöffnet.');
-   publicState=next;questionHistory[String(next.round)]=createHistoryEntry(q,next.round,now());saveOfflineSession();schedule();return;
+   publicState=next;selected=q.id;questionHistory[String(next.round)]=createHistoryEntry(q,next.round,now());if(!rehearsal)saveOfflineSession();schedule();return;
   }
-  const next=await game.openQuestion(room,expectedRound,q,playerQuestion,participants,deadline);
+  const next=await game.openQuestion(room,expectedRound,q,playerQuestion,participants,deadline,{covered:true});
   // The round is published atomically. Noncritical side effects are deliberately
   // scoped to the committed round and cannot replace another current question.
   await game.clearPicks(room).catch(error);
@@ -1076,7 +1255,8 @@ async function hostOpen(id){
 }
 function buildRevealPatch(q){
  const v=q.type==='order'?publicState.current.displayItems:q.image||'';
- const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,6),phase:'reveal',deadline:0,pausedRemaining:0};
+ const sceneStep=q.type==='imposter'?Number(publicState.current.scene?.step||0):6;
+ const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',deadline:0,pausedRemaining:0};
  if(q.type==='map'){
   // Publish all submitted pins atomically with the solution; private until now.
   const answers=responses?.[roundKey()]||{};
@@ -1096,7 +1276,7 @@ async function hostReveal(){
  if(publicState?.phase==='reveal')return; // Already shown by a correct buzzer judgement.
  const q=quiz.questions.find(x=>x.id===publicState?.current?.id);
  if(!q)throw Error('Originalfrage im Host-Quiz fehlt. Eine Host-Quizdatei importieren.');
- await game.updateCurrent(room,Number(publicState.round),q.id,buildRevealPatch(q),['question','paused','review']);
+ await game.updateCurrent(room,Number(publicState.round),q.id,buildRevealPatch(q),['question','answered','paused','review']);
 }
 async function hostHint(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||!isOpen())return;const current=Number(activeQuestion()?.hintStep||0);if(current>=4)return;const next=(q.hints||[]).findIndex((h,i)=>i>=current&&h.trim());if(next<0)return;const v=q.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(q,false,v,next+1,Number(activeQuestion()?.scene?.step||0));if(q.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);await game.updateCurrent(room,Number(publicState.round),q.id,{current:pub},['question']);}
 async function hostSplashNext(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||q.type!=='splash'||!isOpen())return;const expectedRound=Number(publicState.round);const next=Math.min(2,Number(activeQuestion().visualStep||0)+1);const visual=await splashPreview(q.image,{...q,zoom:splashStageZoom(q.zoom,next)},false);const pub=publicQuestion(q,false,visual,Number(activeQuestion().hintStep)||0,Number(activeQuestion()?.scene?.step||0));pub.visualStep=next;await game.updateCurrent(room,expectedRound,q.id,{current:pub},['question']);}
@@ -1109,12 +1289,67 @@ const studio=createStudioEditor({
  boardInfo:()=>({id:boardId,title:quiz.title,isLocal:isOffline(),conflict:boardConflict,boards:isOffline()?boardList(localStorage):[]}),
  save:()=>saveLocal(),saveStatus:()=>saveState,notice,newId:uid,snapshot:()=>snapshotLayout(),discardSnapshot:()=>{undoStack.pop();},undo:()=>undoLayout('undo'),redo:()=>undoLayout('redo'),error:error,isOffline,onlineReady:()=>configured,
  optimizeImage,optimizeAudio,backup:()=>safeDownload(backupFilename('BrainQuiz_Backup'),JSON.stringify(normalizedQuiz(quiz),null,2)),
- makeQuestion:(category,template='text')=>{if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');snapshotLayout();const q=makeQuestion();q.category=category;q.title=category+' '+q.points;quiz.categories=collectCategories(quiz.categories,quiz.questions.concat(q));if(template!=='text'){const names={multiple:'multiple',order:'order',estimate:'estimate',imposter:'imposter',quote:'quote',audio:'audio',map:'map'};q.type=names[template]||'text';if(template==='image'||template==='map')q.scene=templateScene(template,q);if(template==='written'||template==='map')q.roundMode='written';}quiz.questions.push(q);selected=q.id;saveLocal();},
- quickset:cats=>{const items=quickBoard(cats);if(quiz.questions.length+items.length>180)throw Error('Maximal 180 Fragen.');snapshotLayout();quiz.questions.push(...items);quiz.categories=collectCategories(quiz.categories,quiz.questions);selected=items[0]?.id||selected;saveLocal();},
- copyQuestion:(targetId)=>{const q=(targetId?quiz.questions.find(x=>x.id===targetId):null)||currentQuestion();if(!q)return;if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');snapshotLayout();const next=JSON.parse(JSON.stringify(q));next.id=uid();next.title+=' (Kopie)';quiz.questions.push(next);selected=next.id;saveLocal();},
+ makeQuestion:(category,template='text',boardRound=1)=>{
+  if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');
+  snapshotLayout();
+  const q=makeQuestion();q.boardRound=boardRound;q.category=category;q.title=category+' '+q.points;
+  quiz.categories=collectCategories(quiz.categories,quiz.questions.concat(q));
+  if(template!=='text'){
+   q.type=Object.hasOwn(MODES,template)?template:'text';
+   if(template==='image'||template==='map'||template===TEAM_EMOJI)q.scene=templateScene(template,q);
+   if(template==='written'||template==='map')q.roundMode='written';
+   if(template===TEAM_EMOJI){q.roundMode=TEAM_EMOJI;q.teamEmoji=normalizeTeamEmoji();}
+  }
+  quiz.questions.push(q);selected=q.id;saveLocal();
+ },
+ quickset:(cats,boardRound=1)=>{const items=quickBoard(cats).map(question=>({...question,boardRound}));if(quiz.questions.length+items.length>180)throw Error('Maximal 180 Fragen.');snapshotLayout();quiz.questions.push(...items);quiz.categories=collectCategories(quiz.categories,quiz.questions);selected=items[0]?.id||selected;saveLocal();},
+ copyQuestion:(targetId)=>{const q=(targetId?quiz.questions.find(x=>x.id===targetId):null)||currentQuestion();if(!q)return;if(roundQuestions(quiz,boardRoundOf(q)).filter(item=>categoryKey(item.category)===categoryKey(q.category)).length>=6)throw Error('Maximal sechs Fragen in dieser Kategorie. Wähle das andere Spielbrett.');snapshotLayout();const next=JSON.parse(JSON.stringify(q));next.id=uid();next.title+=' (Kopie)';quiz.questions.push(next);selected=next.id;saveLocal();},
  deleteQuestion:()=>{const old=currentQuestion();if(!old)return;snapshotLayout();quiz.questions=quiz.questions.filter(x=>x.id!==old.id);selected=quiz.questions[0]?.id||'';saveLocal();}
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
+ case 'uncover-question':await uncoverSelectedQuestion();return;
+ case 'next-board':{
+  if(!canHost()||!canAdvanceBoard(publicState))return;
+  if(remainingBoardQuestions(publicState).length&&!confirm('Runde 1 enthält noch ungespielte Fragen. Trotzdem Runde 2 starten?'))return;
+  if(isOffline()){publicState=advanceBoardState(publicState);boardPage=0;if(!rehearsal)saveOfflineSession();schedule();}
+  else await game.advanceBoard(room,publicState.round);
+  return;
+ }
+ case 'emoji-start':{
+  if(!canHost()||publicState?.teamEmoji?.phase!=='roles')return;
+  const round=publicState.teamEmoji;
+  if(rehearsal){advanceTeamEmoji(rehearsal.emoji,now());publicState.teamEmoji=publicTeamEmoji(rehearsal.emoji);schedule();return;}
+  if(round.teams.some(team=>team.players>0&&!team.ready)&&!confirm('Einige Teams haben noch kein vollständiges Rollenpaar. Emoji-Phase starten?'))return;
+  await game.startTeamEmoji(room,round.id);return;
+ }
+ case 'emoji-close':{
+  const round=publicState?.teamEmoji;
+  if(!canHost()||!round)return;
+  if(['clues','guess'].includes(round.phase)&&!confirm('Diese Emoji-Teamrunde abbrechen? Das Fragenfeld zählt als gespielt.'))return;
+  if(!await game.closeTeamEmoji(room,round.id,round.phase))notice('Die Runde ist inzwischen weitergelaufen.');
+  return;
+ }
+ case 'emoji-add':case 'emoji-remove':{
+  const own=playerEmoji,index=Number(button.dataset.emojiIndex);
+  if(!own?.palette||publicState?.teamEmoji?.phase!=='clues'||own.id!==publicState.teamEmoji.id||!Number.isInteger(index)||index<0)return;
+  const selection=emojiSelection(own);
+  if(action==='emoji-add'&&index<own.palette.length&&selection.length<MAX_EMOJI_CLUES)selection.push(index);
+  if(action==='emoji-remove'&&index<selection.length)selection.splice(index,1);
+  schedule();return;
+ }
+ case 'emoji-role':case 'emoji-clue':case 'emoji-guess':{
+  const round=publicState?.teamEmoji;
+  if(!round||!rehearsal&&(role!=='guest'||!connected))return;
+  const kind=action.slice('emoji-'.length);
+  const value=kind==='role'?button.dataset.emojiRole:kind==='clue'?[...(emojiDraft?.indices||[])]:$('team-emoji-guess')?.value;
+  const label={role:'Rollenwahl',clue:'Emoji-Hinweis',guess:'Rateversuch'}[kind];
+  if(rehearsal){
+   const demo=rehearsal.emoji;
+   playTeamEmoji(demo,'t1',rehearsal.emojiActing,kind,value,demo.deadline?demo.deadline-1:now());
+   publicState.teamEmoji=publicTeamEmoji(demo);schedule();return;
+  }
+  await sendGuestAction(label,()=>game.submitTeamEmoji(room,round.id,kind,value));return;
+ }
  case 'sfx-mute':sfx.setMuted(!sfx.values().muted);schedule();return;
  case 'sfx-preview':sfx.unlock();sfx.play(button.dataset.sfx);return;
  case 'create-offline':startOffline();return;
@@ -1135,7 +1370,15 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'select-player':scoreTarget=button.dataset.person;schedule();return;
  case 'unlock-buzz-player':{if(!canHost()||!scoreTarget)throw Error('Person auswählen.');if(isOffline()){if(publicState?.buzzerBlocked?.[roundKey()])delete publicState.buzzerBlocked[roundKey()][scoreTarget];saveOfflineSession();schedule();}else await game.setState(room,{['buzzerBlocked/'+roundKey()+'/'+scoreTarget]:null,['buzzerBlockedTeams/'+roundKey()+'/'+(roster?.[scoreTarget]?.team||'')]:null});notice('Buzzer-Freigabe aktualisiert.');return;}
  case 'unlock-buzz-all':{if(!canHost())return;if(isOffline()){if(publicState?.buzzerBlocked)publicState.buzzerBlocked[roundKey()]={};saveOfflineSession();schedule();}else await game.setState(room,{['buzzerBlocked/'+roundKey()]:null,['buzzerBlockedTeams/'+roundKey()]:null});notice('Alle Sperren entfernt.');return;}
- case 'buzz-correct':case 'buzz-wrong':{if(!canHost()||!isOpen()||roundMode(activeQuestion())!=='buzzer'||!winner())throw Error('Kein aktiver Buzzer zu bewerten.');const b=winner(),verdict=action==='buzz-correct'?'correct':'wrong';if(isOffline())throw Error('Buzzerbewertung nur in einem Online-Raum verfügbar.');const revealPatch=verdict==='correct'?buildRevealPatch(quiz.questions.find(q=>q.id===activeQuestion()?.id)):null;const result=await game.judgeBuzzer(room,roundKey(),b.uid,verdict,revealPatch);notice(verdict==='correct'?`${b.name} richtig: +${result.delta} Punkte. Die Lösung ist jetzt für alle sichtbar.`:`Falsch: ${result.delta} Punkte. Buzzer für andere wieder offen.`);return;}
+ case 'buzz-correct':case 'buzz-wrong':{
+  if(!canHost()||!isOpen()||roundMode(activeQuestion())!=='buzzer'||!winner())throw Error('Kein aktiver Buzzer zu bewerten.');
+  const b=winner(),verdict=action==='buzz-correct'?'correct':'wrong';
+  if(isOffline())throw Error('Buzzerbewertung nur in einem Online-Raum verfügbar.');
+  const question=quiz.questions.find(q=>q.id===activeQuestion().id);
+  const patch=verdict==='correct'?buildRevealPatch(question):null;
+  const result=await game.judgeBuzzer(room,roundKey(),b.uid,verdict,patch);
+  notice(verdict==='correct'?`${b.name} richtig: +${result.delta} Punkte. Lösung aufgedeckt.`:`Falsch: ${result.delta} Punkte. Buzzer für andere wieder offen.`);return;
+ }
  case 'judge-review-correct':case 'judge-review-wrong':case 'judge-correct':case 'judge-wrong':{
   const person=action.startsWith('judge-review-')?button.dataset.person:scoreTarget;
   if(!canHost()||!person||!activeQuestion()||roundMode(activeQuestion())!=='written')throw Error('Bewerte schriftliche Antworten in der Antwortübersicht.');
@@ -1152,7 +1395,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'adjust-player':{if(!canHost()||!scoreTarget)throw Error('Person auswählen.');const delta=Number($('person-adjust')?.value);const actionData={kind:'manual',delta,at:now()};if(isOffline()){publicState.playerScores??={};publicState.playerScores[scoreTarget]=updatePlayerScore(publicState.playerScores[scoreTarget],actionData);saveOfflineSession();schedule();}else await game.scorePerson(room,scoreTarget,actionData);notice('Punkte korrigiert.');return;}
  case 'score-page':{scorePage=Math.max(0,scorePage+Number(button.dataset.delta||0));schedule();return;}
  case 'board-page':{boardPage=Math.max(0,Math.min(boardPages().length-1,boardPage+Number(button.dataset.delta||0)));schedule();return;}
- case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;await sendGuestAction('Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice('Fragenwunsch an den Host gesendet.');return;}
+ case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;const turn=selectingTeam(publicState);if(turn&&turn!==member.team)throw Error('Gerade wählt ein anderes Team.');await sendGuestAction(turn?'Fragenauswahl':'Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice(turn?'Frage ausgewählt. Der Host deckt sie auf.':'Fragenwunsch an den Host gesendet.');return;}
  case 'promote-online':await promoteOnline();return;
  case 'add-block':{const q=currentQuestion();if(!q)return;if(q.blocks.length>=18)throw Error('Maximal 18 Layout-Elemente pro Frage.');snapshotLayout();const b=newBlock(button.dataset.blockType||'text');q.blocks.push(b);editingBlock=b.id;saveLocal();schedule();return;}
  case 'select-block':editingBlock=button.dataset.blockId;inspectorExpanded=false;lastEditAt=0;schedule();return;
@@ -1163,18 +1406,26 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'undo-layout':undoLayout('undo');return;
  case 'redo-layout':undoLayout('redo');return;
  case 'fullscreen':{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();return;}
- case 'present-next':case 'present-prev':{const index=quiz.questions.findIndex(x=>x.id===(isOffline()?selected:activeQuestion()?.id)),next=index+(action==='present-next'?1:-1);if(next<0||next>=quiz.questions.length)return;selected=quiz.questions[next].id;if(isOffline()){previewRevealed=rehearsal?.rounds.get(selected)?.state.phase==='reveal';previewSceneStep=0;schedule()}else await hostOpen(selected);return;}
- case 'present-step':{if(isOffline()){previewSceneStep=Math.min(5,previewSceneStep+1);schedule();}return;}
+ case 'probe-emoji-player':if(rehearsal){rehearsal.emojiActing=button.dataset.player;emojiDraft=null;schedule();}return;
+ case 'probe-emoji-time':{
+  if(!rehearsal?.emoji)return;
+  const demo=rehearsal.emoji;
+  if(!advanceTeamEmoji(demo,demo.deadline))return;
+  publicState.teamEmoji=publicTeamEmoji(demo);
+  if(demo.phase==='reveal'){
+   for(const result of demo.results)publicState.scores[result.id]=(publicState.scores[result.id]||0)+result.points;
+   publicState.phase='reveal';publicState.current=publicQuestion(currentQuestion(),true);
+  }
+  schedule();return;
+ }
  case 'editor-probe':{
   if(!isOffline()||!canHost())throw Error('Die Generalprobe ist nur in einer lokalen Quiz-Kopie verfügbar.');
   if(!quiz.questions.length)throw Error('Lege zuerst eine Frage an.');
-  studio.flush?.();rehearsal={rounds:new Map(),compact:false,media:null,checking:false};
-  selected=quiz.questions[0].id;view='present';previewRevealed=false;previewSceneStep=0;schedule();return;
+  beginRehearsal();return;
  }
  case 'probe-buzz':case 'probe-answer':case 'probe-review':case 'probe-uncover':
  case 'probe-correct':case 'probe-wrong':case 'probe-width':case 'probe-media':case 'probe-reset':
   await rehearse(action,button);return;
- case 'present-reveal':{if(isOffline()){previewRevealed=!previewRevealed;schedule()}else if(publicState?.phase!=='reveal')await hostReveal();return;}
 
  case 'lobby-join':{if(role!=='guest')return;await sendGuestAction('Teamwahl',()=>game.chooseLobbyTeam(room,button.dataset.team));notice('Team ausgewählt.');return;}
  case 'lobby-ready':{if(role!=='guest')return;await sendGuestAction('Bereitschaft',()=>game.setLobbyReady(room,button.dataset.ready==='true'));notice(button.dataset.ready==='true'?'Bereit gemeldet.':'Bereitschaft zurückgenommen.');return;}
@@ -1186,14 +1437,19 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(projectorChannel){projectorChannel.postMessage({t:'closed'});projectorChannel.close();projectorChannel=null;projectorRoom='';}if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
   case 'resume':{const code=localStorage.getItem('bq-last-host');if(!code)throw Error('Kein vorheriger Hostraum gespeichert.');await enterRoom(code);return;}
  case 'start-game':{if(!canHost()||isOffline()||!canArrangeLobby(publicState))throw Error('Spielstart ist nur vor der ersten Frage möglich.');if(!isPublished())throw Error('Bitte zuerst das Quiz veröffentlichen.');if(!approvedCount(roster))throw Error('Lasse zuerst mindestens einen Teilnehmer zu.');if(!connected)throw Error('Die Host-Verbindung ist unterbrochen.');const left=Object.values(members||{}).filter(p=>p?.status==='pending').length;if(left&&!confirm(left+' Beitrittsanfrage(n) sind noch offen. Trotzdem das Spiel starten?'))return;await game.setState(room,{started:true});view='live';schedule();notice('Quiz gestartet. Öffne die erste Frage auf dem Quizbrett.');return;}
-  case 'view':if(isPublished()&&button.dataset.view==='editor'){notice('Dieses Quiz ist bereits veröffentlicht. Der Frageneditor bleibt geschlossen.');return;}view=button.dataset.view;if(view!=='present')rehearsal=null;if(isOffline()&&view==='live'){const board=buildPublicBoard(quiz,publicState?.used||{});publicState={...publicState,board,manualPlayers:manualPlayerLabels(quiz)};}schedule();return;
+ case 'view':{
+  if(isPublished()&&button.dataset.view==='editor'){notice('Dieses Quiz ist bereits veröffentlicht.');return;}
+  if(isOffline()&&button.dataset.view==='live'){beginRehearsal();return;}
+  if(rehearsal&&button.dataset.view!=='present')endRehearsal();
+  view=button.dataset.view;schedule();return;
+ }
  case 'invite':{const link=location.origin+location.pathname+'?room='+room;await navigator.clipboard.writeText(`BrainQuiz Live\n${link}\nRaumcode: ${room}`);notice('Einladung kopiert.');return;}
  case 'copy-room':await navigator.clipboard.writeText(room);notice('Lobby-Code kopiert.');return;
   case 'copy-invite-link':{if(isOffline()||!hasValidRoom(room))throw Error('Kein aktiver Lobby-Link.');await navigator.clipboard.writeText(location.origin+location.pathname+'?room='+room);notice('Einladungslink kopiert.');return;}
  case 'select-q':selected=button.dataset.qid;editingBlock='';previewRevealed=false;previewImage='';lastEditAt=0;schedule();return;
  case 'new-q':{snapshotLayout();const q=makeQuestion();quiz.questions.push(q);selected=q.id;previewOpen=false;saveLocal();schedule();return;}
  case 'move-up':case 'move-down':{snapshotLayout();const i=quiz.questions.findIndex(x=>x.id===selected),j=i+(action==='move-up'?-1:1);if(i<0||j<0||j>=quiz.questions.length)return;[quiz.questions[i],quiz.questions[j]]=[quiz.questions[j],quiz.questions[i]];saveLocal();schedule();return;}
- case 'clone-q':{const q=currentQuestion();if(!q)return;snapshotLayout();const copy=JSON.parse(JSON.stringify(q));copy.id=uid();copy.title+=' (Kopie)';quiz.questions.push(copy);selected=copy.id;saveLocal();schedule();return;}
+ case 'clone-q':{const q=currentQuestion();if(!q)return;if(roundQuestions(quiz,boardRoundOf(q)).filter(item=>categoryKey(item.category)===categoryKey(q.category)).length>=6)throw Error('Maximal sechs Fragen in dieser Kategorie.');snapshotLayout();const copy=JSON.parse(JSON.stringify(q));copy.id=uid();copy.title+=' (Kopie)';quiz.questions.push(copy);selected=copy.id;saveLocal();schedule();return;}
  case 'delete-q':{const q=currentQuestion();if(!q||!confirm(`Frage „${q.title}“ wirklich löschen?`))return;snapshotLayout();quiz.questions=quiz.questions.filter(x=>x.id!==q.id);selected=quiz.questions[0]?.id||'';saveLocal();schedule();return;}
  case 'preview-q':{previewOpen=!previewOpen;previewRevealed=false;previewImage='';const q=currentQuestion();if(previewOpen&&q?.type==='splash')previewImage=await splashPreview(q.image,q,false);schedule();return;}
  case 'preview-reveal':previewRevealed=!previewRevealed;schedule();return;
@@ -1226,10 +1482,16 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!play||!isOpen()||!soundPlayer||soundPlayer.seq!==play.seq||!soundPlayer.blocked||soundPlayer.ended)throw Error('Der Host hat keinen neuen Sound freigegeben.');
   await attemptSoundPlayback(soundPlayer,play);return;
  }
- case 'reveal':if(!canHost()||!activeQuestion())return;if(isOffline()){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);publicState={...publicState,phase:'reveal',current:publicQuestion(q,true,q.image||'',3)};schedule();}else await hostReveal();return;
+ case 'reveal':if(!canHost()||!activeQuestion()||publicState.phase==='ready')return;if(isOffline()){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);publicState={...publicState,...buildRevealPatch(q)};schedule();}else await hostReveal();return;
  case 'pause':if(isOffline()){publicState.pausedRemaining=publicState.deadline?Math.max(0,publicState.deadline-now()):0;publicState.deadline=0;publicState.phase='paused';schedule();}else await hostPause();return;
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
- case 'back':if(publicState?.phase==='question'&&Object.keys(responses?.[roundKey()]||{}).length&&!confirm('Es liegen Antworten vor. Trotzdem zurück zum Quizbrett?'))return;if(isOffline()){publicState={...publicState,phase:'board',current:null,deadline:0};saveOfflineSession();schedule();}else if(publicState?.current?.id)await game.updateCurrent(room,Number(publicState.round),publicState.current.id,{phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null},['question','paused','review','reveal']);return;
+ case 'back':{
+  if(!canHost()||!activeQuestion())return;
+  if(publicState.phase==='question'&&Object.keys(responses?.[roundKey()]||{}).length&&!confirm('Es liegen Antworten vor. Trotzdem zurück zum Quizbrett?'))return;
+  if(isOffline()){publicState=returnToBoardState(publicState)||publicState;if(!rehearsal)saveOfflineSession();schedule();}
+  else await game.returnToBoard(room,publicState.round,activeQuestion().id);
+  return;
+ }
  case 'reset-buzz':if(isOffline()){buzzers={};schedule();}else await game.clearBuzzer(room,roundKey());return;
  case 'arm-buzzer':{
   if(!canHost()||isOffline()||!isOpen()||roundMode(activeQuestion())!=='buzzer'||winner())return;
@@ -1313,7 +1575,14 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const blob=new Blob(['\ufeff'+header+body],{type:'text/csv;charset=utf-8'}),href=URL.createObjectURL(blob);
   const anchor=document.createElement('a');anchor.href=href;anchor.download='BrainQuiz_Endstand.csv';anchor.click();
   setTimeout(()=>URL.revokeObjectURL(href),500);return;}
- case 'reset-questions':{boardPage=0;scorePage=0;if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);questionHistory={};publicState={...publicState,current:null,phase:'board',round:0,deadline:0,playerScores:{},used:{},board:buildPublicBoard(quiz)};schedule();return;}await game.clearRoomEvents(room);await game.replacePublic(room,{...publicState,current:null,phase:'board',deadline:0,round:0,started:false,pausedRemaining:0,used:{_empty:true},board:buildPublicBoard(quiz),scores:Object.fromEntries(Object.keys(publicState?.teams||{}).map(id=>[id,0])),answerReview:null,answerParticipants:null});return;}
+ case 'reset-questions':{
+  if(!canHost())return;
+  if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;
+  boardPage=0;scorePage=0;questionHistory={};buzzers={};responses={};picks={};
+  const next=resetBoardGameState(publicState,buildPublicBoard(quiz),roster);
+  if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);publicState=next;schedule();return;}
+  await game.clearRoomEvents(room);await game.replacePublic(room,next);return;
+ }
  default:return;}}
 async function handleMessage(form){const text=$('chat-text')?.value.trim();if(!text)return;if(Date.now()-lastMsgTime<1100)throw Error('Bitte zwischen zwei Nachrichten kurz warten.');if(!canHost()&&!chatAllowed())throw Error('Teamchat wurde vorübergehend gesperrt.');
  const target=canHost()?chatTeam:member?.team,targets=target==='ALL'?Object.keys(publicState.teams||{}):[target],name=canHost()?'HOST':member.name;
@@ -1326,7 +1595,7 @@ async function handleBlockUpload(input){const b=chosenBlock(),file=input.files?.
 async function handleAudioUpload(input){const q=currentQuestion(),file=input.files?.[0];if(!q||!file)return;notice('Audio wird lokal verarbeitet …');q.audio=await optimizeAudio(file,q.audioStart,q.audioDuration);saveLocal();schedule();notice('Audioclip verarbeitet, ohne Original-Metadaten gespeichert.');}
 async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(localStorage,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
 function updateClock(){const el=$('clock');if(!el)return;const deadline=publicState?.deadline||0;if(!deadline){el.textContent='–:––';return;}const s=Math.max(0,Math.ceil((deadline-now())/1000));el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
-const CRITICAL_HOST_ACTIONS=new Set(['open','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','finish-game','finale-next','finale-all','resume-final']);
+const CRITICAL_HOST_ACTIONS=new Set(['open','uncover-question','next-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','finish-game','finale-next','finale-all','resume-final']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 document.addEventListener('pointerdown',()=>{sfx.unlock()},{capture:true,passive:true});
 document.addEventListener('keydown',()=>{sfx.unlock()},{capture:true});
@@ -1335,7 +1604,7 @@ document.addEventListener('input',ev=>{const input=ev.target;if(!input?.matches?
  const output=input.closest('.bq-sfx-row')?.querySelector('output');if(output)output.textContent=value+' %';
 });
 document.addEventListener('click',async ev=>{if(ev.target.closest('.question-settings summary'))settingsExpanded=!ev.target.closest('details').open;if(ev.target.closest('.inspector-advanced summary'))inspectorExpanded=!ev.target.closest('details').open;if(ev.target.closest('.quiz-metadata summary'))quizMetaExpanded=!ev.target.closest('details').open;const b=ev.target.closest('[data-action]');if(!b)return;ev.preventDefault();if(b.disabled)return;try{b.disabled=true;const action=b.dataset.action;if(canHost()&&CRITICAL_HOST_ACTIONS.has(action)){const key=[room,publicState?.round??0,action,b.dataset.uid||b.dataset.person||b.dataset.team||b.dataset.qid||b.dataset.event||''].join(':');await hostActionLease.run(key,async()=>{await doAction(action,b);if(HOST_ACTION_FEEDBACK[action])notice(HOST_ACTION_FEEDBACK[action]);});}else await doAction(action,b);}catch(err){error(err);}finally{if(document.contains(b))b.disabled=false;}});
-document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form','turn-relay-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='turn-relay-form'){
+document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answer-form','lobby-create-form','host-team-create-form','turn-relay-form','team-emoji-guess-form'].includes(ev.target.id))return;ev.preventDefault();try{if(ev.target.id==='team-emoji-guess-form'){await doAction('emoji-guess',ev.target);return;}if(ev.target.id==='turn-relay-form'){
  const data=Object.fromEntries(new FormData(ev.target));
  const {configureTurnRelay}=await import('./peer-client.mjs');
  configureTurnRelay(data);ev.target.reset();notice('TURN-Einstellung für diesen Tab gespeichert.');return;
@@ -1351,7 +1620,7 @@ window.addEventListener('beforeunload',event=>{
  if(role==='host'&&(boardConflict||/SPEICHERFEHLER|KONFLIKT/.test(saveState))){event.preventDefault();event.returnValue='';}
 });
 document.addEventListener('change',async ev=>{const target=ev.target;try{if(target.id==='import-quiz')await handleImport(target);else if(target.dataset.blockimage)await handleBlockUpload(target);else if(target.dataset.blockfield){blockPropertyUpdate(target);schedule();}else if(target.dataset.image)await handleUpload(target);else if(target.dataset.audio)await handleAudioUpload(target);else if(target.id==='q-type'){updateDraftField(target);schedule();}else if(target.id?.startsWith('team-')){pendingTeamChoices.set(target.id.slice(5),target.value);}else if(target.id==='chat-team'){chatTeam=target.value;schedule();}else if(target.id?.startsWith('q-'))updateDraftField(target);}catch(err){error(err);}});
-document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}if(!input&&canHost()&&view==='present'&&['ArrowRight','ArrowLeft'].includes(ev.key)){ev.preventDefault();const action=ev.key==='ArrowRight'?'present-next':'present-prev';document.querySelector(`[data-action="${action}"]`)?.click();}});
+document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}});
 
 document.addEventListener('keydown',ev=>{if(ev.code!=='KeyB'||ev.ctrlKey||ev.altKey||ev.metaKey||canHost()||role!=='guest')return;const el=document.activeElement;if(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName))return;ev.preventDefault();const b=document.querySelector('[data-action="buzz"]');if(b&&!b.disabled)b.click();});
 setInterval(()=>{updateClock();if(publicState?.phase==='question'&&activeQuestion()?.type==='map'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();const play=soundEvent();if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}},350);
@@ -1368,4 +1637,4 @@ if(hasValidRoom(roomFromLink))void (async()=>{
 })();
 if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
-window.addEventListener('resize',()=>{if(['play','live'].includes(view))schedule();},{passive:true});
+window.addEventListener('resize',()=>{if(isGameView())schedule();},{passive:true});
