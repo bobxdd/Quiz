@@ -13,7 +13,7 @@ test('Imposter is secret while playing; wrong slot remains visible and marked af
  const scene=templateScene('imposter',{prompt:'Welches Icon passt nicht?',icons:Array(5).fill(wrong)});
  const question=normalizedQuiz({questions:[{id:'imp-card',type:'imposter',
   category:'Champions',title:'Imposter',points:400,prompt:'Welches Icon passt nicht?',
-  scene,imposterIndex:3,correctIcon:original,answerText:'Das E-Icon wurde ersetzt.'}]}).questions[0];
+  scene,icons:Array(5).fill(wrong),imposterIndex:3,correctIcon:original,answerText:'Das E-Icon wurde ersetzt.'}]}).questions[0];
  const before=publicQuestion(question,false,'',0,0);
  assert.equal(before.answer,undefined);
  assert.equal(before.imposterIndex,undefined);
