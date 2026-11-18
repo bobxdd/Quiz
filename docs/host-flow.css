@@ -366,3 +366,67 @@ body.bq-game-mode:has(.bq-question-scene) .shell{height:100dvh;min-height:0;over
  .bq-question-scene .bq-stage-is-answer>.bq-answer-view{overflow-y:auto}
  .bq-question-scene .bq-guest-compose{overflow:auto}
 }
+
+/* Interactive world maps are the deliberate exception to a locked one-screen
+   gallery. They must be fully click-/touch-accessible and remain in document
+   flow, especially on 320px screens. Never let the answer composer overlap. */
+body.bq-game-mode:has(.bq-question-scene .bq-map-viewport){
+ overflow-y:auto!important;
+}
+body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
+ height:auto!important;min-height:100dvh!important;overflow:visible!important;
+}
+.bq-question-scene:has(.bq-map-viewport){
+ height:auto!important;min-height:calc(100dvh - 125px);overflow:visible!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-question-body,
+.bq-question-scene:has(.bq-map-viewport) .bq-question-panel,
+.bq-question-scene:has(.bq-map-viewport) .bq-scene-content,
+.bq-question-scene:has(.bq-map-viewport) .stage,
+.bq-question-scene:has(.bq-map-viewport) .bq-map-scene.se-scene{
+ flex:0 0 auto!important;height:auto!important;max-height:none!important;min-height:0!important;
+ overflow:visible!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-scene-content{
+ container-type:normal!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-question-panel .stage:has(>.se-scene)>.se-scene,
+.bq-question-scene:has(.bq-map-viewport) .bq-stage-is-answer .bq-answer-context>.se-scene{
+ width:100%!important;max-width:100%!important;max-height:none!important;
+}
+.bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{
+ flex:none!important;
+ aspect-ratio:2/1;
+ width:min(100%,1080px,max(320px,calc(200dvh - 750px)))!important;
+ height:auto!important;min-height:0!important;max-height:none!important;
+}
+@media(max-width:680px){
+ .bq-question-scene:has(.bq-map-viewport) .bq-map-viewport{width:100%!important}
+}
+/* Popovers must stay within the visible viewport even when their summary
+   appears near its edge. The existing 720px right-aligned popup could start
+   at a negative x coordinate in the game mode and block accessible controls. */
+.bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail{
+ position:fixed!important;
+ inset:auto auto clamp(48px,8dvh,110px) max(8px,calc(50vw - 360px))!important;
+ width:min(720px,calc(100vw - 16px))!important;
+ max-height:min(67dvh,520px)!important;
+ overflow:auto!important;
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ z-index:300!important;
+}
+.bq-question-scene .bq-action-bar:has(>.bq-auxiliary[open]){
+ position:relative;overflow:visible!important;z-index:299!important;
+}
+@media(max-width:680px){
+ .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail{
+  left:8px!important;
+  grid-template-columns:minmax(0,1fr);
+ }
+}
+/* In abnormal text-heavy questions, let the text itself scroll locally
+   instead of silently cutting off facts. Normal question scenes still fit. */
+.bq-question-scene:not(:has(.bq-map-viewport)) .bq-question-panel .stage{
+ overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+}
