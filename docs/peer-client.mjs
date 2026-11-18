@@ -293,7 +293,7 @@ export class PeerGame{
   const Peer=await this._preparePeer();const peer=new Peer(peerId(room),peerOptions());this.peer=peer;this.quitting=false;
   await new Promise((resolve,reject)=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;reject(Error('PeerJS konnte den Host-Raum nicht anmelden.'))}},16000);
    peer.on('open',()=>{if(!done){done=true;clearTimeout(timer);resolve()}});
-   peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error)))}})
+   peer.on('error',error=>{if(!done){done=true;clearTimeout(timer);reject(Error(peerError(error,'host')))}})
   }).catch(err=>{try{peer.destroy()}catch{}throw err});
   this.mode='host';this.room=room;this.connected=true;this.netError='';this.connectionPhase='connected';this.hostReconnectAttempts=0;this._listenHostPeer(peer);this._emit();
  }
@@ -350,20 +350,50 @@ export class PeerGame{
  async connect(room,name=''){if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');if(this.mode!=='idle')this.shutdown();this.mode='guest';this.room=room;
   this.quitting=false;this.guestReconnectAttempts=0;
   const ident=guestIdentity(room);this.uid=ident.uid;this.secret=ident.secret;this.guestName=safeText(name,28)||this.guestName||'Spieler';
-  await this._connectGuestOnce();return this.guestData.members?.[this.uid]||null;
+  let last;
+  for(let attempt=0;attempt<2;attempt++){
+   if(attempt){this._health('retrying',last?.message||'Wiederholter Verbindungsversuch …');
+    await new Promise(resolve=>setTimeout(resolve,900));}
+   try{await this._connectGuestOnce();return this.guestData.members?.[this.uid]||null;}
+   catch(error){
+    last=error;
+    if(this.quitting||!['rtc','timeout','network'].includes(error?.connectionKind)||attempt===1)break;
+   }
+  }
+  throw last;
  }
  async _connectGuestOnce(){
+  if(this.connectAttempt)return this.connectAttempt;
+  const attempt=this._connectGuestAttempt();
+  this.connectAttempt=attempt;
+  try{return await attempt;}finally{if(this.connectAttempt===attempt)this.connectAttempt=null;}
+ }
+ async _connectGuestAttempt(){
   this.cachedQuizAudio=null;
+  this.iceState='new';this.iceErrorCode=0;this._health('signaling','');
   const Peer=await this._preparePeer();this.quitting=false;
   const peer=new Peer(undefined,peerOptions());this.peer=peer;
   await new Promise((resolve,reject)=>{
-   let done=false,accepted=false,conn=null,partial=null;const timer=setTimeout(()=>finish(Error('Host nicht erreichbar. Einladung und Internetverbindung prüfen.')),18000);
-   const finish=error=>{if(done)return;done=true;clearTimeout(timer);if(error){try{peer.destroy()}catch{}reject(error)}else resolve()};
+   let done=false,accepted=false,conn=null,partial=null;
+   const timer=setTimeout(()=>finish(networkFailure(
+    connectionAdvice({iceState:this.iceState,relay:hasTurnRelay(),phase:'timeout'})+
+    ' Host-Verbindungsaufbau hat zu lange gedauert.', 'timeout')),CONNECT_TIMEOUT_MS);
+   const finish=error=>{
+    if(done)return;
+    done=true;clearTimeout(timer);
+    if(error){
+     this.netError=String(error.message||error);this.connectionPhase='failed';
+     this._emit('.info/diagnostics');
+     try{conn?.close()}catch{}try{peer.destroy()}catch{}
+     reject(error);
+    }else resolve();
+   };
    peer.on('open',()=>{if(this.peer!==peer||this.quitting||conn)return;conn=peer.connect(peerId(this.room),{reliable:true,serialization:'json'});this.conn=conn;
+    this._health('ice');this._watchIce(conn);
     conn.on('open',()=>{
      if(this.peer!==peer||this.conn!==conn||this.quitting)return;
-     try{conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room});}
-     catch{finish(Error('Verbindung zum Host konnte nicht bestätigt werden.'));}
+     try{this._health('handshake');conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room});}
+     catch{finish(networkFailure('Verbindung zum Host konnte nicht bestätigt werden.','rtc'));}
     });
     conn.on('data',input=>{
      if(this.peer!==peer||this.conn!==conn||this.quitting)return;
@@ -371,31 +401,54 @@ export class PeerGame{
      if(!msg)return;
      if(msg?.t==='welcome'){
       if(accepted)return;
-      if(!this._applySnapshot(msg.state)){finish(Error('Spielstand konnte nicht vollständig empfangen werden.'));return;}
-      accepted=true;this.connected=true;this.netError='';this.guestReconnectAttempts=0;
+      if(!this._applySnapshot(msg.state)){finish(networkFailure('Spielstand konnte nicht vollständig empfangen werden.','rtc'));return;}
+      accepted=true;this.connected=true;this.netError='';this.connectionPhase='connected';this.guestReconnectAttempts=0;
       this._ackSnapshot(msg.version);finish();this._emit();
       for(const pending of this.pending.values())this._sendRequest(pending);
      }
-     else if(msg?.t==='denied')finish(Error(msg.reason||'Beitritt abgelehnt.'));
+     else if(msg?.t==='denied')finish(networkFailure(msg.reason||'Beitritt abgelehnt.','denied'));
      else if(accepted)this._receiveFromHost(msg);
     });
-    conn.on('close',()=>{if(!done)finish(Error('Hostverbindung abgebrochen.'));else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
-    conn.on('error',()=>{if(!done)finish(Error('WebRTC-Datenkanal fehlgeschlagen.'));else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
+    conn.on('close',()=>{if(!done)finish(networkFailure(this.iceState==='failed'?
+     connectionAdvice({iceState:this.iceState,relay:hasTurnRelay()}):'Hostverbindung vor der Anmeldung abgebrochen.','rtc'));
+     else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
+    conn.on('error',err=>{if(!done)finish(networkFailure(this.iceState==='failed'?
+     connectionAdvice({iceState:this.iceState,relay:hasTurnRelay()}):peerError(err?.type?err:{type:'webrtc'}),'rtc'));
+     else if(accepted&&this.peer===peer&&this.conn===conn)this._guestLost()});
    });
-   peer.on('error',err=>{if(!done)finish(Error(peerError(err)));else if(accepted&&this.peer===peer&&!conn?.open)this._guestLost();});
+   peer.on('error',err=>{if(!done)finish(networkFailure(peerError(err,'guest'),
+    err?.type==='peer-unavailable'?'offline':['network','server-error','socket-error','socket-closed'].includes(err?.type)?'network':'rtc'));
+    else if(accepted&&this.peer===peer&&!conn?.open)this._guestLost();});
    peer.on('disconnected',()=>{if(!this.quitting&&this.peer===peer)try{peer.reconnect()}catch{}});
   });
  }
  _guestLost(){
   if(this.quitting||this.mode!=='guest'||this.reconnectTimer)return;
-  this.connected=false;this.netError='Hostverbindung unterbrochen. Wiederverbindung läuft …';this._emit();
+  this.connected=false;this.netError=this.iceState==='failed'
+   ?connectionAdvice({iceState:this.iceState,relay:hasTurnRelay()})
+   :'Hostverbindung unterbrochen. Wiederverbindung läuft …';
+  this.connectionPhase='reconnecting';this._emit();
   const delay=Math.min(10000,1500+1500*this.guestReconnectAttempts++);
-  this.reconnectTimer=setTimeout(async()=>{
+  this.reconnectTimer=setTimeout(()=>{
    this.reconnectTimer=null;
-   const previous=this.peer;this.peer=null;this.conn=null;
-   try{previous?.destroy();}catch{}
-   try{await this._connectGuestOnce();}catch{this._guestLost();}
+   void this.retryGuestNow().catch(()=>{});
   },delay);
+ }
+ async retryGuestNow(){
+  if(this.mode!=='guest'||this.quitting)throw Error('Kein Gast-Raum aktiv.');
+  if(this.connected)return true;
+  if(this.connectAttempt)return this.connectAttempt;
+  if(this.retryPromise)return this.retryPromise;
+  clearTimeout(this.reconnectTimer);this.reconnectTimer=null;
+  const work=(async()=>{
+   const old=this.peer;
+   this.peer=null;this.conn=null;
+   try{old?.destroy()}catch{}
+   try{await this._connectGuestOnce();return true;}
+   catch(error){this.netError=error.message;this.connectionPhase='failed';this._guestLost();throw error;}
+  })();
+  this.retryPromise=work;
+  try{return await work;}finally{if(this.retryPromise===work)this.retryPromise=null;}
  }
  _applySnapshot(payload){if(!payload||typeof payload!=='object')return;
   // Hydrate previously delivered audio before publishing this new room state.
@@ -883,6 +936,6 @@ export class PeerGame{
   this.pending.clear();this.uncertainActions.clear();
   try{this.conn?.close();}catch{}try{this.peer?.destroy();}catch{}
   this.conn=this.peer=null;
-  this.connected=false;this.mode='idle';this.guestConnections.clear();this.projectorConnections.clear();this.projectorFrame=null;this._emit();
+  this.connected=false;this.mode='idle';this.connectionPhase='idle';this.iceState='unknown';this.guestConnections.clear();this.projectorConnections.clear();this.projectorFrame=null;this._emit();
  }
 }
