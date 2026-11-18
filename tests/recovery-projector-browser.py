@@ -42,11 +42,11 @@ async def main():
    errors=[];projector.on('pageerror',lambda error:errors.append(str(error)))
    await projector.goto(f'{root}/projector.html?room={room}#{token}')
    await expect(projector.locator('.bq-projector-wait')).to_be_visible()
-   await page.evaluate("""(room,token)=>{
+   await page.evaluate("""([room,token])=>{
     const bc=new BroadcastChannel('brainquiz-projector-'+room+'-'+token);
     bc.postMessage({t:'frame',html:'<section class="bq-session-scene"><h1>PUBLIC BOARD</h1><p>Score: 200</p><button data-action="score">No host controls</button></section>'});
     setTimeout(()=>bc.close(),1000);
-   }""",room,token)
+   }""",[room,token])
    await expect(projector.locator('#projector-root')).to_contain_text('PUBLIC BOARD',timeout=10000)
    assert await projector.evaluate("document.querySelector('#projector-root').textContent.includes('Score: 200')")
    assert not errors,errors
