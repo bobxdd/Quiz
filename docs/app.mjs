@@ -655,7 +655,7 @@ function turnRelaySetup(){
    <label class="field span2">TURN-Adresse<input name="url" type="text" placeholder="turns:relay.example:443?transport=tcp" maxlength="300" required></label>
    <label class="field">Nutzername<input name="username" type="text" maxlength="512" autocomplete="off" required></label>
    <label class="field">Passwort<input name="credential" type="password" maxlength="512" autocomplete="off" required></label>
-   <div class="row span2"><button type="submit" class="btn primary">TURN-Daten übernehmen</button>${btn('TURN-Daten entfernen','clear-turn-relay','small')}</div>
+   <div class="row span2"><button type="submit" class="btn primary">TURN-Daten übernehmen</button>${btn('TURN-Daten entfernen','clear-turn-relay','small')}${btn('TURN-Verbindung prüfen','test-turn-relay','small')}</div>
   </form></details>`;
 }
 function hostPage(){if(isPublished()&&view==='editor')view='live';if(!publicState){return `<section class="glass panel"><div class="empty">Verbindung zum Raum wird aufgebaut …</div></section>`;}if(view==='editor')return renderEditor();if(view==='history')return renderHistory();if(view==='present')return (isOffline()?'':presentationControls())+renderPresenter();if(isOffline()&&view==='live')return renderHostLive();if(isOffline())return renderEditor();if(view==='teams')return renderTeams();if(view==='setup')return renderSetup();return renderHostLive();}
@@ -1502,6 +1502,10 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'clear-turn-relay':{
   const {configureTurnRelay}=await import('./peer-client.mjs');
   configureTurnRelay(null);notice('TURN-Einstellung entfernt. Bei laufendem Host erst nach Netzwerk-Neustart wirksam.');if(view==='setup')schedule();return;
+ }
+ case 'test-turn-relay':{
+  const {testTurnRelay}=await import('./peer-client.mjs');
+  await testTurnRelay();notice('TURN-Server erreichbar: Relay-Kandidat erfolgreich empfangen. Host und Gäste müssen denselben Zugang konfigurieren.');return;
  }
  case 'restart-host-transport':{
   if(!canHost()||isOffline()||!game?.restartHostTransport)throw Error('Nur für einen geöffneten Live-Hostraum verfügbar.');
