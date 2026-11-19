@@ -7,7 +7,7 @@ import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
-import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam} from './question-flow.mjs';
+import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz} from './backup-store.mjs';
 import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
@@ -904,9 +904,31 @@ export class PeerGame{
   delete d.pendingQuestion;
   this._changed();return clone(d.public);
  }
+ async cancelQuestion(room,round,id){
+  const d=this._getHostData(room),p=d.public,key=String(round);
+  if(p.round!==Number(round)||p.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
+  if(d.buzzers[key])throw Error('Zuerst den offenen Buzzer bewerten oder zurücksetzen.');
+  if(p.buzzerJudgements?.[key]||p.buzzerResolved?.[key]||
+     Object.keys(d.responses?.[key]||{}).length||
+     (d.scoreEvents||[]).some(event=>event.round===key))
+   throw Error('Bereits Antworten oder Punktwertungen vorhanden. Frage nicht ohne Wertungsverlust zurücklegen. Als gespielt beenden.');
+  const next=cancelQuestionState(p);
+  if(!next)throw Error('Diese Frage kann in der aktuellen Phase nicht zurückgelegt werden.');
+  d.public=next;delete d.questionHistory[key];delete d.responses[key];delete d.buzzers[key];
+  d.picks={};delete d.pendingQuestion;delete d.teamEmoji;
+  this._scheduleTeamEmojiDeadline();this._changed();return clone(next);
+ }
+ async skipSelection(room){
+  const d=this._getHostData(room);
+  const next=skipSelectionTurn(d.public);
+  if(!next)throw Error('Das Auswahlrecht kann nur auf einem freien Spielbrett mit mehreren Teams weitergegeben werden.');
+  d.public=next;this._changed();return selectingTeam(next);
+ }
  async returnToBoard(room,round,id){
   const d=this._getHostData(room);
   if(d.public.round!==Number(round)||d.public.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
+  if(d.buzzers[String(round)]&&d.public?.phase==='question'&&!d.public?.buzzerResolved?.[String(round)])
+   throw Error('Offener Buzzer: erst Richtig oder Falsch entscheiden oder den Buzzer zurücksetzen.');
   const previous=d.public,next=returnToBoardState(previous);
   if(!next)throw Error('Keine aktive Frage.');
   if(previous.phase==='ready')delete d.questionHistory[String(previous.round)];
@@ -921,7 +943,11 @@ export class PeerGame{
   if(!next)throw Error('Runde 2 kann nur von der Übersicht aus gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
- async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Die Emoji-Teamrunde hat eine eigene Phasensteuerung.');const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
+ async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Die Emoji-Teamrunde hat eine eigene Phasensteuerung.');
+  if(changes?.phase==='reveal'&&d.public?.phase==='question'&&
+    d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
+   throw Error('Ein Buzzer ist noch offen. Zuerst Richtig oder Falsch bestätigen oder den Buzzer zurücksetzen.');
+  const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
  async recordQuestion(room,round,entry){const d=this._getHostData(room);d.questionHistory[String(round)]=clone(entry);this._changed()}
  async replacePublic(room,state){const d=this._getHostData(room);d.public=clone(state);if(!d.teamEmoji)delete d.public.teamEmoji;this._changed()}
  _syncTeamEmoji(){
