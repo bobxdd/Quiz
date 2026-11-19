@@ -132,19 +132,21 @@ test('P2P session restores only on host browser; cannot resume with another room
 });
 
 
-test('P2P guest cannot send forbidden room actions, request an inherited fake question, or choose a question during another round',async()=>{
+test('guests cannot pick any question through public API or direct RPC',async()=>{
  const {host,guest1,guest2}=await setup(),q=host.hostQuiz.questions[0];
- await assert.rejects(guest1.requestPick(room,'constructor','Alice'),/nicht mehr verfügbar/);
- await assert.rejects(guest1.requestPick(room,'__proto__','Alice'),/nicht mehr verfügbar/);
- await assert.rejects(guest1._rpc('reveal',{round:0,answer:'SPOILER'}),/nicht erlaubt/);
- await assert.rejects(guest1._rpc('hostAssign',{uid:guest2.uid,team:'t1'}),/nicht erlaubt/);
- await guest1.requestPick(room,q.id,'Alice');
- assert.equal(host.data.picks[guest1.uid].qid,q.id);
- await host.openQuestion(room,0,q,publicQuestion(q,false),{},0);
- await assert.rejects(guest2.requestPick(room,host.hostQuiz.questions[1].id,'Bob'),/nicht mehr verfügbar/);
- host.shutdown();guest1.shutdown();guest2.shutdown();
+ try{
+  for(const id of ['constructor','__proto__',q.id])
+   await assert.rejects(guest1.requestPick(room,id,'Alice'),/Nur der Host/);
+  await assert.rejects(guest1._rpc('pick',{qid:q.id,round:0}),/Nur der Host/);
+  await assert.rejects(guest2._rpc('pick',{qid:q.id,round:0}),/Nur der Host/);
+  await assert.rejects(guest1._rpc('reveal',{round:0,answer:'SPOILER'}),/nicht erlaubt/);
+  await assert.rejects(guest1._rpc('hostAssign',{uid:guest2.uid,team:'t1'}),/nicht erlaubt/);
+  assert.equal(host.data.public.questionPick,null);
+  assert.deepEqual(host.data.picks,{});
+  await host.openQuestion(room,0,q,publicQuestion(q,false),{},0);
+  await assert.rejects(guest2._rpc('pick',{qid:host.hostQuiz.questions[1].id,round:1}),/Nur der Host/);
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
-
 
 test('Ten distinct guest slots are accepted; an eleventh cannot be approved',async()=>{
  const host=new PeerGame(),quiz=validQuiz();await host.create(room,quiz);
@@ -440,39 +442,37 @@ test('12-second 512-KB WAV transfers over capped RTC packets; cache and late gue
 });
 
 
-test('fixed team turns reserve one field while every team can buzz and only the host can score',async()=>{
+test('host alone opens questions while all guests can buzz and only host can judge',async()=>{
  const {host,guest1,guest2}=await setup();
  try{
   await host.setState(room,{published:true,started:true});await sleep(75);
   const [q,next]=host.hostQuiz.questions;
-  assert.equal(selectingTeam(host.data.public),'t1');
-  await assert.rejects(guest2.requestPick(room,q.id),/anderes Team/);
-  await assert.rejects(guest1._rpc('pick',{qid:q.id,round:77}),/früheren Runde/);
-  assert.equal(await guest1.requestPick(room,q.id),true);
-  await assert.rejects(guest1.requestPick(room,next.id),/bereits eine Frage/);
+  await assert.rejects(guest2.requestPick(room,q.id),/Nur der Host/);
+  await assert.rejects(guest1._rpc('pick',{qid:q.id,round:77}),/Nur der Host/);
+  await assert.rejects(guest1.requestPick(room,q.id),/Nur der Host/);
+  assert.equal(host.data.public.questionPick,null);
   await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
   await sleep(60);
-  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht freigegeben|gesperrt/,'no buzzer before host uncovering');
+  await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht freigegeben|gesperrt/);
   await host.uncoverQuestion(room,1,q.id);await sleep(65);
-  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true,'non-selecting team has the same buzzer rights');
-  assert.equal(host.data.public.scores.t2,0,'buzzing must never score automatically');
-  await assert.rejects(guest2._rpc('judgeBuzzer',{result:'correct'}),/nicht erlaubt/);
+  assert.equal(await guest2.buzzer(room,1,'t2','Bob'),true);
   assert.equal(host.data.public.scores.t2,0);
+  await assert.rejects(guest2._rpc('judgeBuzzer',{result:'correct'}),/nicht erlaubt/);
   await host.judgeBuzzer(room,1,guest2.uid,'wrong');await sleep(65);
   assert.equal(host.data.public.scores.t2,-50);
-  assert.equal(selectingTeam(host.data.public),'t1','a wrong answer does not change the choosing turn');
   await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/gesperrt/);
   assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
-  assert.equal(host.data.public.scores.t1,0,'the next buzz also waits for host judgement');
+  assert.equal(host.data.public.scores.t1,0);
   await host.judgeBuzzer(room,1,guest1.uid,'correct',{current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0});
   await host.returnToBoard(room,1,q.id);await sleep(75);
-  assert.equal(selectingTeam(host.data.public),'t2');
   assert.equal(host.data.public.scores.t1,100);
   assert.equal(host.data.public.scores.t2,-50);
-  await assert.rejects(guest1.requestPick(room,next.id),/anderes Team/);
-  assert.equal(await guest2.requestPick(room,next.id),true);
+  await assert.rejects(guest1._rpc('pick',{qid:next.id,round:1}),/Nur der Host/);
+  await assert.rejects(guest2.requestPick(room,next.id),/Nur der Host/);
+  assert.equal(host.data.public.questionPick,null);
+  await host.openQuestion(room,1,next,publicQuestion(next,false),null,0,{covered:true});
+  assert.equal(host.data.public.current.id,next.id);
   await assert.rejects(host.returnToBoard(room,1,q.id),/nicht mehr aktiv/);
-  assert.equal(selectingTeam(host.data.public),'t2');
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
 
@@ -611,21 +611,19 @@ test('wrong verdict creates a non-refundable scored event, even if the buzzer ha
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
 
-test('host may pass selection rights to an absent team without affecting scores or violating a reserved pick',async()=>{
+test('old reservation cannot block host selecting another question',async()=>{
  const {host,guest1,guest2}=await setup();
  try{
   await host.setState(room,{published:true,started:true});await sleep(60);
-  const q=host.hostQuiz.questions[0];
-  assert.equal(await guest1.requestPick(room,q.id),true);
-  await assert.rejects(host.skipSelection(room),/Auswahlrecht/);
-  await host.clearPicks(room);
-  assert.equal(await host.skipSelection(room),'t2');
-  assert.equal(selectingTeam(host.data.public),'t2');
+  const q=host.hostQuiz.questions[0],other=host.hostQuiz.questions[1];
+  await host.setState(room,{questionPick:{qid:other.id,uid:guest1.uid,team:'t1',round:0}});
+  await assert.rejects(guest1._rpc('pick',{qid:other.id,round:0}),/Nur der Host/);
+  assert.equal(host.data.public.questionPick.qid,other.id);
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
+  assert.equal(host.data.public.current.id,q.id);
+  assert.equal(host.data.public.questionPick,null);
   assert.equal(host.data.public.scores.t1,0);
   assert.equal(host.data.public.scores.t2,0);
-  await assert.rejects(guest1.requestPick(room,q.id),/anderes Team/);
-  assert.equal(await guest2.requestPick(room,q.id),true);
-  assert.equal(host.data.public.questionPick.team,'t2');
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
 
