@@ -563,6 +563,21 @@ export function createStudioEditor(api){
    try{await applyImageFiles([file],{kind:'answer-image'});api.notice?.('Bild aus der Zwischenablage eingefügt.');}catch(error){api.error(error);}
   });
   root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
+  root.addEventListener('submit',event=>{
+   if(!event.target.matches('[data-se-category-transfer-form]'))return;
+   event.preventDefault();
+   try{
+    const form=event.target,category=transferCategoryName;
+    const targetId=form.querySelector('[name="target-board"]')?.value;
+    const targetRound=Number(form.querySelector('[name="target-round"]')?.value)||editorRound;
+    const move=form.querySelector('[name="transfer-mode"]')?.value==='move';
+    if(!category||!targetId)throw Error('Kategorie und Zielquiz auswählen.');
+    const count=questionsInCategory(visibleQuestions(),category).length;
+    if(move&&!confirm('Kategorie „'+category+'“ mit '+count+' Fragen nach der Übertragung aus diesem Quizbrett entfernen?'))return;
+    flushDraft();api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
+    transferCategoryName='';draw();
+   }catch(err){api.error(err);}
+  });
   root.addEventListener('submit',event=>{if(!event.target.matches('[data-se-category-form]'))return;event.preventDefault();try{const raw=event.target.querySelector('[data-se-category-name]')?.value||'';if(renamingCategory)renameCategory(raw);else addCategory(raw);}catch(err){api.error(err);}});
   root.addEventListener('click',event=>{if((menu||libraryMenu)&&!event.target.closest('.se-context')){menu=null;libraryMenu=null;if(!event.target.closest('[data-se-action],[data-se-element]')){draw();return;}}const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});
   root.addEventListener('focusout',event=>{if(event.target===trackedInput)trackedInput=null;});
