@@ -10,7 +10,7 @@ test('rules are public, accurate and visible before players mark ready',()=>{
   scoreMode:'team',settings:{manualBuzzer:true},started:false,round:0,phase:'board',used:{}},
   roster:{anna:{team:'t1',name:'Anna'}},members:{anna:{ready:false,status:'approved'}},presence:{}};
  const rules=lobbyRulesHTML(lobbySnapshot(data));
- for(const phrase of ['Spielregeln und Punkte','ALLE Teams','halber Fragewert','Host bestätigt','nächsten Team'])
+ for(const phrase of ['Spielregeln und Punkte','ALLE Teams','halber Fragewert','Host bestätigt','Host wählt'])
   assert.ok(rules.includes(phrase),phrase);
  assert.match(rules,/Joker und Sonderbonusfragen sind in diesen Standardregeln nicht aktiviert/);
  assert.ok(!rules.includes('TOP SECRET'));
@@ -29,10 +29,10 @@ test('visual team identity never changes with leaderboard place',()=>{
 
 test('gameflow explicitly labels completed vs unplayed questions, guards verdict and warns before early end',()=>{
  for(const phrase of ['Erst Buzzer bewerten','Frage als gespielt beenden',
-   'Ungespielt zurücklegen','case \'cancel-question\':','case \'skip-turn\':',
-   'Auswahlrecht weitergeben','noch nicht bereit','Fragen der aktuellen Runde sind noch ungespielt']){
+   'Ungespielt zurücklegen','case \'cancel-question\':',
+   'Der Host wählt die nächste Frage','noch nicht bereit','Fragen der aktuellen Runde sind noch ungespielt']){
   assert.ok(app.includes(phrase),'missing '+phrase);
  }
  assert.ok(app.includes('game.cancelQuestion(room'));
- assert.ok(app.includes('game.skipSelection(room'));
+ assert.doesNotMatch(app,/data-action="request-pick"/);
 });
