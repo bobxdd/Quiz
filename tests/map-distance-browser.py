@@ -107,9 +107,14 @@ async def main():
   await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===200""",arg=bobid,timeout=12000)
   after=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
   assert after[bobid]['total']==200,after
+  aliceid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Alice')[0]""")
+  await expect(host.locator(f'.review-card[data-review-player="{aliceid}"] [data-action="mark-review-wrong"]')).to_be_visible()
+  await host.locator(f'.review-card[data-review-player="{aliceid}"] [data-action="mark-review-wrong"]').click()
+  await host.wait_for_function("""(id) => window.__probe.info().publicState.answerReview.entries[id].verdict==='wrong'""",arg=aliceid)
+  assert await host.evaluate("window.__probe.info().publicState.scores.t1")==200
   assert sum(v.get('total',0) for v in after.values() if isinstance(v,dict))==200,after
   assert not errors,errors
-  print('PASS: two public distances after solution, private until reveal, host chooses winner manually',flush=True)
+  print('PASS: numbered map pins, three guests in two teams, visible countdown, team navigation and non-scoring teammate verdict',flush=True)
   await browser.close()
 
 if __name__=='__main__':asyncio.run(main())
