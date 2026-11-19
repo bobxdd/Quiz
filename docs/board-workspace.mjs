@@ -1,6 +1,24 @@
-import {categoryKey,roundCategories,roundQuestions,questionsInCategory,collectCategories} from './category-model.mjs';
 /* BrainQuiz local board workspaces: distinct drafts, explicit switching, no silent overwrite.
    This module deliberately never touches public PeerJS room state. */
+// Deliberately keep this module standalone. Browser tests and offline recovery
+// load it from an isolated data: URL; relative ES module imports would break them.
+// Mirror the small category model selectors without introducing an import.
+const categoryKey=value=>String(value??'').trim().replace(/\s+/g,' ').slice(0,70).toLocaleLowerCase('de');
+const boardRoundOf=q=>Number(q?.boardRound)===2?2:1;
+const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(q=>boardRoundOf(q)===Number(round));
+const collectCategories=(stored,questions=[])=>{
+ const names=[],seen=new Set();
+ const add=value=>{
+  const name=String(value??'').trim().replace(/\s+/g,' ').slice(0,70),key=categoryKey(name);
+  if(!name||seen.has(key)||names.length>=180)return;
+  seen.add(key);names.push(name);
+ };
+ if(Array.isArray(stored))stored.forEach(add);
+ if(Array.isArray(questions))questions.forEach(q=>add(q?.category));
+ return names;
+};
+const questionsInCategory=(questions,category)=>(questions||[]).filter(q=>categoryKey(q?.category)===categoryKey(category));
+const roundCategories=(quiz,round=1)=>collectCategories(quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]),roundQuestions(quiz,round));
 const INDEX='bq-board-workspaces-v1',ACTIVE='bq-board-active-v1';
 const key=id=>'bq-board-workspace-'+id;
 const validId=id=>typeof id==='string'&&/^b[0-9a-f]{32}$/.test(id);
