@@ -19,7 +19,7 @@ async def main():
   browser=await p.chromium.launch(args=['--no-sandbox','--no-proxy-server'])
   ctx=await browser.new_context(viewport={'width':1366,'height':850},reduced_motion='reduce')
   errors=[]
-  host=await ctx.new_page();host.on('pageerror',lambda err:errors.append('Host: '+str(err)))
+  host=await ctx.new_page();host.on('dialog',lambda d:asyncio.create_task(d.accept()));host.on('pageerror',lambda err:errors.append('Host: '+str(err)))
   await install(host)
   await host.locator('.bq-legacy-options>summary').click()
   await host.get_by_role('button',name='Online-Raum erstellen').click()
