@@ -65,6 +65,7 @@ async def main():
   assert await guest.evaluate("window.__probe.info().publicState") is None,'Pending guest has no quiz'
   await host.locator('[data-action="approve"]').first.click()
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="large-sound"]').first.click()
   await host.locator('[data-action="uncover-question"]').click()
