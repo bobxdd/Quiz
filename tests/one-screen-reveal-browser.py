@@ -58,7 +58,7 @@ async def run(browser, origin):
         await host.evaluate("""async pixel => {
           const {templateScene,reconcileQuestion}=await import('/studio-model.mjs');
           const q=window.__screenQA.current();
-          q.type='imposter';q.imposterIndex=3;q.correctIcon=pixel;q.icons=Array(5).fill(pixel);
+          q.type='imposter';q.imposterIndex=3;q.correctIcon=pixel;q.icons=Array(5).fill(pixel);q.explanation=('Die E-Fähigkeit wurde durch ein fremdes Bild ersetzt. '+ 'Vergleiche Position vier mit dem Originalsymbol. ').repeat(7);
           q.abilityNames=['Passiv','Q','W','E','R'];
           q.scene=templateScene('imposter',{prompt:'Welches Icon wurde ausgetauscht?',icons:q.icons,abilityNames:q.abilityNames});
           reconcileQuestion(q);
@@ -106,8 +106,46 @@ async def run(browser, origin):
             await expect(page.locator('.bq-answer-view')).to_be_visible()
             await expect(page.locator('.se-imposter-image')).to_have_count(1)
 
+        # Rich answer content may wrap naturally: the explanatory text may
+        # scroll INSIDE the solution pane, but it must not disappear on phones.
+        # Narrow landscape is a deliberate DOCUMENT scroll fallback.
+        for page, name in [(host,'host'),(guest,'guest')]:
+            for width,height in [(320,720),(390,844),(768,1024),(812,375),(1280,720)]:
+                await page.set_viewport_size({'width':width,'height':height})
+                await expect(page.locator('.bq-answer-explanation')).to_be_visible()
+                report=await page.evaluate("""() => {
+                  const scene=document.querySelector('.bq-question-scene');
+                  const explanation=document.querySelector('.bq-answer-explanation');
+                  const pane=document.querySelector('.bq-answer-view');
+                  const output={
+                    overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+                    explained:getComputedStyle(explanation).display!=='none',
+                    explanationText:explanation.textContent.length,
+                    answerPaneScrollHeight:pane.scrollHeight,
+                    answerPaneHeight:pane.clientHeight,
+                    documentHeight:document.documentElement.scrollHeight,
+                    viewportHeight:innerHeight
+                  };
+                  const buttons=[...scene.querySelectorAll('.bq-host-action-bar button:not([disabled])')];
+                  output.criticalActions=buttons.filter(x=>/Lösung|Quizbrett|Schritt zurück/.test(x.textContent)).length;
+                  return output;
+                }""")
+                assert report['overflow']<=8,(name,width,height,report)
+                assert report['explained'] and report['explanationText']>=150,(name,width,height,report)
+                if name=='host':
+                    assert report['criticalActions']>=2,(name,width,height,report)
+                if height<=540:
+                    assert report['documentHeight']>height-15,(name,width,height,report)
+                if height>540 and width>=768:
+                    await assert_fits(page,f'{name} solved {width}x{height}')
+        # The crucial host action must remain clickable in the short viewport.
+        await host.set_viewport_size({'width':812,'height':375})
+        await host.locator('[data-action="reveal-prev"]').scroll_into_view_if_needed()
+        await host.locator('[data-action="reveal-prev"]').click()
+        await expect(guest.locator('.bq-answer-view')).to_have_count(0)
+        await host.locator('[data-action="solution-forward"]').click()
+        await expect(guest.locator('.bq-answer-explanation')).to_be_visible()
         await host.set_viewport_size({'width':1280,'height':720})
-        await assert_fits(host,'host solved laptop')
         await host.locator('[data-action="back"]').click()
         await expect(guest.locator('.bq-board-scene')).to_be_visible()
         assert not errors, errors
