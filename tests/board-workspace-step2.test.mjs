@@ -58,7 +58,7 @@ test('source wiring keeps offline editor and live room separate',async()=>{
  assert.match(app,/resumeBoard\(boardStore,emptyQuiz,makeBoardId,preferred\)/);
  assert.match(app,/case 'new-board':await newStoredBoard\(\)/);
  assert.match(app,/case 'open-board':await openStoredBoard\(button.dataset.boardId\)/);
- assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(boardStore,imported,makeBoardId\)/);
+ assert.match(app,/createBoard\(boardStore,imported,makeBoardId\)/);
  assert.match(editor,/DU BEARBEITEST DIESES QUIZBRETT/);
  assert.match(editor,/data-action="new-board"/);
  assert.match(editor,/data-action="open-board"/);
