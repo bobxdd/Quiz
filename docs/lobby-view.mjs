@@ -5,6 +5,19 @@ import {escapeHTML as e} from './core.mjs';
 const safeTeams=value=>Object.entries(value||{}).filter(([id,name])=>validTeamId(id)&&typeof name==='string').slice(0,6);
 const dot=id=>`<span class="bq-team-swatch" aria-hidden="true" style="--bq-team-color:${teamColor(id)}"></span>`;
 const teamLabel=(id,name)=>`${dot(id)}<span>${e(name)}</span>`;
+/** The public rules are visible to EVERY participant BEFORE ready-up.
+ * They must describe BrainQuiz's active scoring, not unimplemented Brainlag
+ * bonus/joker variants. */
+export function lobbyRulesHTML(lobby){
+ const individual=lobby?.scoreMode==='individual';
+ return `<details class="bq-lobby-rules" data-bq-persist="quizrules"><summary>Spielregeln und Punkte vor dem Start ansehen</summary>
+ <div class="bq-lobby-rules-body"><p><strong>${individual?'Einzelwertung':'Teamwertung'}:</strong> ${individual?'Jeder sammelt eigene Punkte.':'Das auswählende Team bestimmt nur das Fragenfeld. ALLE Teams dürfen anschließend buzzern.'}</p>
+ <p><strong>Buzzerfragen:</strong> Das erste vom Host empfangene gültige Signal erhält das Antwortrecht. Der Host bestätigt jede Antwort ausdrücklich. Richtig: voller Fragewert. Falsch: halber Fragewert als Abzug; ${individual?'die betroffene Person':'das betroffene Team'} ist für diese Frage gesperrt, andere dürfen weiter buzzern.</p>
+ <p><strong>Schreibfragen:</strong> Alle geben ihre Antwort zunächst verdeckt ab; der Host deckt auf und bewertet. Eine falsche Wertung kostet die Hälfte der Fragepunkte.</p>
+ <p><strong>Fragenwechsel:</strong> ${individual?'Der Host wählt die nächste Frage.':'Nach der abgeschlossenen Frage wechselt das Auswahlrecht zum nächsten Team.'} Lösung und Punkte sind erst nach der Hostentscheidung verbindlich. Der Host kann offensichtliche Wertungsfehler berichtigen.</p>
+ <p class="small muted">Joker und Sonderbonusfragen sind in diesen Standardregeln nicht aktiviert. Sonderregeln sollten vor Spielbeginn gemeinsam vereinbart werden.</p>
+ </div></details>`;
+}
 export function lobbyGuestHTML(lobby,member){
  const teams=safeTeams(lobby?.teams),players=Array.isArray(lobby?.players)?lobby.players:[],phaseOpen=lobby?.open===true;
  const requested=member?.teamRequest||null;
@@ -20,6 +33,7 @@ export function lobbyGuestHTML(lobby,member){
    <div class="bq-lobby-counter" role="status" aria-live="polite"><strong>${totalReady} / ${complete}</strong><span>bereit</span></div>
   </div>
   ${pending?'<p class="bq-lobby-notice" role="status">Freigabe ausstehend · Du kannst dein Team bereits auswählen. Der Host bestätigt deine Aufnahme.</p>':''}
+  ${lobbyRulesHTML(lobby)}
   <div class="bq-lobby-join-guide"><strong>1. Wähle dein Team</strong><span>Du kannst auch ein eigenes erstellen.</span></div>
   <div class="bq-lobby-team-grid">${teams.map(([id,name])=>{
    const members=players.filter(x=>x.team===id);
@@ -43,6 +57,7 @@ export function hostLobbySummary(lobby){
  const teams=safeTeams(lobby?.teams),players=Array.isArray(lobby?.players)?lobby.players:[];
  return `<section class="glass panel bq-host-lobby-summary" aria-label="Team-Bereitschaft">
   <div class="panelhead"><div class="bq-host-lobby-title"><h2>Team-Lobby</h2><p class="small muted">Quiz: <strong>${e(lobby?.title||'BrainQuiz')}</strong></p></div><span class="bq-lobby-headcount" role="status" aria-live="polite"><strong>${Number(lobby?.ready)||0} / ${Number(lobby?.approved)||0}</strong> bereit</span></div>
+  ${lobbyRulesHTML(lobby)}
   <div class="bq-host-team-grid">${teams.map(([id,name])=>{
     const group=players.filter(p=>p.team===id),ready=group.filter(p=>p.ready).length;
     return `<div class="bq-host-team-row" style="--bq-team-color:${teamColor(id)}"><strong>${teamLabel(id,name)}</strong><span>${ready}/${group.length} bereit</span><small>${group.map(p=>e(p.name)+(p.ready?' ✓':'')).join(', ')||'Noch keine Mitglieder'}</small></div>`;

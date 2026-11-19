@@ -44,6 +44,7 @@ export function lobbySnapshot(data){
  }));
  const colors=Object.fromEntries(Object.keys(safeTeams).map(id=>[id,teamColor(id)]));
  return {title:String(pub.title||data?.access?.title||'BrainQuiz').slice(0,100),teams:safeTeams,colors,players,
+  scoreMode:pub.scoreMode==='individual'?'individual':'team',manualBuzzer:pub.settings?.manualBuzzer===true,
   ready:players.filter(p=>p.ready).length,online:players.filter(p=>p.online).length,
   approved:players.length,pending:Object.values(members).filter(m=>m?.status==='pending').length,
   open:canArrangeLobby(pub)};

@@ -25,7 +25,11 @@ async def exercise(browser,root):
     context.on('page',lambda page:page.on('pageerror',lambda err:errors.append(str(err))))
     try:
         host=await context.new_page()
-        host.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
+        dialogs=[]
+        def accept_and_record(dialog):
+            dialogs.append(dialog.message)
+            asyncio.create_task(dialog.accept())
+        host.on('dialog',accept_and_record)
         await host.goto(root)
         await host.locator('[data-action="create-new-quiz"]').click()
         await host.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
@@ -51,6 +55,12 @@ async def exercise(browser,root):
             players.append(page)
         anna,alina,ben,bea=players
         await host.locator('[data-action="start-game"]').click()
+        assert any('noch nicht bereit' in message for message in dialogs),dialogs
+        await expect(anna.locator('.bq-selection-turn')).to_contain_text('Team 1')
+        await host.locator('[data-action="skip-turn"]').click()
+        await expect(ben.locator('.bq-selection-turn')).to_contain_text('Team 2')
+        await expect(tile(anna,200)).to_be_disabled()
+        await host.locator('[data-action="skip-turn"]').click()
         await expect(anna.locator('.bq-selection-turn')).to_contain_text('Team 1')
         await expect(tile(ben,200)).to_be_disabled()
         qid=await tile(anna,200).get_attribute('data-qid')
@@ -64,6 +74,8 @@ async def exercise(browser,root):
         await host.locator('[data-action="uncover-question"]').click()
         await ben.locator('[data-action="buzz"]').click()
         await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Ben')
+        assert await host.locator('[data-action="reveal"]').is_disabled()
+        assert await host.locator('[data-action="back"]').is_disabled()
         state=await host.evaluate('window.__turnTest.state()')
         assert state['scores']['t1']==0 and state['scores']['t2']==0,state['scores']
         for page in players:
@@ -101,6 +113,12 @@ async def exercise(browser,root):
         await host.locator('[data-action="start-game"]').click()
         await expect(anna.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 1')
         assert (await host.evaluate('window.__turnTest.state().scores'))=={'t1':0,'t2':0}
+        await tile(anna,100).click()
+        await host.locator('[data-action="uncover-question"]').click()
+        await expect(host.locator('[data-action="cancel-question"]')).to_be_visible()
+        await host.locator('[data-action="cancel-question"]').click()
+        await expect(tile(anna,100)).to_be_enabled()
+        await expect(anna.locator('.bq-selection-turn')).to_contain_text('Team 1')
         await tile(anna,200).click()
         await host.locator('[data-action="uncover-question"]').click()
         await ben.locator('[data-action="buzz"]').click()
@@ -108,7 +126,7 @@ async def exercise(browser,root):
         await expect(anna.locator('.bq-answer-view')).to_contain_text('Antwort zwei')
         assert (await host.evaluate('window.__turnTest.state().scores.t2'))==200
         assert not errors,errors
-        print('PASS: four players, fixed team turn, enforced picker, anyone buzzes, no score before host verdict, -50% team lock, next-team choice, round carryover host recovery and a clean new game',flush=True)
+        print('PASS: team turns and skip, explicit unready-start consent, locked outstanding verdict, cancel unplayed question, shared buzzer rights, -50% penalty, later board and reset',flush=True)
     finally:
         await context.close()
 

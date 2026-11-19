@@ -11,7 +11,7 @@ import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease,checkQuizMedia} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
-import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,makeSelectionTurn,selectingTeam,resetBoardGameState} from './question-flow.mjs';
+import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
@@ -704,12 +704,13 @@ function renderBoard(readOnly=false){
  if(!pages.length)return '<div class="empty">Noch keine Fragen veröffentlicht.</div>';
  const page=pages[readOnly?0:Math.min(boardPage,pages.length-1)];
  const choose=canHost()?'open':'request-pick';
- const canSelect=canHost()||(!publicState.questionPick&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
+ const reserved=publicState.questionPick?.qid||'';
+ const canSelect=canHost()||(!reserved&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
  const used=isBoardCellPlayed(q,publicState);
  if(readOnly)return `<div class="tile ${used?'used is-played':''}" aria-label="${e(q.points)} Punkte${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(q.points)}</span></div>`;
- return `<button type="button" class="tile ${used?'used is-played':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':''}" ${used||!canSelect||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
+ return `<button type="button" class="tile ${used?'used is-played':''} ${reserved===q.id?'bq-tile-reserved':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':reserved===q.id?' · vom Team gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':reserved===q.id?' · vorgemerkt':''}" ${used||!canSelect||(canHost()&&reserved&&reserved!==q.id)||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
@@ -766,7 +767,7 @@ function boardScene(host=false){
  const cells=boardColumns().flatMap(column=>column.items);
  const suggestions=host?Object.entries(picks||{}).filter(([,x])=>p.board?.[x.qid]&&!p.board[x.qid]?.used):[];
  return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
- ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span></div>`:''}
+ ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${p.questionPick?'Frage vorgemerkt: der Host öffnet sie oder gibt die Auswahl wieder frei.':host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span>${host&&p.questionPick?btn('Auswahl freigeben','clear-pick','small'):host&&p.selectionTurn?.order?.length>1?btn('Auswahlrecht weitergeben','skip-turn','small'):''}</div>`:''}
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${suggestions.length?`<details class="bq-auxiliary"><summary>${suggestions.length} Fragenwunsch${suggestions.length===1?'':'e'} von Teilnehmern</summary><div class="row">${suggestions.slice(-8).map(([,x])=>btn(`${e(x.name||'Spieler')}: ${e(p.board[x.qid]?.category||'')} ${e(p.board[x.qid]?.points||'')}`,'open','small',`data-qid="${e(x.qid)}"`)).join('')}</div></details>`:''}
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
@@ -822,7 +823,7 @@ function renderStage(readOnly=false){let q=activeQuestion();const isReveal=publi
  if((q.hints||[]).length)html+=`<div class="hintlist">${q.hints.map((h,i)=>`<p><b>Tipp ${i+1}:</b> ${e(h)}</p>`).join('')}</div>`;
  if(q.type==='splash'&&!showAnswer)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
  html+=showAnswer?'</section></div>':'</div>';return html;}
-function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label],i)=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${TEAM_COLORS[i%TEAM_COLORS.length]}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
+function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label])=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${teamColor(id)}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
 function scoreControls(){const pts=activeQuestion()?.points??100;return Object.entries(publicState?.teams||{}).map(([id,label])=>`<div class="scoreline"><b>${e(label)}</b><div class="row">${btn('−'+pts,'score','small danger',`data-team="${id}" data-amount="-${pts}"`)}${btn('+'+pts,'score','small primary',`data-team="${id}" data-amount="${pts}"`)}</div></div>`).join('');}
 function buzzerStatus(){const b=winner(),locks=Object.values(buzzLocks()),teamLocks=Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{});return `<div class="buzzerbox"><div class="sub">BUZZER / SERVERENTSCHEIDUNG</div>${b?`<h2 style="margin:16px 0 4px">◉ ${e(b.name)}</h2><p>${e(teamName(b.team))} ist zuerst eingegangen und darf antworten.</p>`:`<h2 style="margin:16px 0 4px">○ Noch kein Buzzer</h2><p>${isOpen()?'Frage läuft, Buzzer ist für alle freigegeben.':'Buzzer derzeit nicht aktiv.'}</p>`}<p class="small muted">Gesperrt für diese Runde: ${locks.length?locks.map(x=>e(x.name||x.uid||'Spieler')).join(' · '):'niemand'}${teamLocks.length?' · Teams: '+teamLocks.map(id=>e(teamName(id))).join(', '):''}</p>${canHost()?`<div class="row">${btn('Buzzer zurücksetzen','reset-buzz','small',b?'':'disabled')}${btn('Alle Sperren lösen','unlock-buzz-all','small',locks.length?'':'disabled')}</div>`:''}</div>`;}
 function hostVisibilityCard(){const b=winner(),locks=Object.values(buzzLocks());return `<section class="glass panel bq-host-visibility"><div class="panelhead"><h3>Zuschauerzustand</h3><span class="pill good">${e(viewerStateLabel())}</span></div><div class="bq-visibility-grid"><div><div class="sub">Sichtbar für Zuschauer</div><strong>${e(publicState?.phase==='board'?'Quizbrett':publicState?.phase==='review'?'Antwortübersicht':hasLiveQuestion()?'Aktuelle Frage':'Warteansicht')}</strong><p class="small muted">${publicState?.phase==='reveal'?'Die Lösung ist sichtbar.':publicState?.phase==='question'?'Die Frage ist geöffnet, die Lösung noch verborgen.':publicState?.phase==='review'?'Nur die freigegebenen Antworten sind sichtbar.':'Noch keine offene Frage.'}</p></div><div><div class="sub">Buzzerstatus</div><strong>${b?e(b.name)+' · '+e(teamName(b.team)):'Noch frei'}</strong><p class="small muted">${locks.length?locks.length+' gesperrt in dieser Runde':'Niemand gesperrt in dieser Runde'}</p></div></div></section>`;}
@@ -830,14 +831,21 @@ function hostPrivateSolution(){const q=quiz.questions.find(x=>x.id===activeQuest
  const answer=answerViewContent(q),hint=answer.text||(!answer.image?'Nicht eingetragen':'Antwortbild hinterlegt');
  return `<details class="bq-host-solution"><summary>🔒 Nur für Host: Lösung ansehen</summary><div class="bq-host-solution-body"><strong>${e(hint)}</strong>${q.acceptedAnswers?`<p><b>Akzeptierte Varianten:</b> ${e(q.acceptedAnswers)}</p>`:''}${q.hostNotes?`<p><b>Host-Notizen:</b> ${e(q.hostNotes)}</p>`:''}${q.sourceUrl?`<p><b>Quelle:</b> ${e(q.sourceUrl)}</p>`:''}${q.sourcePatch?`<p><b>Patch / Bezugsjahr:</b> ${e(q.sourcePatch)}</p>`:''}${q.sourceCheckedOn?`<p>Geprüft am ${e(q.sourceCheckedOn)}</p>`:''}<p class="small muted">Dieser Bereich wird niemals an Teilnehmer gesendet. Die öffentliche Lösung bleibt verborgen, bis du sie freigibst.</p></div></details>`;
 }
-function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=publicState?.buzzerResolved?.[roundKey()];if(roundMode(q)==='written')return `<div class="bq-host-main-status">✍️ Alle Teilnehmer schreiben selbst. ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).submitted} von ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).total} Antworten eingegangen.</div>`;
+function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=publicState?.buzzerResolved?.[roundKey()];
+ const participantIds=Object.keys(roster||{});
+ const eligibleTeams=[...new Set(Object.values(roster||{}).map(player=>player?.team).filter(team=>publicState?.teams?.[team]))];
+ const noBuzzerRights=publicState?.scoreMode==='individual'
+  ?participantIds.length>0&&participantIds.every(uid=>publicState?.buzzerBlocked?.[roundKey()]?.[uid])
+  :eligibleTeams.length>0&&eligibleTeams.every(team=>publicState?.buzzerBlockedTeams?.[roundKey()]?.[team]);
+ if(roundMode(q)==='written')return `<div class="bq-host-main-status">✍️ Alle Teilnehmer schreiben selbst. ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).submitted} von ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).total} Antworten eingegangen.</div>`;
  if(resolved)return `<div class="bq-host-main-status bq-host-won" role="status">✓ ${e(teamName(resolved.team))} richtig bewertet · +${e(q.points)} Punkte. ${publicState.phase==='reveal'?'Weiter mit der Fragenübersicht.':'Die Lösung über „Lösung zeigen“ aufdecken.'}</div>`;
  if(publicState?.phase==='reveal')return '<div class="bq-host-main-status bq-host-won" role="status">Lösung wurde aufgedeckt. Diese Runde ist beendet – nächstes Feld über das Quizbrett auswählen.</div>';
  if(!b&&isOpen()&&publicState?.settings?.buzzerEnabled!==false&&publicState?.buzzerArmed===false){
   return `<div class="bq-host-main-status"><span>Die Frage ist offen. Der Buzzer wartet auf deine Freigabe.</span>${btn('Buzzer freigeben','arm-buzzer','primary','data-armed="true"')}</div>`;
  }
+ if(!b&&noBuzzerRights&&isOpen())return `<div class="bq-host-main-status" role="status"><strong>Keine Buzzer mehr möglich.</strong> Alle Teams bzw. Spieler sind für diese Frage gesperrt. Der Host kann die Lösung zeigen oder bewusst alle Sperren aufheben. ${btn('Buzzer-Sperren aufheben','unlock-buzz-all','small')}</div>`;
  if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer freigegeben · Wer zuerst buzzert, erhält das Antwortrecht.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
- return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}</div></div>`;
+ return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}${btn('Irrtümlichen Buzzer zurücksetzen','reset-buzz','small')}</div></div>`;
 }
 function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(activeQuestion()?.type===TEAM_EMOJI||publicState.settings.lockOnBuzz&&winner())));}
 function renderChat(){const teams=Object.entries(publicState?.teams||{});const host=canHost(),selected=host?chatTeam:member?.team;if(host&&selected!=='ALL'&&!publicState?.teams?.[selected])chatTeam='ALL';let all=[];
@@ -980,9 +988,11 @@ function renderHostLive(){
  if(!hasLiveQuestion())return boardScene(true)+(mayFinishGame(publicState)&&!canAdvanceBoard(publicState)?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
+ const awaitingVerdict=!!winner()&&['question','paused'].includes(p.phase)&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()];
+ const canCancelQuestion=['question','paused'].includes(p.phase)&&!winner()&&!Object.keys(responses?.[roundKey()]||{}).length&&!p.buzzerJudgements?.[roundKey()]&&!p.buzzerResolved?.[roundKey()];
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${isOpen()?'good':''}">${p.phase==='paused'?'Pausiert':isOpen()?'Frage offen':'Auflösung'}</span></div>
  ${p.phase==='reveal'?'':hostBuzzerControl()}<section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
- <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase==='reveal'?(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small')):btn('Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion?'':'disabled')}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Zurück zum Quizbrett','back',p.phase==='reveal'?'primary':'small')}
+ <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase==='reveal'?(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small')):btn(awaitingVerdict?'Erst Buzzer bewerten':'Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion&&!awaitingVerdict?'':'disabled title="Erst den offenen Buzzer bewerten"')}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Frage als gespielt beenden','back',p.phase==='reveal'?'primary':'small',awaitingVerdict?'disabled title="Buzzerentscheidung ausstehend"':'')}${canCancelQuestion?btn('Ungespielt zurücklegen','cancel-question','small'):''}
  ${canHost()&&isOpen()&&(Number(q?.scene?.step||0)>0||Number(q?.hintStep||0)>0||Number(q?.visualStep||0)>0)?btn('Schritt zurück','reveal-prev','small'):''}${q?.scene&&isOpen()&&sceneHasStep(quiz.questions.find(x=>x.id===q.id),Number(q.scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}${q?.type==='splash'&&isOpen()&&Number(q.visualStep||0)<2?btn('Bild weiter aufdecken','splash-next','small'):''}${isOpen()&&quiz.questions.find(x=>x.id===q?.id)?.hints?.slice(Number(q.hintStep||0)).some(Boolean)?btn('Tipp '+Math.min(4,Number(q.hintStep||0)+1)+' freigeben','hint-next','primary'):''}
  <details class="bq-auxiliary" data-bq-persist="hostmore"><summary>Mehr · Timer, Chat, Buzzer & Punkte</summary><div class="bq-host-detail"><section><h3>Timer und Buzzer</h3>${buzzerStatus()}<div class="row">${btn(p.settings?.buzzerEnabled?'Buzzer deaktivieren':'Buzzer aktivieren','toggle-buzz','small')}${btn(p.settings?.chatOpen?'Chat sperren':'Chat öffnen','toggle-chat','small')}</div><div class="row"><select id="time-choice" aria-label="Timerdauer">${[15,30,45,60,90,120,180].map(n=>`<option value="${n}">${n} Sekunden</option>`).join('')}</select>${btn('Timer starten','start-timer','small')}${btn('Timer beenden','stop-timer','small',p.deadline?'':'disabled')}</div></section><section><h3>Antworten</h3>${renderResponses()}${renderChat()}</section><section class="bq-host-info-wrap">${hostVisibilityCard()}${hostPrivateSolution()}</section>${scorePanel()}</div></details></div>
  ${sessionFooter()}</section>`;
@@ -1312,6 +1322,7 @@ function buildRevealPatch(q){
 }
 async function hostReveal(){
  if(publicState?.phase==='reveal')return; // Already shown by a correct buzzer judgement.
+ if(roundMode(activeQuestion())==='buzzer'&&winner()&&!publicState?.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: bitte zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
  const q=quiz.questions.find(x=>x.id===publicState?.current?.id);
  if(!q)throw Error('Originalfrage im Host-Quiz fehlt. Eine Host-Quizdatei importieren.');
  await game.updateCurrent(room,Number(publicState.round),q.id,buildRevealPatch(q),['question','answered','paused','review']);
@@ -1525,7 +1536,19 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'create':await createRoom();return;
  case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(projectorChannel){projectorChannel.postMessage({t:'closed'});projectorChannel.close();projectorChannel=null;projectorRoom='';}if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
   case 'resume':{const code=localStorage.getItem('bq-last-host');if(!code)throw Error('Kein vorheriger Hostraum gespeichert.');await enterRoom(code);return;}
- case 'start-game':{if(!canHost()||isOffline()||!canArrangeLobby(publicState))throw Error('Spielstart ist nur vor der ersten Frage möglich.');if(!isPublished())throw Error('Bitte zuerst das Quiz veröffentlichen.');if(!approvedCount(roster))throw Error('Lasse zuerst mindestens einen Teilnehmer zu.');if(!connected)throw Error('Die Host-Verbindung ist unterbrochen.');const left=Object.values(members||{}).filter(p=>p?.status==='pending').length;if(left&&!confirm(left+' Beitrittsanfrage(n) sind noch offen. Trotzdem das Spiel starten?'))return;await game.setState(room,{started:true});view='live';schedule();notice('Quiz gestartet. Öffne die erste Frage auf dem Quizbrett.');return;}
+ case 'start-game':{
+  if(!canHost()||isOffline()||!canArrangeLobby(publicState))throw Error('Spielstart ist nur vor der ersten Frage möglich.');
+  if(!isPublished())throw Error('Bitte zuerst das Quiz veröffentlichen.');
+  if(!approvedCount(roster))throw Error('Lasse zuerst mindestens einen Teilnehmer zu.');
+  if(!connected)throw Error('Die Host-Verbindung ist unterbrochen.');
+  const pending=Object.values(members||{}).filter(p=>p?.status==='pending').length;
+  const unready=Object.entries(roster||{}).filter(([uid])=>!members?.[uid]?.ready).map(([,p])=>p.name||'Spieler');
+  const warnings=[];
+  if(pending)warnings.push(pending+' offene Beitrittsanfrage(n)');
+  if(unready.length)warnings.push(unready.length+' noch nicht bereit: '+unready.slice(0,5).join(', '));
+  if(warnings.length&&!confirm('Vor dem Spielstart prüfen:\n• '+warnings.join('\n• ')+'\n\nTrotzdem bewusst starten?'))return;
+  await game.setState(room,{started:true});view='live';schedule();notice('Quiz gestartet. Öffne die erste Frage auf dem Quizbrett.');return;
+ }
  case 'view':{
   if(isPublished()&&button.dataset.view==='editor'){notice('Dieses Quiz ist bereits veröffentlicht.');return;}
   if(isOffline()&&button.dataset.view==='live'){beginRehearsal();return;}
@@ -1556,6 +1579,28 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'select-choice':{if(!canHost()&&isOpen()&&!myResponse){guestChoice=button.dataset.choice||'';const target=$('answer-text');if(target)target.value=guestChoice;schedule();}return;}
  case 'custom-score':{const team=$('custom-team')?.value,amount=Number($('custom-points')?.value);if(!canHost()||!publicState.teams[team]||!Number.isInteger(amount)||Math.abs(amount)>10000||!amount)throw Error('Bitte gültige Punktkorrektur zwischen -10.000 und +10.000 eingeben.');if(isOffline()){publicState.scores[team]=(Number(publicState.scores[team])||0)+amount;schedule();}else await game.score(room,team,amount);notice('Punkte korrigiert.');return;}
  case 'open':if(!canHost())return;await hostOpen(button.dataset.qid);return;
+ case 'clear-pick':{
+  if(!canHost()||isOffline()||publicState?.phase!=='board'||!publicState?.questionPick)return;
+  await game.clearPicks(room);notice('Auswahl aufgehoben. Dasselbe Team darf erneut wählen.');return;
+ }
+ case 'skip-turn':{
+  if(!canHost()||publicState?.phase!=='board'||!selectingTeam(publicState))return;
+  const current=teamName(selectingTeam(publicState));
+  if(!confirm('Das Auswahlrecht von '+current+' an das nächste Team weitergeben? Es werden keine Punkte verändert.'))return;
+  if(isOffline()){const next=skipSelectionTurn(publicState);if(!next)throw Error('Auswahlrecht kann jetzt nicht weitergegeben werden.');publicState=next;saveOfflineSession();schedule();}
+  else await game.skipSelection(room);
+  notice('Jetzt wählt das nächste Team.');return;
+ }
+ case 'cancel-question':{
+  if(!canHost()||!activeQuestion())return;
+  if(!confirm('Frage als UNGESPIELT zurücklegen? Das geht nur ohne Buzzer, Antworten oder Punktwertungen. Dasselbe Team behält das Auswahlrecht.'))return;
+  if(isOffline()){
+   const next=cancelQuestionState(publicState);
+   if(!next)throw Error('Diese Frage ist nicht ungespielt zurücklegbar.');
+   publicState=next;delete questionHistory[roundKey()];saveOfflineSession();schedule();
+  }else await game.cancelQuestion(room,Number(publicState.round),activeQuestion().id);
+  notice('Frage ist wieder verfügbar und nicht als gespielt markiert.');return;
+ }
  case 'start-review':if(roundMode(activeQuestion())!=='written')throw Error('Antwortübersicht ist nur für Schreib-Runden.');await startAnswerReview(false);return;
  case 'reveal-answer':await publishOneAnswer(button.dataset.uid);return;
  case 'reveal-all-answers':await publishAllAnswers();return;
@@ -1578,7 +1623,9 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
  case 'back':{
   if(!canHost()||!activeQuestion())return;
-  if(publicState.phase==='question'&&Object.keys(responses?.[roundKey()]||{}).length&&!confirm('Es liegen Antworten vor. Trotzdem zurück zum Quizbrett?'))return;
+  if(winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
+  const changed=publicState.phase!=='reveal';
+  if(changed&&!confirm('Die Frage wird als GESPIELT markiert, auch wenn sie nicht richtig beantwortet wurde.\n\nUngespielt zurücklegen geht stattdessen über die separate Schaltfläche. Trotzdem beenden?'))return;
   if(isOffline()){publicState=returnToBoardState(publicState)||publicState;if(!rehearsal)saveOfflineSession();schedule();}
   else await game.returnToBoard(room,publicState.round,activeQuestion().id);
   return;
@@ -1629,7 +1676,8 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!canHost()||isOffline()||!mayFinishGame(publicState))throw Error('Quiz kann nur zwischen Fragen oder nach einer Auflösung beendet werden.');
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
-  if(!confirm('Endstand prüfen und Siegerehrung starten?\n\n'+summary))return;
+  const left=remainingBoardQuestions(publicState).length;
+  if(!confirm('Endstand prüfen und Siegerehrung starten?'+(left?'\n\nAchtung: '+left+' Fragen der aktuellen Runde sind noch ungespielt.':'')+'\n\n'+summary))return;
   await game.setState(room,{phase:'finished',finaleStep:0,presentation:null,current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null});
   return;
  }
@@ -1686,7 +1734,7 @@ async function handleBlockUpload(input){const b=chosenBlock(),file=input.files?.
 async function handleAudioUpload(input){const q=currentQuestion(),file=input.files?.[0];if(!q||!file)return;notice('Audio wird lokal verarbeitet …');q.audio=await optimizeAudio(file,q.audioStart,q.audioDuration);saveLocal();schedule();notice('Audioclip verarbeitet, ohne Original-Metadaten gespeichert.');}
 async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(localStorage,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
 function updateClock(){const el=$('clock');if(!el)return;const deadline=publicState?.deadline||0;if(!deadline){el.textContent='–:––';return;}const s=Math.max(0,Math.ceil((deadline-now())/1000));el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
-const CRITICAL_HOST_ACTIONS=new Set(['open','uncover-question','next-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
+const CRITICAL_HOST_ACTIONS=new Set(['open','clear-pick','skip-turn','cancel-question','uncover-question','next-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 document.addEventListener('pointerdown',()=>{sfx.unlock()},{capture:true,passive:true});
 document.addEventListener('keydown',()=>{sfx.unlock()},{capture:true});
