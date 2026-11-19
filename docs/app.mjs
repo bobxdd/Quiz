@@ -27,7 +27,7 @@ let service=null,game=null,room='',role='landing',view='start',member=null,guest
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let projectorChannel=null,projectorRoom='',projectorToken='';
 let guestReceipt=null;
-let reviewTeam='all'; // Local host filter; does not change scoring.
+let reviewTeam='all',reviewTeamRound=-1; // Local host filter; does not change scoring.
 let playerEmoji=null,emojiDraft=null;
 let rehearsal=null;
 let boardId='',boardRevision=0,boardConflict=false;
@@ -741,6 +741,7 @@ function guestCanAnswer(){const q=activeQuestion(),timeUp=!!publicState?.deadlin
 function renderReviewGallery(readOnly=false){
  const host=canHost()&&!readOnly;
  const board=publicState?.answerReview;if(!board)return '';
+ if(host&&reviewTeamRound!==publicState.round){reviewTeam='all';reviewTeamRound=publicState.round;}
  const entries=Object.entries(board.entries||{});const visible=entries.filter(([,a])=>a.revealed).length;
  const teamIds=host&&roundMode(activeQuestion())==='written'
   ?Object.keys(publicState?.teams||{}).filter(team=>entries.some(([id])=>roster?.[id]?.team===team)):[];
@@ -766,8 +767,10 @@ function renderReviewGallery(readOnly=false){
    const team=roster?.[id]?.team;
    const official=host&&scoreMode(publicState)==='team'&&team?publicState?.writtenTeamRepresentatives?.[roundKey()]?.[team]:null;
    const teamAlreadyJudged=!!official&&official!==id;
-   const judgeAttrs=teamAlreadyJudged?`data-person="${e(id)}" disabled title="Für dieses Team zählt bereits die offiziell bewertete Antwort von ${e(roster?.[official]?.name||'einem anderen Mitglied')}"`:`data-person="${e(id)}"`;
-   return `<article class="review-card ${!submitted?'is-missing':hidden?'is-hidden':'is-revealed'} ${clickable?'bq-selectable review-clickable':''}" data-review-player="${e(id)}" ${clickable?`role="button" tabindex="0" data-action="reveal-answer" data-uid="${e(id)}" aria-label="Antwort von ${e(a.name||'Spieler')} aufdecken"`:''}><div class="review-name">${e(a.name||'Spieler')}</div><div class="review-value">${display}</div>${distance}<div class="review-footer">${!submitted?'<span class="small muted">Keine Abgabe</span>':hidden?'<span class="small muted">Verdeckt</span>':'<span class="small good">Aufgedeckt</span>'}${clickable?'<span class="small good">Klicken: aufdecken</span>':''}</div>${host&&submitted&&!hidden&&roundMode(activeQuestion())==='written'?`<div class="review-judge"><span class="status-tag ${e(verdict||'open')}">${responseStatus(verdict).icon} ${responseStatus(verdict).label}</span>${official===id?'<span class="small good">Offizielle Teamantwort</span>':teamAlreadyJudged?'<span class="small muted">Andere Teamantwort zählt bereits</span>':''}${btn('✓ Richtig','judge-review-correct','small',judgeAttrs)}${btn('✕ Falsch','judge-review-wrong','small',judgeAttrs)}</div>`:''}</article>`;
+   const judgeAttrs=`data-person="${e(id)}"`;
+   const shownVerdict=teamAlreadyJudged?(a.verdict||null):verdict;
+   const judgeAction=teamAlreadyJudged?'mark-review':'judge-review';
+   return `<article class="review-card ${!submitted?'is-missing':hidden?'is-hidden':'is-revealed'} ${clickable?'bq-selectable review-clickable':''}" data-review-player="${e(id)}" ${clickable?`role="button" tabindex="0" data-action="reveal-answer" data-uid="${e(id)}" aria-label="Antwort von ${e(a.name||'Spieler')} aufdecken"`:''}><div class="review-name">${e(a.name||'Spieler')}<small class="bq-review-person-team">${e(teamName(team))}</small></div><div class="review-value">${display}</div>${distance}<div class="review-footer">${!submitted?'<span class="small muted">Keine Abgabe</span>':hidden?'<span class="small muted">Verdeckt</span>':'<span class="small good">Aufgedeckt</span>'}${clickable?'<span class="small good">Klicken: aufdecken</span>':''}</div>${host&&submitted&&!hidden&&roundMode(activeQuestion())==='written'?`<div class="review-judge"><span class="status-tag ${e(shownVerdict||'open')}">${responseStatus(shownVerdict).icon} ${responseStatus(shownVerdict).label}</span>${official===id?'<span class="small good">Offizielle Teamantwort</span>':teamAlreadyJudged?'<span class="small muted">Weitere Teamantwort · ohne zusätzliche Punkte</span>':''}${btn('✓ Richtig',judgeAction+'-correct','small',judgeAttrs)}${btn('✕ Falsch',judgeAction+'-wrong','small',judgeAttrs)}</div>`:''}</article>`;
   }).join('')}</div>
  </div>`;
 }
@@ -1580,6 +1583,20 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   reviewTeam=ids[(index<0?(step===1?0:ids.length-1):(index+step+ids.length)%ids.length)];
   schedule();return;
  }
+ case 'mark-review-correct':case 'mark-review-wrong':{
+  const person=button.dataset.person,entry=publicState?.answerReview?.entries?.[person];
+  if(!canHost()||!reviewIsCurrent(publicState)||roundMode(activeQuestion())!=='written'||!entry?.revealed||!roster?.[person])
+   throw Error('Antwort muss zuerst aufgedeckt werden.');
+  const team=roster[person].team,official=publicState.writtenTeamRepresentatives?.[roundKey()]?.[team];
+  if(scoreMode(publicState)!=='team'||!official||official===person)
+   throw Error('Diese Antwort benötigt eine normale offizielle Bewertung.');
+  const verdict=action.endsWith('correct')?'correct':'wrong';
+  if(isOffline()){publicState.answerReview.entries[person].verdict=verdict;schedule();}
+  else await game.updateCurrent(room,Number(publicState.round),activeQuestion().id,
+   {['answerReview/entries/'+person+'/verdict']:verdict},['review','reveal']);
+  notice(verdict==='correct'?'Antwort richtig markiert (ohne zusätzliche Teampunkte).':'Antwort falsch markiert (ohne zusätzliche Teampunkte).');
+  return;
+ }
  case 'score-page':{scorePage=Math.max(0,scorePage+Number(button.dataset.delta||0));schedule();return;}
  case 'board-page':{boardPage=Math.max(0,Math.min(boardPages().length-1,boardPage+Number(button.dataset.delta||0)));schedule();return;}
  case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;const turn=selectingTeam(publicState);if(turn&&turn!==member.team)throw Error('Gerade wählt ein anderes Team.');await sendGuestAction(turn?'Fragenauswahl':'Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice(turn?'Frage ausgewählt. Der Host deckt sie auf.':'Fragenwunsch an den Host gesendet.');return;}
@@ -1856,7 +1873,7 @@ function updateClock(){
  const display=el.closest('.bq-round-countdown');
  if(display){display.classList.toggle('is-urgent',p.phase!=='paused'&&seconds>0&&seconds<=10);display.classList.toggle('is-expired',p.phase!=='paused'&&seconds===0);}
 }
-const CRITICAL_HOST_ACTIONS=new Set(['open','clear-pick','skip-turn','cancel-question','uncover-question','next-board','skip-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
+const CRITICAL_HOST_ACTIONS=new Set(['open','clear-pick','skip-turn','cancel-question','uncover-question','next-board','skip-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','mark-review-correct','mark-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 document.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse')void sfx.unlock()},{capture:true,passive:true});
 document.addEventListener('click',()=>{void sfx.unlock()},{capture:true});
