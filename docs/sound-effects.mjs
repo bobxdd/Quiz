@@ -21,11 +21,11 @@ const CUES={
   {frequency:783.99,wave:'triangle',delay:.17,duration:.18,peak:.47},
   {frequency:1046.50,wave:'triangle',delay:.255,duration:.29,peak:.50,hold:.18}
  ],
- // Two separated falling tones. The lower one has a little grit.
+ // A descending two-part signal, with a clear pause between its tones.
  wrong:[
-  {frequency:349,endFrequency:245,wave:'triangle',duration:.13,peak:.58,hold:.55},
-  {frequency:224,endFrequency:145,wave:'triangle',delay:.15,duration:.25,peak:.49,hold:.52},
-  {frequency:238,endFrequency:155,wave:'sawtooth',delay:.15,duration:.23,peak:.24,hold:.45}
+  {frequency:392,endFrequency:277,wave:'triangle',duration:.12,peak:.58,hold:.55},
+  {frequency:224,endFrequency:145,wave:'triangle',delay:.212,duration:.25,peak:.49,hold:.52},
+  {frequency:238,endFrequency:155,wave:'sawtooth',delay:.212,duration:.23,peak:.24,hold:.45}
  ]
 };
 export function normalizeSfxSettings(value){

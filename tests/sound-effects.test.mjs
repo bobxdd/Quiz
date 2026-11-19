@@ -71,6 +71,7 @@ test('Synthesizer plays an electric buzzer, rising chime and falling error tones
  const wrong=render('wrong');
  assert.equal(new Set(wrong('start')).size,2);
  assert.ok(wrong('slide').every((note,index)=>note<wrong('frequency')[index]));
+ assert.ok(wrong('start')[1]-wrong('stop')[0]>.07,'The pause separates the falling verdict from a sustained buzzer');
  assert.equal(wrong('compressor').length,0,'Cues reuse one output bus');
  fx.setMuted(true);
  assert.equal(fx.play('correct'),false);

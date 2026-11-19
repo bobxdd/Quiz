@@ -192,11 +192,11 @@ body.bq-game-mode{overflow:hidden;min-height:100dvh}
 .bq-host-solution-body p{margin:0;color:#ecd9bc}
 .bq-host-solution-body .bq-host-solution-image{max-height:35dvh}
 @media(max-width:450px){
- .bq-host-solution{grid-template-columns:minmax(0,1fr) auto;gap:1px 6px}
- .bq-host-solution-label{display:flex;align-items:baseline;gap:7px}
- .bq-host-solution-preview{grid-area:2/1/3/-1}
- .bq-host-solution details{grid-area:1/2/2/3}
- .bq-host-solution summary{padding:3px 2px}
+ .bq-host-solution{gap:3px 7px;padding:3px 7px}
+ .bq-host-solution-label{font-size:.73rem}
+ .bq-host-solution-label small{font-size:.62rem}
+ .bq-host-solution-preview strong{font-size:.88rem}
+ .bq-host-solution summary{min-height:24px;padding:3px 2px;font-size:.76rem}
 }
 .bq-guest-mode{border:1px solid #465453;background:#222e30;border-radius:10px;padding:12px;display:grid;gap:7px;line-height:1.4}
 .bq-guest-mode h3{margin:0;font-size:20px}.bq-guest-mode p{margin:0;color:#c7d5d2}

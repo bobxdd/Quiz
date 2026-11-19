@@ -113,6 +113,10 @@ async def main():
      for w,h in [(320,568),(390,844),(768,720),(1280,720)]:
       await page.set_viewport_size({'width':w,'height':h})
       await audit(page,f'{name}-question-{w}x{h}',False)
+      if name=='host':
+       preview=page.locator('.bq-host-solution-preview')
+       await expect(preview).to_have_text('C: richtig')
+       await expect(preview).to_be_in_viewport(ratio=1)
     await guest.locator('[data-action="buzz"]').click()
     await host.locator('[data-action="buzz-correct"]').click()
     for page,name in [(host,'host'),(guest,'guest')]:
