@@ -6,12 +6,11 @@ Stand: November 2026 · Hosting: statische GitHub Pages + PeerJS Cloud + WebRTC-
 
 Der PeerJS-Cloud-Dienst übernimmt **Signalisierung**, aber weder die Verbindung der Spielnachrichten noch TURN. Die eigentlichen Daten (Quizbrett, Buzzer, Antworten und Teamchat) laufen zwischen Host-Browser und Gästen über WebRTC DataChannels. GitHub Pages kann keinen TURN- oder WebSocket-Spielserver bereitstellen.
 
-Die App versucht automatisch, direkte WebRTC-Verbindungen mit zwei STUN-Endpunkten zu finden:
+**Stand der Korrektur vom 19. November 2026:** BrainQuiz verwendet für normale Host- und Gastverbindungen wieder die **unveränderte PeerJS-Standard-ICE-Konfiguration**, wie es auch `D0minatxr/strassenbingo` macht. Damit überschreiben wir nicht mehr unabsichtlich die Standardliste mit STUN-only-Einträgen. Wer einen Raumcode erhält, braucht dadurch keine eigene TURN-Konfiguration mehr, um den normalen Verbindungsversuch zu starten.
 
-- `stun:stun.cloudflare.com:3478`
-- `stun:stun.l.google.com:19302`
+**Wichtig zur tatsächlichen Verfügbarkeit:** Die PeerJS-Bibliothek enthält zwar die historischen Adressen `turn:eu-0.turn.peerjs.com:3478` und `turn:us-0.turn.peerjs.com:3478`, das PeerJS-Projekt hat seinen kostenlosen TURN-Dienst jedoch am **5. Dezember 2023 offiziell eingestellt**. Daher sind diese eingebauten Server **keine nachgewiesen funktionierende Relay-Infrastruktur**. Die Korrektur beseitigt eine Konfigurationsabweichung zum Straßenbingo, garantiert aber keine erfolgreichen ICE-Verbindungen aus allen Netzen. Für verlässliche Erreichbarkeit auch bei restriktiven NATs wird weiterhin ein tatsächlich betriebsbereiter TURN-Dienst benötigt; ein Live-Test auf verschiedenen Internetanschlüssen ist unabdingbar.
 
-**Wichtig:** Eine erfolgreiche STUN-Antwort garantiert nicht, dass zwei Geräte hinter verschiedenen NATs kommunizieren können. Insbesondere bei symmetrischem NAT, CGNAT, Firmennetzen oder blockiertem UDP braucht die Verbindung einen erreichbaren TURN-Server. Ohne TURN-Zugangsdaten kann BrainQuiz **keine Verbindung über alle Internetanbieter garantieren**.
+Quellen: [PeerJS-Freie-TURN-Einstellung](https://github.com/orgs/peers/discussions/1172), [PeerJS-Standardkonfiguration](https://github.com/peers/peerjs/blob/master/lib/util.ts), [Straßenbingo-Netzwerkcode](https://github.com/D0minatxr/strassenbingo/blob/main/index.html).
 
 Offizielle Grundlagen: [PeerJS FAQ](https://peerjs.com/client/faq/), [PeerJS Server](https://peerjs.com/server/getting-started), [MDN WebRTC-Protokolle](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Protocols), [Cloudflare STUN](https://developers.cloudflare.com/realtime/turn/faq/).
 
@@ -40,4 +39,4 @@ Der TURN-Test beweist nur, dass ein Browser einen Relay-Kandidaten erhalten hat,
 
 Verbessert werden die Fehlerkategorien, automatische Verbindungswiederholung, manuelle Wiederverbindung, hostseitige Neuinitialisierung, STUN-Auswahl, TURN-Prüfung und die Aufräumlogik für nie angemeldete Gastkanäle.
 
-**Keine öffentliche TURN-Infrastruktur ist mit dem Repository verbunden.** Damit bleiben echte Verbindungen durch restriktives NAT ohne zusätzlich bereitgestellte TURN-Zugangsdaten ein externer Konfigurationspunkt. Es wäre irreführend, allein nach einem erfolgreichen GitHub-Build oder lokalen Browser-Test zu behaupten, dass der Fernzugriff für alle Netzwerke funktioniert. Vor einer öffentlichen Multiplayer-Runde sollte mindestens ein erfolgreicher Test über zwei unterschiedliche Internetanschlüsse stattfinden.
+**Keine zuverlässig verfügbare TURN-Infrastruktur ist mit dem Repository verbunden.** Die von PeerJS historisch voreingestellten kostenlosen Relays sind eingestellt. Deshalb bleiben echte Verbindungen durch restriktives NAT ohne einen aktuell betriebenen Relay-Dienst ein externer Konfigurationspunkt. Es wäre irreführend, allein nach einem erfolgreichen GitHub-Build oder lokalen Browser-Test zu behaupten, dass der Fernzugriff für alle Netzwerke funktioniert. Vor einer öffentlichen Multiplayer-Runde sollte mindestens ein erfolgreicher Test über zwei unterschiedliche Internetanschlüsse stattfinden.

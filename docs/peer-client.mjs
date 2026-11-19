@@ -73,16 +73,16 @@ export function peerError(error,role='guest'){
  if(type==='peer-unavailable')return 'Der Host ist unter diesem Raumcode derzeit nicht erreichbar. Host-Fenster und Raumcode prüfen.';
  if(type==='unavailable-id')return role==='host'?'Dieser Raumcode ist schon vergeben. Den alten Host-Tab schließen oder einen neuen Raum erstellen.':'Diese Peer-ID wird bereits verwendet.';
  if(['network','server-error','socket-error','socket-closed'].includes(type))return 'Der PeerJS-Signalserver ist nicht erreichbar. Netzwerk prüfen und anschließend erneut verbinden.';
- if(['webrtc','negotiation-failed'].includes(type))return 'Der WebRTC-Datenkanal konnte nicht aufgebaut werden. Bei CGNAT oder strengen Firewalls ist ein TURN-Relay erforderlich.';
+ if(['webrtc','negotiation-failed'].includes(type))return 'Der WebRTC-Datenkanal konnte nicht aufgebaut werden. PeerJS versucht direkte Wege und Standard-Relays; diese sind nicht garantiert verfügbar. Ein erreichbarer eigener TURN-Server kann helfen.';
  return String(error?.message||error||'WebRTC-Verbindungsfehler').slice(0,220);
 }
 export function connectionAdvice({iceState='unknown',relay=false,phase='connecting'}={}){
  if(iceState==='failed')return relay
-   ?'WebRTC-ICE fehlgeschlagen. TURN-Adresse, Port und Zugangsdaten auf Host UND Gast prüfen.'
-   :'Keine direkte WebRTC-Route gefunden. Häufig bei CGNAT/Firewall: TURN-Relay bei Host UND Gast konfigurieren.';
+   ?'WebRTC-ICE fehlgeschlagen. Eigenen TURN-Server, Port und Zugangsdaten auf Host UND Gast prüfen.'
+   :'WebRTC-ICE fehlgeschlagen. Auch die eingebauten PeerJS-Relays haben keine Verbindung ermöglicht. Host erreichbar? Für schwierige Netze ist ein aktiver TURN-Dienst nötig.';
  if(phase==='signaling')return 'Verbindung zum Signalserver wird aufgebaut. Raumcode und Internetzugang prüfen.';
  if(phase==='handshake')return 'Datenkanal offen; der vollständige Spielstand wird vom Host erwartet.';
- return relay?'TURN als Ausweichweg eingerichtet; der Server muss für beide Seiten erreichbar sein.':'Direkte Verbindung via STUN; ohne TURN ist restriktives NAT nicht zuverlässig erreichbar.';
+ return relay?'Eigener TURN-Server für diese Verbindung konfiguriert. Er muss für beide Seiten erreichbar sein.':'PeerJS-Standardverbindung: direkte WebRTC-Route und vorhandene öffentliche Relay-Einträge werden versucht (nicht garantiert verfügbar).';
 }
 function networkFailure(message,kind='rtc'){const error=new Error(message);error.connectionKind=kind;return error;}
 let loadingPeer=null;
@@ -137,11 +137,17 @@ export function configureTurnRelay(input){
  sessionStorage.setItem(TURN_STORAGE,JSON.stringify(relay));
 }
 export function peerOptions(){
- const iceServers=BASE_ICE.map(row=>({...row,urls:[...row.urls]}));
+ // Same connection strategy as D0minatxr/strassenbingo: let PeerJS use its
+ // built-in ICE configuration, instead of replacing it with a STUN-only list.
+ // NOTE: PeerJS discontinued its free TURN service in 2023. Bundled relay
+ // addresses are NOT a guaranteed replacement for an actively managed TURN.
+ let custom=null;
  try{
   const stored=JSON.parse(sessionStorage.getItem(TURN_STORAGE)||'null');
-  if(stored)iceServers.push(turnServer({url:stored.urls,username:stored.username,credential:stored.credential}));
+  if(stored)custom=turnServer({url:stored.urls,username:stored.username,credential:stored.credential});
  }catch{}
+ if(!custom)return {debug:0};
+ const iceServers=[...BASE_ICE.map(row=>({...row,urls:[...row.urls]})),custom];
  return {debug:0,config:{iceServers,iceCandidatePoolSize:4,iceTransportPolicy:'all'}};
 }
 
@@ -241,6 +247,7 @@ export class PeerGame{
   return {mode:this.mode,connected:!!this.connected,error:String(this.netError||'').slice(0,160),
     phase:this.connectionPhase||'idle',iceState:this.iceState||'unknown',
     iceErrorCode:Number(this.iceErrorCode)||0,turnConfigured:hasTurnRelay(),
+     transportProfile:hasTurnRelay()?'custom-turn':'peerjs-default',
     reconnectAttempts:this.mode==='host'?this.hostReconnectAttempts||0:this.guestReconnectAttempts||0,
     guidance:connectionAdvice({iceState:this.iceState,relay:hasTurnRelay(),phase:this.connectionPhase}),
     lastBackupAt:this.lastBackupAt||0,backupError:this.backupError||'',
