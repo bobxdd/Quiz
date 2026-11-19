@@ -102,6 +102,12 @@ async def main():
   if await host.locator('[data-action="audio-unblock"]').count():
    await host.locator('[data-action="audio-unblock"]').click()
   await host.get_by_role('button',name='↻ Sound erneut abspielen').wait_for(timeout=10000)
+  # The host must explicitly judge or clear an active buzzer BEFORE revealing.
+  # This question tests the manual solution, so reset an accidental buzz,
+  # keep the scores unchanged, then reveal normally.
+  await expect(host.locator('[data-action="reveal"]')).to_be_disabled()
+  await host.locator('.bq-host-action-bar [data-action="reset-buzz"]').click()
+  await expect(host.locator('[data-action="reveal"]')).to_be_enabled()
   await host.locator('[data-action="reveal"]').first.click()
   await alice.wait_for_function("() => window.__probe.info().publicState.phase==='reveal'",timeout=10000)
   assert await alice.locator('[data-action="audio-unblock"]').count()==0
