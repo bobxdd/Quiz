@@ -55,10 +55,10 @@ test('board identifiers must be valid and unique',()=>{
 test('source wiring keeps offline editor and live room separate',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const editor=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
- assert.match(app,/resumeBoard\(localStorage,emptyQuiz,makeBoardId,preferred\)/);
- assert.match(app,/case 'new-board':newStoredBoard\(\)/);
- assert.match(app,/case 'open-board':openStoredBoard\(button.dataset.boardId\)/);
- assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(localStorage,imported,makeBoardId\)/);
+ assert.match(app,/resumeBoard\(boardStore,emptyQuiz,makeBoardId,preferred\)/);
+ assert.match(app,/case 'new-board':await newStoredBoard\(\)/);
+ assert.match(app,/case 'open-board':await openStoredBoard\(button.dataset.boardId\)/);
+ assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(boardStore,imported,makeBoardId\)/);
  assert.match(editor,/DU BEARBEITEST DIESES QUIZBRETT/);
  assert.match(editor,/data-action="new-board"/);
  assert.match(editor,/data-action="open-board"/);
@@ -77,7 +77,7 @@ test('editing a board updates its library label without changing identity',()=>{
 
 test('reset action uses per-board session key and cannot erase other boards',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
- assert.match(app,/localStorage\.removeItem\('bq-session-LOCAL-'\+boardId\)/);
+ assert.match(app,/boardStore\.removeItem\('bq-session-LOCAL-'\+boardId\)/);
  assert.doesNotMatch(app,/localStorage\.removeItem\('bq-session-LOCAL'\)/);
 });
 
@@ -121,10 +121,10 @@ test('conflict recovery UX and original board load are present and reachable',as
  const fs=await import('node:fs');
  const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const ui=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
- assert.match(app,/function rescueStoredBoard\(/);
- assert.match(app,/function reloadStoredBoard\(/);
- assert.match(app,/case 'rescue-board':rescueStoredBoard\(\)/);
- assert.match(app,/case 'reload-board':reloadStoredBoard\(\)/);
+ assert.match(app,/async function rescueStoredBoard\(/);
+ assert.match(app,/async function reloadStoredBoard\(/);
+ assert.match(app,/case 'rescue-board':await rescueStoredBoard\(\)/);
+ assert.match(app,/case 'reload-board':await reloadStoredBoard\(\)/);
  assert.match(app,/window\.addEventListener\('storage'/);
  assert.match(app,/boardConflict=true/);
  assert.match(ui,/data-action="rescue-board"/);
