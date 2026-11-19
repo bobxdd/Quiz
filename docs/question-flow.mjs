@@ -33,6 +33,9 @@ export function remainingBoardQuestions(state,round=boardRound(state)){
  * the seventh-to-last question must still have normal points. */
 export const FINAL_DOUBLE_QUESTIONS=6;
 export function finalSixActive(state,round=boardRound(state)){
+ const cells=Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round);
+ // A micro-board with fewer than six fields has no distinct final-six phase.
+ if(cells.length<FINAL_DOUBLE_QUESTIONS)return false;
  const left=remainingBoardQuestions(state,round).length;
  return left>0&&left<=FINAL_DOUBLE_QUESTIONS;
 }
