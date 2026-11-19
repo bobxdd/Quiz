@@ -46,6 +46,20 @@ async def migrate_full_storage(browser,url):
    return {first,second,picture,entries};
   }""")
   await page.goto(url)
+  await page.get_by_text('Zweites Altbrett',exact=True).wait_for()
+  await page.locator('#join-room').fill('ABCDEFGHJKLMNPQR')
+  await page.locator('#join-name').fill('Testname')
+  await page.evaluate("""async id => {
+   const {openBoardLibrary}=await import('/board-workspace.mjs');
+   const library=await openBoardLibrary({onChange(){}});
+   try {
+    const {quiz,revision}=await library.load(id);
+    await library.persist(id,revision,{...quiz,title:'Zweites Altbrett aktualisiert'});
+   } finally {library.close();}
+  }""",legacy['second'])
+  await page.get_by_text('Zweites Altbrett aktualisiert',exact=True).wait_for()
+  assert await page.locator('#join-room').input_value()=='ABCDEFGHJKLMNPQR'
+  assert await page.locator('#join-name').input_value()=='Testname'
   await page.locator(f'[data-action="open-landing-board"][data-board-id="{legacy["first"]}"]').click()
   await page.locator('.se-board-context>strong').get_by_text('Altes Quiz').wait_for()
   assert (await read_board(page,legacy['first']))['revision']==7
@@ -74,7 +88,7 @@ async def migrate_full_storage(browser,url):
    for i in range(20)]}
   payload=json.dumps(large_quiz).encode()
   assert len(payload)>8_000_000
-  await page.locator('#import-quiz').set_input_files({'name':'media.brainquiz.json','mime_type':'application/json','buffer':payload})
+  await page.locator('#import-quiz').set_input_files({'name':'media.brainquiz.json','mimeType':'application/json','buffer':payload})
   await page.locator('.se-board-context>strong').get_by_text('Grosses Medienbackup').wait_for()
   assert len((await read_board(page))['quiz']['questions'])==20
   assert (await read_board(page,legacy['first']))['quiz']['questions']==saved
@@ -157,7 +171,7 @@ async def main():
    # Import must always make a separate board and leave the originals intact.
    payload=json.dumps({'version':1,'title':'Importiert','questions':[],'teams':['A','B']}).encode()
    await page.evaluate("() => {window.__importEvents=0;document.addEventListener('change',e=>{if(e.target.id==='import-quiz')window.__importEvents++},true)}")
-   await page.locator('#import-quiz').set_input_files({'name':'probe.brainquiz.json','mime_type':'application/json','buffer':payload})
+   await page.locator('#import-quiz').set_input_files({'name':'probe.brainquiz.json','mimeType':'application/json','buffer':payload})
    try: await page.locator('.se-board-context>strong').get_by_text('Importiert').wait_for(timeout=8000)
    except Exception:
     print('DIAG import',{'title':await page.locator('.se-board-context>strong').all_inner_texts(),

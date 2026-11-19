@@ -34,8 +34,8 @@ async def main():
   await expect(page.locator('[data-action="host-current-board"]')).to_have_count(1)
   # Empty quizzes can be saved as drafts but must never open an unusable lobby.
   await page.locator('[data-action="host-current-board"]').click()
+  await expect(page.locator('#toaster')).to_contain_text('noch nicht bereit')
   assert await page.evaluate('window.__probe.room()')=='LOCAL'
-  assert 'noch nicht bereit' in (await page.locator('#toaster').inner_text()).lower()
   await page.evaluate('(q)=>window.__probe.setQuiz(q)',make_quiz('Quiz eins','q-one','Birne'))
   await page.locator('[data-action="save-board"]').click()
   await wait_board_saved(page)

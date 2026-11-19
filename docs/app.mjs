@@ -46,10 +46,10 @@ const makeBoardId=()=>'b'+uid().slice(1);
 function getBoardLibrary(){
  if(!libraryOpening){
   libraryOpening=openBoardLibrary({onChange:ids=>void syncBoardLibrary(ids)}).then(library=>{
-   boardLibrary=library;libraryError='';if(role==='landing')schedule();return library;
+   boardLibrary=library;libraryError='';refreshLandingQuizLibrary();return library;
   }).catch(error=>{
    libraryOpening=null;libraryError=error?.message||'Quizbibliothek konnte nicht geladen werden.';
-   if(role==='landing')schedule();throw error;
+   refreshLandingQuizLibrary();throw error;
   });
  }
  return libraryOpening;
@@ -58,7 +58,7 @@ async function syncBoardLibrary(changedIds=[]){
  if(!boardLibrary)return;
  try{
   await boardLibrary.refresh();
-  if(role==='landing'){schedule();return;}
+  if(role==='landing'){refreshLandingQuizLibrary();return;}
   const id=boardId;
   if(!isOffline()||!id||!changedIds.includes(id))return;
   const current=await boardLibrary.load(id);
@@ -749,6 +749,12 @@ function savedQuizzesStart(drafts,workspaceError,hostCode){
    <details class="bq-legacy-options" data-bq-persist="legacy-quiz-tools"><summary>Weitere Optionen</summary><div class="bq-legacy-options-content">${btn('Quizbrett bearbeiten','create-offline','small')}${btn('Online-Raum erstellen','create','small')}<p class="small muted">Diese Funktionen sind für ältere Quizbretter. Einfacher: oben ein Quiz erstellen und daraus eine Lobby hosten.</p></div></details>
   </div>
  </section>`;
+}
+function refreshLandingQuizLibrary(){
+ if(role!=='landing')return;
+ const card=$('app').querySelector('.bq-saved-quiz-home');
+ // Late IndexedDB results can arrive while someone is filling the join form.
+ if(card)preserveForm(()=>{card.outerHTML=savedQuizzesStart(boardLibrary?.boards||[],libraryError,lastHostCode);});
 }
 function landing(){
  const hostCode=lastHostCode;
@@ -2122,7 +2128,7 @@ setInterval(()=>{updateClock();if(publicState?.phase==='question'&&roundMode(act
 render();
 if(!hasValidRoom(roomFromLink))void getBoardLibrary().catch(()=>{});
 void loadLastHostRoom().then(code=>{
- if(!lastHostChanged&&code){lastHostCode=code;if(role==='landing')schedule();}
+ if(!lastHostChanged&&code){lastHostCode=code;refreshLandingQuizLibrary();}
 });
 // A host may restore a previous session from its own browser; returning guests
 // need the per-tab identity/secret created on their original visit.
