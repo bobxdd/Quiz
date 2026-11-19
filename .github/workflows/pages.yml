@@ -94,6 +94,9 @@ jobs:
       - name: Firefox and WebKit recovery and projector checks
         run: |
           python -m pip install --disable-pip-version-check playwright==1.65.0
+          # Playwright's Firefox sandbox requires HOME to be owned by root;
+          # GitHub Actions otherwise sets /github/home owned by pwuser.
+          export HOME=/root
           timeout -k 10s 150s env BRAINQUIZ_BROWSER=firefox python tests/recovery-projector-browser.py
           timeout -k 10s 150s env BRAINQUIZ_BROWSER=webkit python tests/recovery-projector-browser.py
   deploy:
