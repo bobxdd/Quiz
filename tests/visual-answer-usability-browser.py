@@ -96,7 +96,7 @@ async def main():
     await guest.get_by_role('button',name='Beitreten',exact=True).click()
     await guest.locator('[data-action="lobby-join"][data-team="t1"]').click()
     await host.locator('[data-action="approve"]').click()
-    await expect(guest.locator('.role-caption')).to_have_text('Team 1')
+    await expect(guest.locator('.role-caption')).to_have_text('Rot')
     await host.locator('[data-action="start-game"]').click()
     await rounds.choose(host,400)
     await host.locator('[data-action="uncover-question"]').click()
