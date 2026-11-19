@@ -11,7 +11,7 @@ import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease,checkQuizMedia} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
-import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
+import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,finalSixActive,boardQuestionPoints,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
@@ -705,9 +705,11 @@ function renderBoard(readOnly=false){
  const canSelect=canHost()||(!reserved&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
- const used=isBoardCellPlayed(q,publicState);
- if(readOnly)return `<div class="tile ${used?'used is-played':''}" aria-label="${e(q.points)} Punkte${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(q.points)}</span></div>`;
- return `<button type="button" class="tile ${used?'used is-played':''} ${reserved===q.id?'bq-tile-reserved':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':reserved===q.id?' · vom Team gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':reserved===q.id?' · vorgemerkt':''}" ${used||!canSelect||(canHost()&&reserved&&reserved!==q.id)||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
+ const used=isBoardCellPlayed(q,publicState),points=used?Number(q.points):boardQuestionPoints(publicState,q);
+ const doubled=!used&&points===Number(q.points)*2&&finalSixActive(publicState);
+ const bonusText=doubled?' · doppelte Punkte (×2)':'';
+ if(readOnly)return `<div class="tile ${used?'used is-played':''} ${doubled?'bq-double-points':''}" aria-label="${e(points)} Punkte${bonusText}${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(points)}</span></div>`;
+ return `<button type="button" class="tile ${used?'used is-played':''} ${reserved===q.id?'bq-tile-reserved':''} ${doubled?'bq-double-points':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gewählt':reserved===q.id?' · vom Team gewählt':''}" aria-label="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gespielt':reserved===q.id?' · vorgemerkt':''}" ${used||!canSelect||(canHost()&&reserved&&reserved!==q.id)||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
@@ -722,11 +724,14 @@ function participantList(){
 function personScores(){return participantList().map(([id,name,team])=>({id,name,team,points:Number(publicState?.playerScores?.[id]?.total)||0})).sort((a,b)=>b.points-a.points||a.name.localeCompare(b.name,'de'));}
 function scorePanel(){
  const people=personScores(),question=activeQuestion(),pts=Number(question?.points)||0,choice=people.find(p=>p.id===scoreTarget),locks=buzzLocks();
+ const teamMode=scoreMode(publicState)==='team';
  const official=choice&&publicState?.writtenTeamRepresentatives?.[roundKey()]?.[roster?.[choice.id]?.team];
  const teamAlreadyJudged=scoreMode(publicState)==='team'&&!!official&&official!==choice?.id;
  const judgeDisabled=teamAlreadyJudged?'disabled title="Pro Team wird nur eine offizielle Antwort je Frage gewertet"':question?'':'disabled';
- return `<section class="glass panel scoring-panel"><div class="panelhead"><h3>Teilnehmer & Punkte</h3><div class="row"><span class="pill">${people.length}</span>${btn('+ Person','add-person','small')}</div></div>${people.length?`<div class="score-people">${people.map(p=>`<button type="button" class="score-person ${p.id===scoreTarget?'selected':''} ${locks[p.id]?'is-locked':''}" data-action="select-player" data-person="${e(p.id)}"><span><b>${e(p.name)}</b><small>${e(p.team)}${locks[p.id]?' · Buzzer gesperrt':''}</small></span><strong>${p.points.toLocaleString('de-DE')}</strong></button>`).join('')}</div>`:'<div class="empty">Noch keine Spieler. Im Editor unter „Quiz-Einstellungen“ manuelle Teilnehmer eintragen oder Online-Spieler freigeben.</div>'}
- ${choice?`<div class="score-actions"><div class="small muted">Ausgewählt: ${e(choice.name)}${locks[choice.id]?' · aktuell für diese Frage gesperrt':''}</div><div class="row">${roundMode(question)==='written'?`${teamAlreadyJudged?'<span class="small muted">Eine andere Person dieses Teams wurde bereits offiziell bewertet.</span>':''}${btn('Richtig · +'+pts,'judge-correct','primary',judgeDisabled)}${btn('Falsch · −'+(pts/2),'judge-wrong','danger',judgeDisabled)}`:'<p class="small muted">Buzzer direkt in der Hauptleiste bewerten.</p>'}${btn('Buzzer freigeben','unlock-buzz-player','small',locks[choice.id]?'':'disabled')}</div><div class="manual-points"><label class="field">Punkte manuell ändern<input id="person-adjust" type="number" step="0.5" min="-10000" max="10000" value="50"></label>${btn('Hinzufügen / Abziehen','adjust-player','small')}</div><div class="small muted">Bei „Falsch“ verliert der aktuelle Buzzer automatisch die Hälfte der Fragepunkte. Danach wird der Buzzer wieder freigegeben; dieselbe Person bleibt bis zur manuellen Freigabe gesperrt.</div></div>`:''}</section>`;
+ return `<section class="glass panel scoring-panel"><div class="panelhead"><h3>${teamMode?'Teams & Antworten':'Teilnehmer & Punkte'}</h3><div class="row"><span class="pill">${people.length}</span>${!teamMode?btn('+ Person','add-person','small'):''}</div></div>
+ ${teamMode?`<div class="bq-team-only-scoreboard" aria-label="Ein gemeinsamer Punktestand pro Team"><p class="small muted">Teamwertung: Jedes Team hat genau EINEN Punktestand. Beiträge einzelner Mitglieder zählen nur zur gemeinsamen Teamwertung.</p>${scores()}${!isOffline()?scoreControls():''}</div>`:''}
+ ${people.length?`<div class="score-people">${people.map(p=>`<button type="button" class="score-person ${p.id===scoreTarget?'selected':''} ${locks[p.id]?'is-locked':''}" data-action="select-player" data-person="${e(p.id)}"><span><b>${e(p.name)}</b><small>${e(p.team)}${locks[p.id]?' · Buzzer gesperrt':''}</small></span>${teamMode?'<span class="small muted">Teammitglied</span>':`<strong>${p.points.toLocaleString('de-DE')}</strong>`}</button>`).join('')}</div>`:'<div class="empty">Noch keine Spieler. Im Editor unter „Quiz-Einstellungen“ manuelle Teilnehmer eintragen oder Online-Spieler freigeben.</div>'}
+ ${choice?`<div class="score-actions"><div class="small muted">Ausgewählt: ${e(choice.name)}${locks[choice.id]?' · aktuell für diese Frage gesperrt':''}</div><div class="row">${roundMode(question)==='written'?`${teamAlreadyJudged?'<span class="small muted">Eine andere Person dieses Teams wurde bereits offiziell bewertet.</span>':''}${btn('Richtig · +'+pts,'judge-correct','primary',judgeDisabled)}${btn('Falsch · −'+(pts/2),'judge-wrong','danger',judgeDisabled)}`:'<p class="small muted">Buzzer direkt in der Hauptleiste bewerten.</p>'}${btn('Buzzer freigeben','unlock-buzz-player','small',locks[choice.id]?'':'disabled')}</div>${teamMode?'<p class="small muted">Manuelle Punktekorrekturen erfolgen ausschließlich beim gemeinsamen Teampunktestand oben.</p>':`<div class="manual-points"><label class="field">Punkte manuell ändern<input id="person-adjust" type="number" step="0.5" min="-10000" max="10000" value="50"></label>${btn('Hinzufügen / Abziehen','adjust-player','small')}</div>`}<div class="small muted">Bei „Falsch“ verliert der aktuelle Buzzer automatisch die Hälfte der Fragepunkte. Danach wird der Buzzer wieder freigegeben; dieselbe Person bleibt bis zur manuellen Freigabe gesperrt.</div></div>`:''}</section>`;
 }
 function safeImage(value){return isImageData(value)?value:'';}
 function guestCanAnswer(){const q=activeQuestion(),timeUp=!!publicState?.deadline&&publicState.deadline<now();return role==='guest'&&member?.status==='approved'&&!!q&&roundMode(q)==='written'&&!!publicState?.answerParticipants?.[game?.uid]&&isOpen()&&!timeUp;}
@@ -773,6 +778,7 @@ function boardScene(host=false){
  const hasRoundTwo=boardRoundOf(p)===1&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2);
  const remainingFirst=hasRoundTwo?remainingBoardQuestions(p,1).length:0;
  return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+ ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Endspurt: letzte 6 Fragen</strong><span>Alle verbleibenden Felder auf diesem Brett zählen doppelt (×2). Die Wertung gilt nur für Runde ${boardRoundOf(p)}.</span></div>`:''}
  ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${p.questionPick?'Frage vorgemerkt: der Host öffnet sie oder gibt die Auswahl wieder frei.':host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span>${host&&p.questionPick?btn('Auswahl freigeben','clear-pick','small'):host&&p.selectionTurn?.order?.length>1?btn('Auswahlrecht weitergeben','skip-turn','small'):''}</div>`:''}
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${suggestions.length?`<details class="bq-auxiliary"><summary>${suggestions.length} Fragenwunsch${suggestions.length===1?'':'e'} von Teilnehmern</summary><div class="row">${suggestions.slice(-8).map(([,x])=>btn(`${e(x.name||'Spieler')}: ${e(p.board[x.qid]?.category||'')} ${e(p.board[x.qid]?.points||'')}`,'open','small',`data-qid="${e(x.qid)}"`)).join('')}</div></details>`:''}
@@ -907,7 +913,7 @@ async function uncoverSelectedQuestion(){
  if(!isOffline()){await game.uncoverQuestion(room,publicState.round,q.id);return;}
  let visual=q.type==='order'?(q.orderDisplayItems?.length?q.orderDisplayItems:shuffledItems(q.orderItems)):q.image||'';
  if(q.type==='splash')visual=await splashPreview(q.image,q,false);
- publicState={...publicState,phase:'question',current:publicQuestion(q,false,visual),deadline:q.seconds?now()+q.seconds*1000:0,buzzerArmed:true};
+ publicState={...publicState,phase:'question',current:{...publicQuestion(q,false,visual),points:publicState.current.points,basePoints:publicState.current.basePoints,doublePoints:publicState.current.doublePoints},deadline:q.seconds?now()+q.seconds*1000:0,buzzerArmed:true};
  if(rehearsal)startRehearsalQuestion(q);
  schedule();
 }
@@ -1111,7 +1117,7 @@ function beginRehearsal(){
  rehearsal={rounds:new Map(),compact:false,media:null,checking:false,previous:{publicState,questionHistory,buzzers,responses,roster,selected}};
  publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
   board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
-  used:{},playerScores:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
+  used:{},playerScores:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
  roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
  view='present';boardPage=0;previewRevealed=false;schedule();
 }
@@ -1124,7 +1130,7 @@ function endRehearsal(){
 }
 function startRehearsalQuestion(q){
  if(q.type===TEAM_EMOJI){
-  rehearsal.emoji=newTeamEmojiRound(q,publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
+  rehearsal.emoji=newTeamEmojiRound({...q,points:publicState.current.points},publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
   rehearsal.emojiActing='probe_1';emojiDraft=null;
   publicState.teamEmoji=publicTeamEmoji(rehearsal.emoji);
  }else rehearsal.rounds.set(q.id,{state:publicState,buzzers:{},answers:{}});
@@ -1139,10 +1145,9 @@ function rehearsalRound(q){
  return demo;
 }
 function rehearsalTotals(){
- return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>({
-  name:scoreMode(publicState)==='individual'?player.name:publicState.teams[player.team],
-  points:scoreMode(publicState)==='individual'?publicState.playerScores[id]?.total||0:publicState.scores[player.team]||0
- }));
+ if(scoreMode(publicState)==='team')
+  return Object.entries(publicState.teams||{}).map(([id,name])=>({name,points:publicState.scores[id]||0}));
+ return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>({name:player.name,points:publicState.playerScores[id]?.total||0}));
 }
 function renderRehearsalControls(q){
  const demo=rehearsalRound(q),p=demo.state;
@@ -1167,8 +1172,8 @@ function renderRehearsalControls(q){
   ${audit.errors.length?`<p class="small bad">Quizcheck · ${audit.errors.length} offene Punkte im Editor</p>`:''}
   <div class="row" aria-label="Simulierte Spieleraktionen">${submissions}</div>
   ${winner?`<div class="row"><strong>${e(winner.name)} am Buzzer</strong>
-   ${btn('Richtig · +'+e(q.points),'probe-correct','primary')}
-   ${btn('Falsch · −'+e(q.points/2),'probe-wrong','danger')}</div>`:''}
+   ${btn('Richtig · +'+e(p.current.points),'probe-correct','primary')}
+   ${btn('Falsch · −'+e(p.current.points/2),'probe-wrong','danger')}</div>`:''}
   ${!buzzer&&p.phase==='question'?btn('Antwortübersicht öffnen','probe-review','small',Object.keys(demo.answers).length?'':'disabled'):''}
   <ul class="bq-probe-scores" aria-label="Punktestand der Generalprobe">${points}</ul>
  </section>`;
@@ -1227,9 +1232,15 @@ async function rehearse(action,button){
    demo.state=judged.state;demo.buzzers=judged.buzzers;
    if(result==='correct')Object.assign(demo.state,buildRevealPatch(q));
   }else if(player&&p.answerReview?.entries?.[id]?.revealed){
+   const official=scoreMode(p)==='team'&&p.writtenTeamRepresentatives?.[p.round]?.[player.team];
+   if(official&&official!==id)return;
    const before=p.playerScores[id]?.rounds?.[p.round]?.delta||0;
-   p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:q.points,result,at:Date.now()});
-   if(scoreMode(p)==='team')p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
+   p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:p.current.points,result,at:Date.now()});
+   if(scoreMode(p)==='team'){
+    p.writtenTeamRepresentatives??={};p.writtenTeamRepresentatives[p.round]??={};
+    p.writtenTeamRepresentatives[p.round][player.team]=id;
+    p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
+   }
   }
  }
  publicState=demo.state;
@@ -1295,13 +1306,13 @@ async function hostOpen(id){
   if(isOffline()){
    const next=openQuestionState(publicState,{expectedRound,question:q,playerQuestion,participants,deadline,covered:true});
    if(!next)throw Error('Das Fragenfeld wurde inzwischen geöffnet.');
-   publicState=next;selected=q.id;questionHistory[String(next.round)]=createHistoryEntry(q,next.round,now());if(!rehearsal)saveOfflineSession();schedule();return;
+   publicState=next;selected=q.id;questionHistory[String(next.round)]=createHistoryEntry({...q,points:next.current.points},next.round,now());if(!rehearsal)saveOfflineSession();schedule();return;
   }
   const next=await game.openQuestion(room,expectedRound,q,playerQuestion,participants,deadline,{covered:true});
   // The round is published atomically. Noncritical side effects are deliberately
   // scoped to the committed round and cannot replace another current question.
   await game.clearPicks(room).catch(error);
-  await game.recordQuestion(room,next.round,createHistoryEntry(q,next.round,now())).catch(error);
+  await game.recordQuestion(room,next.round,createHistoryEntry({...q,points:next.current.points},next.round,now())).catch(error);
  }finally{openingQuestion=false;}
 }
 function buildRevealPatch(q){
@@ -1315,6 +1326,9 @@ function buildRevealPatch(q){
   ...(q.type==='splash'?{image:publicState.current.image||''}:{})
  };
  const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',solutionVisible:true,preRevealDisplay,deadline:0,pausedRemaining:0};
+ patch.current.points=publicState.current.points;
+ patch.current.basePoints=publicState.current.basePoints??q.points;
+ patch.current.doublePoints=publicState.current.doublePoints===true;
  if(q.type==='map'){
   // Publish all submitted pins atomically with the solution; private until now.
   const answers=responses?.[roundKey()]||{};
@@ -1339,7 +1353,7 @@ async function hostReveal(){
 }
 async function hostHint(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||!isOpen())return;const current=Number(activeQuestion()?.hintStep||0);if(current>=4)return;const next=(q.hints||[]).findIndex((h,i)=>i>=current&&h.trim());if(next<0)return;const v=q.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(q,false,v,next+1,Number(activeQuestion()?.scene?.step||0));if(q.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);await game.updateCurrent(room,Number(publicState.round),q.id,{current:pub},['question']);}
 async function hostSplashNext(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||q.type!=='splash'||!isOpen())return;const expectedRound=Number(publicState.round);const next=Math.min(2,Number(activeQuestion().visualStep||0)+1);const visual=await splashPreview(q.image,{...q,zoom:splashStageZoom(q.zoom,next)},false);const pub=publicQuestion(q,false,visual,Number(activeQuestion().hintStep)||0,Number(activeQuestion()?.scene?.step||0));pub.visualStep=next;await game.updateCurrent(room,expectedRound,q.id,{current:pub},['question']);}
-async function hostSceneNext(){const source=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!source?.scene||!isOpen())return;const step=Number(activeQuestion()?.scene?.step||0);if(step>=5)return;const next=step+1;const v=source.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(source,false,v,Number(activeQuestion()?.hintStep||0),next);if(source.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);if(isOffline()){publicState.current=pub;schedule();}else await game.updateCurrent(room,Number(publicState.round),source.id,{current:pub},['question']);}
+async function hostSceneNext(){const source=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!source?.scene||!isOpen())return;const step=Number(activeQuestion()?.scene?.step||0);if(step>=5)return;const next=step+1;const v=source.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(source,false,v,Number(activeQuestion()?.hintStep||0),next);if(source.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);if(isOffline()){publicState.current={...pub,points:activeQuestion().points,basePoints:activeQuestion().basePoints,doublePoints:activeQuestion().doublePoints};schedule();}else await game.updateCurrent(room,Number(publicState.round),source.id,{current:pub},['question']);}
 async function hostPreviousReveal(){
  if(!canHost()||!activeQuestion())return;
  const source=quiz.questions.find(q=>q.id===activeQuestion().id);
@@ -1498,7 +1512,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   }else await game.judgeWritten(room,roundKey(),person,result);
   scoreTarget=person;notice(result==='correct'?'Antwort richtig bewertet.':'Antwort falsch bewertet: halbe Fragepunkte abgezogen.');return;
  }
- case 'adjust-player':{if(!canHost()||!scoreTarget)throw Error('Person auswählen.');const delta=Number($('person-adjust')?.value);const actionData={kind:'manual',delta,at:now()};if(isOffline()){publicState.playerScores??={};publicState.playerScores[scoreTarget]=updatePlayerScore(publicState.playerScores[scoreTarget],actionData);saveOfflineSession();schedule();}else await game.scorePerson(room,scoreTarget,actionData);notice('Punkte korrigiert.');return;}
+ case 'adjust-player':{if(scoreMode(publicState)==='team')throw Error('Im Teammodus nur den einen gemeinsamen Teampunktestand korrigieren.');if(!canHost()||!scoreTarget)throw Error('Person auswählen.');const delta=Number($('person-adjust')?.value);const actionData={kind:'manual',delta,at:now()};if(isOffline()){publicState.playerScores??={};publicState.playerScores[scoreTarget]=updatePlayerScore(publicState.playerScores[scoreTarget],actionData);saveOfflineSession();schedule();}else await game.scorePerson(room,scoreTarget,actionData);notice('Punkte korrigiert.');return;}
  case 'score-page':{scorePage=Math.max(0,scorePage+Number(button.dataset.delta||0));schedule();return;}
  case 'board-page':{boardPage=Math.max(0,Math.min(boardPages().length-1,boardPage+Number(button.dataset.delta||0)));schedule();return;}
  case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;const turn=selectingTeam(publicState);if(turn&&turn!==member.team)throw Error('Gerade wählt ein anderes Team.');await sendGuestAction(turn?'Fragenauswahl':'Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice(turn?'Frage ausgewählt. Der Host deckt sie auf.':'Fragenwunsch an den Host gesendet.');return;}
@@ -1520,7 +1534,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   publicState.teamEmoji=publicTeamEmoji(demo);
   if(demo.phase==='reveal'){
    for(const result of demo.results)publicState.scores[result.id]=(publicState.scores[result.id]||0)+result.points;
-   publicState.phase='reveal';publicState.current=publicQuestion(currentQuestion(),true);
+   publicState.phase='reveal';publicState.current={...publicQuestion(currentQuestion(),true),points:publicState.current.points,basePoints:publicState.current.basePoints,doublePoints:publicState.current.doublePoints};
   }
   schedule();return;
  }

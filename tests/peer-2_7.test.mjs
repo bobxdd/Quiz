@@ -681,3 +681,89 @@ test('Host cannot secretly skip unanswered round-one fields without an explicit 
   await assert.rejects(host.advanceBoard(room,0,{force:true}),/Runde 2/);
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
+
+/** Build a full standard 5x5 board without requiring a second fixture package.
+ * Mark nineteen fields played, exactly as if previous turns were completed. */
+function makeFinalSixFixture(host,mode='buzzer'){
+ const source=host.hostQuiz.questions[0];
+ source.roundMode=mode;
+ for(let i=0;i<23;i++){
+  const q={...source,id:'finalsix-'+i,title:'Bonus '+i};
+  host.hostQuiz.questions.push(q);
+  host.data.public.board[q.id]={
+   id:q.id,boardRound:1,category:q.category,type:q.type,points:q.points,used:false
+  };
+ }
+ const ids=Object.keys(host.data.public.board);
+ assert.equal(ids.length,25);
+ for(const id of ids.slice(0,19)){
+  host.data.public.board[id].used=true;
+  host.data.public.used[id]=true;
+ }
+ return host.hostQuiz.questions.find(q=>q.id===ids[19]);
+}
+
+test('Host and guests use the locked double value for final-six buzzers, verdict, reveal and half-value penalty',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.setState(room,{published:true,started:true});
+  const question=makeFinalSixFixture(host);
+  const base=question.points;
+  await host.openQuestion(room,0,question,publicQuestion(question,false),null,0,{covered:true});
+  assert.equal(host.data.public.current.points,base*2,'covered question already announces doubled value');
+  assert.equal(host.data.public.current.doublePoints,true);
+  await host.uncoverQuestion(room,1,question.id);
+  assert.equal(host.data.public.current.points,base*2,'uncover must not lose the multiplier');
+  await sleep(80);
+  assert.equal(guest1.guestData.public.current.points,base*2,'guest sees the same official question value');
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  const reveal={phase:'reveal',deadline:0,pausedRemaining:0,
+   current:publicQuestion(question,true)};
+  await host.judgeBuzzer(room,1,guest1.uid,'correct',reveal);
+  assert.equal(host.data.public.scores.t1,base*2);
+  assert.equal(host.data.public.current.points,base*2,'answer reveal must not reset points');
+  assert.equal(host.data.public.current.doublePoints,true);
+  assert.equal(host.data.public.scores.t2,0);
+  await host.returnToBoard(room,1,question.id);
+  const next=host.hostQuiz.questions.find(q=>!host.data.public.used[q.id]);
+  await host.openQuestion(room,1,next,publicQuestion(next,false),null,0,{covered:true});
+  await host.uncoverQuestion(room,2,next.id);
+  await sleep(70);
+  assert.equal(await guest2.buzzer(room,2,'t2','Bob'),true);
+  const wrong=await host.judgeBuzzer(room,2,guest2.uid,'wrong');
+  assert.equal(wrong.delta,-next.points,'wrong on ×2 is −base, not −base/2');
+  assert.equal(host.data.public.scores.t1,base*2);
+  assert.equal(host.data.public.scores.t2,-next.points);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('One official TEAM score per doubled written question; extra teammates cannot multiply points',async()=>{
+ const {host,guest1,guest2}=await setup();
+ sessionStorage.clear();const guest3=new PeerGame();
+ try{
+  await guest3.init();
+  await guest3.connect(room,'Alina');
+  await host.hostAssign(room,guest3.uid,host.data.members[guest3.uid],'t1');
+  await host.setState(room,{published:true,started:true});
+  const question=makeFinalSixFixture(host,'written'),base=question.points;
+  const participants=Object.fromEntries([
+   [guest1.uid,{name:'Alice'}],[guest2.uid,{name:'Bob'}],[guest3.uid,{name:'Alina'}]
+  ]);
+  await host.openQuestion(room,0,question,publicQuestion(question,false),participants,0,{covered:true});
+  await host.uncoverQuestion(room,1,question.id);
+  const entries=Object.fromEntries(Object.entries(participants).map(([uid,p])=>
+   [uid,{name:p.name,submitted:true,revealed:true,value:p.name+' answer'}]
+  ));
+  await host.updateCurrent(room,1,question.id,{phase:'review',answerReview:{round:1,entries}},['question']);
+  assert.equal((await host.judgeWritten(room,1,guest1.uid,'correct')).total,base*2);
+  assert.equal(host.data.public.scores.t1,base*2);
+  await assert.rejects(host.judgeWritten(room,1,guest3.uid,'correct'),/andere Antwort offiziell gewertet/);
+  assert.equal(host.data.public.scores.t1,base*2);
+  await host.judgeWritten(room,1,guest2.uid,'wrong');
+  assert.equal(host.data.public.scores.t2,-base);
+  assert.equal(Object.keys(host.data.public.scores).length,2,'exactly one total per team');
+  assert.equal(host.data.public.writtenTeamRepresentatives['1'].t1,guest1.uid);
+  assert.equal(host.data.public.writtenTeamRepresentatives['1'].t2,guest2.uid);
+  await assert.rejects(host.scorePerson(room,guest1.uid,{kind:'manual',delta:100}),/gemeinsamen Punktestand/);
+ }finally{guest3.shutdown();guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
