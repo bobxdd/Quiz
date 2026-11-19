@@ -19,6 +19,9 @@ spec.loader.exec_module(rounds)
 EXPLANATION=('Diese Erklärung ist wichtig und darf auf kleinen Bildschirmen nicht verschwinden. ' * 20).strip()
 
 async def audit(page,label,solved):
+ # The scoreboard's page size is rendered on the next animation frame after
+ # a resize. Wait for that responsive render, not the stale desktop markup.
+ await page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
  report=await page.evaluate("""({solved})=>{
    const rect=s=>{const el=document.querySelector(s);if(!el)return null;
     const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}};
