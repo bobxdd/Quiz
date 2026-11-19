@@ -16,6 +16,19 @@ def sound():
   f.writeframes(b''.join(struct.pack('<h',int(7500*math.sin(i*2*math.pi*440/16000))) for i in range(16000*2)))
  return 'data:audio/wav;base64,'+base64.b64encode(out.getvalue()).decode('ascii')
 
+async def assert_no_premature_replay(host):
+ # The two-second fixture can already have FINISHED on a busy CI runner
+ # after both guests synchronize. Replay is allowed after the clip ends.
+ # Detect an EARLY replay by comparing the host's authoritative timestamp.
+ state=await host.evaluate("""() => {
+  const play=window.__probe.info().publicState.audioPlayback;
+  return {exists:!!play,elapsed:play?window.__probe.getGame().serverNow()-play.at:NaN};
+ }""")
+ assert state['exists'] and math.isfinite(state['elapsed']),state
+ if state['elapsed']<1850:
+  assert await host.locator('[data-action="audio-play"]').count()==0,(
+   'Host replay appeared before clip duration elapsed',state)
+
 async def join(ctx,host,code,name):
  async with ctx.expect_page() as opening:
   await host.evaluate("window.open('about:blank','_blank')")
@@ -66,7 +79,7 @@ async def main():
   for guest in [alice,bob]:
    await guest.wait_for_function("() => window.__probe.info().publicState.audioPlayback?.seq===1",timeout=10000)
    assert await guest.locator('.bq-soundquiz [data-action="audio-play"]').count()==0
-  assert await host.locator('[data-action="audio-play"]').count()==0,'Host replay must not appear before clip end'
+  await assert_no_premature_replay(host)
   # Each guest can only unlock this host-authorized run if browser autoplay blocked.
   for guest in (alice,bob):
    if await guest.locator('[data-action="audio-unblock"]').count():
@@ -85,7 +98,7 @@ async def main():
   await host.get_by_role('button',name='↻ Sound erneut abspielen').click()
   for guest in [alice,bob]:
    await guest.wait_for_function("() => window.__probe.info().publicState.audioPlayback?.seq===2",timeout=10000)
-  assert await host.locator('[data-action="audio-play"]').count()==0
+  await assert_no_premature_replay(host)
   if await host.locator('[data-action="audio-unblock"]').count():
    await host.locator('[data-action="audio-unblock"]').click()
   await host.get_by_role('button',name='↻ Sound erneut abspielen').wait_for(timeout=10000)
