@@ -5,10 +5,18 @@ import asyncio,functools,threading,shutil
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.async_api import async_playwright
+import idb_board_helper as idb
 
 ROOT=Path(__file__).resolve().parents[1] / 'docs'
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
+
+async def board_question(page):
+ # Autosave is deliberately debounced; inspect only confirmed IndexedDB data.
+ await page.wait_for_timeout(800)
+ active=await idb.get_value(page,'bq-board-active-v1')
+ entry=await idb.get_json(page,'bq-board-workspace-'+active)
+ return entry['quiz']['questions'][0]
 
 async def run():
  server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=str(ROOT)))
@@ -31,7 +39,7 @@ async def run():
    await page.locator('.bq-map-viewport').wait_for()
    assert await page.locator('.bq-map-required').count()==1,'missing host requirement'
    assert await page.locator('.bq-map-viewport img[src$="world-map.svg"]').count()==1
-   saved=await page.evaluate("""() => {const id=localStorage.getItem('bq-board-active-v1');return JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.questions[0]}""")
+   saved=await board_question(page)
    assert not saved['mapTargetSet'],'unset host position was incorrectly complete'
    print('PASS: fresh map question is incomplete until host deliberately drops dagger')
    await page.locator('[data-se-field="mapPrompt"]').fill('Wo befindet sich diese Stadt?')
@@ -46,7 +54,7 @@ async def run():
    await page.mouse.click(rect['x']+rect['width']*.63,rect['y']+rect['height']*.42)
    await page.locator('.bq-map-valid').wait_for()
    assert await page.locator('.bq-map-pin.is-host img[src$="dagger-pin.svg"]').count()==1
-   saved=await page.evaluate("""() => {const id=localStorage.getItem('bq-board-active-v1');return JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.questions[0]}""")
+   saved=await board_question(page)
    assert saved['mapTargetSet'] is True,saved
    assert abs(saved['mapTargetX']-63)<1 and abs(saved['mapTargetY']-42)<1,saved
    print('PASS: actual mouse click sets and persists secret dagger target with fractional coordinates')
@@ -62,14 +70,14 @@ async def run():
    await page.mouse.move(rect['x']+rect['width']*.48,rect['y']+rect['height']*.5)
    await page.mouse.down();await page.mouse.move(rect['x']+rect['width']*.57,rect['y']+rect['height']*.47,steps=5)
    await page.mouse.up()
-   same=await page.evaluate("""() => {const id=localStorage.getItem('bq-board-active-v1');return JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.questions[0]}""")
+   same=await board_question(page)
    assert (same['mapTargetX'],same['mapTargetY'])==old,'zoom/pan unexpectedly moved solution'
    print('PASS: zoom controls, mouse wheel and pan do not alter saved answer coordinates')
    await page.locator('.bq-map-viewport').focus()
    await page.keyboard.press('ArrowLeft')
    await page.keyboard.press('Enter')
    await page.locator('.bq-map-valid').wait_for()
-   saved=await page.evaluate("""() => {const id=localStorage.getItem('bq-board-active-v1');return JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.questions[0]}""")
+   saved=await board_question(page)
    assert (saved['mapTargetX'],saved['mapTargetY'])!=old,'keyboard placement did not update answer'
    print('PASS: map keyboard navigation and Enter place a new answer')
    await page.reload()
@@ -81,7 +89,7 @@ async def run():
    print('PASS: page reload preserves host target')
    await page.locator('[data-se-action="map-clear"]').click()
    await page.locator('.bq-map-required').wait_for()
-   saved=await page.evaluate("""() => {const id=localStorage.getItem('bq-board-active-v1');return JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.questions[0]}""")
+   saved=await board_question(page)
    assert saved['mapTargetSet'] is False
    print('PASS: removing marker reverts quiz question to incomplete')
    await page.set_viewport_size({'width':390,'height':800})
