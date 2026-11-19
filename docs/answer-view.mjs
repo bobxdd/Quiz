@@ -30,7 +30,7 @@ export function renderAnswerView(q,{preview=false}={}){
  const mapOnly=!text&&!image&&q.type==='map'&&q.mapTargetSet;
  const fallback=mapOnly?'Der richtige Ort ist auf der Karte mit dem Dolch markiert.':
   !text&&!image?'Noch keine Antwort hinterlegt.':'';
- return '<section class="bq-answer-view'+(preview?' bq-answer-editor-preview':'')+'" aria-label="Antwortansicht">'
+ return '<section class="bq-answer-view'+(preview?' bq-answer-editor-preview':'')+'" aria-label="Antwortansicht" tabindex="0">'
   +'<div class="bq-answer-view-top"><span class="bq-answer-overline">AUFLÖSUNG</span><strong>Richtige Antwort</strong></div>'
   +'<div class="bq-answer-view-content'+(image?' has-image':'')+'">'
   +(image?'<div class="bq-answer-image"><img src="'+image+'" alt="'+html(alt)+'" loading="eager" draggable="false"></div>':'')
