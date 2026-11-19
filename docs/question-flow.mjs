@@ -91,7 +91,7 @@ export function validQuestionPair(state,question){
 export function openQuestionState(state,{expectedRound,question,playerQuestion,participants,deadline=0,covered=false}){
   if(!state||!['board','reveal'].includes(state.phase)||Number(state.round)!==Number(expectedRound))return null;
   if(state.boardSequence&&state.phase!=='board')return null;
-  if(state.questionPick&&state.questionPick.qid!==question?.id)return null;
+  // Legacy guest reservations must not restrict the host's choice.
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
