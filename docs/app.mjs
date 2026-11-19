@@ -16,7 +16,7 @@ import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
 import {createHistoryEntry,historyRows,responseStatus,historyCsv,csvSafeCell} from './history-model.mjs';
-import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from './answer-review.mjs';
+import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState,shouldAutoBeginAnswerReview} from './answer-review.mjs';
 import {renderScene,ensureScene,templateScene,reconcileQuestion,sceneHasStep,publicScene,imposterPublicScene,escape as sceneEscape} from './studio-model.mjs';
 import {BLOCK_TYPES,newBlock,blockId,normalizeBlocks,normalizeBlock,renderBlocks,validateBlocks} from './layout.mjs';
 import {sceneForPublicState,isBoardCellPlayed,pageBoardColumns,VERSION,MODES,ABILITIES,TEAM_COLORS,escapeHTML as e,roomCode,uid,emptyQuiz,normalizedQuiz,buildPublicBoard,buildTeams,buildScores,publicQuestion,splashPreview,optimizeImage,safeDownload,validateQuestion,isImageData,isAudioData,shuffledItems,splashStageZoom,rankEstimates,optimizeAudio,quickBoard,categoryColumns,STANDARD_POINTS,DEFAULT_CATEGORIES,judgementDelta,updatePlayerScore,manualPlayerLabels} from './core.mjs';
@@ -308,7 +308,7 @@ async function startAnswerReview(automatic=false){
  const submitted=responses?.[String(currentRound)]||{};
  const progress=answerProgress(expected,submitted);
  if(!progress.total){if(!automatic)throw Error('Keine Online-Teilnehmer für diese Frage erfasst.');return;}
- if(automatic&&!progress.complete&&!(activeQuestion()?.type==='map'&&publicState?.deadline&&now()>=publicState.deadline))return;
+ if(automatic&&!shouldAutoBeginAnswerReview(publicState,submitted,now()))return;
  const board=makeAnswerReview(expected,submitted,currentRound);
  await game.updateCurrent(room,currentRound,publicState.current.id,{phase:'review',deadline:0,pausedRemaining:0,answerReview:board},['question']);
  if(!automatic)notice('Antwortübersicht für alle Teilnehmer geöffnet.');
@@ -316,10 +316,7 @@ async function startAnswerReview(automatic=false){
 async function maybeAutoBeginReview(){
  if(!canHost()||isOffline()||!game||publicState?.phase!=='question'||roundMode(activeQuestion())!=='written')return;
  const roundNumber=Number(publicState.round)||0;
- const mapRound=activeQuestion()?.type==='map';
- const expired=mapRound&&!!publicState.deadline&&now()>=publicState.deadline;
- if(mapRound&&!expired)return; // Map pins remain editable until the timer ends; without timer the host closes manually.
- if(reviewStartPending===roundNumber||(!expired&&!answerProgress(publicState.answerParticipants,responses?.[String(roundNumber)]).complete))return;
+ if(reviewStartPending===roundNumber||!shouldAutoBeginAnswerReview(publicState,responses?.[String(roundNumber)]||{},now()))return;
  reviewStartPending=roundNumber;
  try{await startAnswerReview(true);}catch(err){error(err);}finally{reviewStartPending=-1;}
 }
@@ -1787,7 +1784,7 @@ document.addEventListener('change',async ev=>{const target=ev.target;try{if(targ
 document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}});
 
 document.addEventListener('keydown',ev=>{if(ev.code!=='KeyB'||ev.ctrlKey||ev.altKey||ev.metaKey||canHost()||role!=='guest')return;const el=document.activeElement;if(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName))return;ev.preventDefault();const b=document.querySelector('[data-action="buzz"]');if(b&&!b.disabled)b.click();});
-setInterval(()=>{updateClock();if(publicState?.phase==='question'&&activeQuestion()?.type==='map'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();const play=soundEvent();if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}},350);
+setInterval(()=>{updateClock();if(publicState?.phase==='question'&&roundMode(activeQuestion())==='written'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();const play=soundEvent();if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}},350);
 render();
 // A host may restore a previous session from its own browser; returning guests
 // need the per-tab identity/secret created on their original visit.
