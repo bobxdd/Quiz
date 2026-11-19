@@ -557,3 +557,67 @@ test('unverified peer channels are removed when they disconnect',async()=>{
   assert.equal(host.unverifiedConnections.size,0);
  }finally{anonymous.destroy();guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
+
+test('an outstanding buzzer is never bypassed by manual solution or board navigation, but may be reset and canceled',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.setState(room,{published:true,started:true});
+  const q=host.hostQuiz.questions[0];
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
+  await host.uncoverQuestion(room,1,q.id);await sleep(80);
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  await assert.rejects(
+   host.updateCurrent(room,1,q.id,{phase:'reveal',current:publicQuestion(q,true),deadline:0},['question']),
+   /Zuerst Richtig oder Falsch/
+  );
+  await assert.rejects(host.returnToBoard(room,1,q.id),/Offener Buzzer/);
+  await assert.rejects(host.cancelQuestion(room,1,q.id),/offenen Buzzer/);
+  assert.equal(host.data.public.board[q.id].used,true);
+  await host.clearBuzzer(room,1);
+  const cancelled=await host.cancelQuestion(room,1,q.id);
+  assert.equal(cancelled.phase,'board');
+  assert.equal(host.data.public.board[q.id].used,false);
+  assert.equal(selectingTeam(host.data.public),'t1');
+  assert.equal(host.data.public.round,1,'stale guest packets must not belong to next question');
+  await host.openQuestion(room,1,q,publicQuestion(q,false),null,0,{covered:true});
+  assert.equal(host.data.public.round,2);
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+test('wrong verdict creates a non-refundable scored event, even if the buzzer has been released',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.setState(room,{published:true,started:true});
+  const q=host.hostQuiz.questions[0];
+  await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
+  await host.uncoverQuestion(room,1,q.id);await sleep(80);
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  await host.judgeBuzzer(room,1,guest1.uid,'wrong');
+  assert.equal(host.data.public.scores.t1,-50);
+  await assert.rejects(host.cancelQuestion(room,1,q.id),/Antworten oder Punktwertungen/);
+  assert.equal(host.data.public.board[q.id].used,true);
+  const revealed=await host.updateCurrent(room,1,q.id,{phase:'reveal',current:publicQuestion(q,true),deadline:0,pausedRemaining:0},['question']);
+  assert.equal(revealed.phase,'reveal');
+  assert.equal(host.data.public.scores.t1,-50);
+  await host.returnToBoard(room,1,q.id);
+  assert.equal(selectingTeam(host.data.public),'t2');
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
+
+test('host may pass selection rights to an absent team without affecting scores or violating a reserved pick',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  await host.setState(room,{published:true,started:true});await sleep(60);
+  const q=host.hostQuiz.questions[0];
+  assert.equal(await guest1.requestPick(room,q.id),true);
+  await assert.rejects(host.skipSelection(room),/Auswahlrecht/);
+  await host.clearPicks(room);
+  assert.equal(await host.skipSelection(room),'t2');
+  assert.equal(selectingTeam(host.data.public),'t2');
+  assert.equal(host.data.public.scores.t1,0);
+  assert.equal(host.data.public.scores.t2,0);
+  await assert.rejects(guest1.requestPick(room,q.id),/anderes Team/);
+  assert.equal(await guest2.requestPick(room,q.id),true);
+  assert.equal(host.data.public.questionPick.team,'t2');
+ }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
+});
