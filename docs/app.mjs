@@ -763,12 +763,15 @@ function boardScene(host=false){
  const p=publicState;
  const cells=boardColumns().flatMap(column=>column.items);
  const suggestions=host?Object.entries(picks||{}).filter(([,x])=>p.board?.[x.qid]&&!p.board[x.qid]?.used):[];
+ const hasRoundTwo=boardRoundOf(p)===1&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2);
+ const remainingFirst=hasRoundTwo?remainingBoardQuestions(p,1).length:0;
  return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
  ${selectingTeam(p)?`<div class="glass bq-selection-turn" role="status" aria-atomic="true"><strong>${e(teamName(selectingTeam(p)))} wählt die nächste Frage</strong><span>${p.questionPick?'Frage vorgemerkt: der Host öffnet sie oder gibt die Auswahl wieder frei.':host?'Der Host kann das Feld auch für dieses Team öffnen.':selectingTeam(p)===member?.team?'Wähle ein Feld. Die Frage bleibt bis zur Host-Aufdeckung verdeckt.':'Warte auf die Auswahl. Danach dürfen alle Teams buzzern.'}</span>${host&&p.questionPick?btn('Auswahl freigeben','clear-pick','small'):host&&p.selectionTurn?.order?.length>1?btn('Auswahlrecht weitergeben','skip-turn','small'):''}</div>`:''}
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${suggestions.length?`<details class="bq-auxiliary"><summary>${suggestions.length} Fragenwunsch${suggestions.length===1?'':'e'} von Teilnehmern</summary><div class="row">${suggestions.slice(-8).map(([,x])=>btn(`${e(x.name||'Spieler')}: ${e(p.board[x.qid]?.category||'')} ${e(p.board[x.qid]?.points||'')}`,'open','small',`data-qid="${e(x.qid)}"`)).join('')}</div></details>`:''}
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
  ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn('Runde 2 starten','next-board','primary')}</div>`:''}
+ ${host&&hasRoundTwo&&remainingFirst? `<details class="bq-auxiliary bq-round-override"><summary>Ausnahme: Runde 1 vorzeitig beenden</summary><p class="small muted">Noch ${remainingFirst} Frage${remainingFirst===1?'':'n'} offen. Üblicherweise startet Runde 2 erst, wenn alle Fragen aus Runde 1 gespielt wurden. Nur bei einem bewusst verkürzten Spiel verwenden.</p>${btn('Offene Felder überspringen und Runde 2 starten','skip-board','small danger')}</details>`:''}
  ${sessionFooter()}</section>`;
 }
 function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';}
@@ -982,7 +985,10 @@ function renderHostLive(){
  if(publicState?.phase==='finished')return renderFinalResults(true);
  if(publicState?.phase==='ready')return readyQuestionScene();
  if(activeQuestion()?.type===TEAM_EMOJI&&publicState.teamEmoji)return teamEmojiScene();
- if(!hasLiveQuestion())return boardScene(true)+(mayFinishGame(publicState)&&!canAdvanceBoard(publicState)?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
+ if(!hasLiveQuestion()){
+  const roundTwoPending=boardRoundOf(publicState)===1&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===2);
+  return boardScene(true)+(mayFinishGame(publicState)&&!roundTwoPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
+ }
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
  const awaitingVerdict=!!winner()&&['question','paused'].includes(p.phase)&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()];
@@ -1386,11 +1392,18 @@ const studio=createStudioEditor({
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
  case 'uncover-question':await uncoverSelectedQuestion();return;
- case 'next-board':{
-  if(!canHost()||!canAdvanceBoard(publicState))return;
-  if(remainingBoardQuestions(publicState).length&&!confirm('Runde 1 enthält noch ungespielte Fragen. Trotzdem Runde 2 starten?'))return;
-  if(isOffline()){publicState=advanceBoardState(publicState);boardPage=0;if(!rehearsal)saveOfflineSession();schedule();}
-  else await game.advanceBoard(room,publicState.round);
+ case 'next-board':case 'skip-board':{
+  const early=action==='skip-board';
+  if(!canHost()||!canAdvanceBoard(publicState,{force:early}))return;
+  if(early){
+   const remaining=remainingBoardQuestions(publicState,1).length;
+   if(!remaining)throw Error('Alle Fragen der ersten Runde sind bereits gespielt.');
+   if(!confirm('ACHTUNG: '+remaining+' offene Frage(n) werden beim Wechsel zu Runde 2 übersprungen. Diese Felder sind danach im laufenden Spiel nicht mehr erreichbar. Nur fortfahren, wenn dies mit allen Teams abgestimmt ist.'))return;
+  }
+  if(isOffline()){
+   publicState=advanceBoardState(publicState,{force:early});boardPage=0;
+   if(!rehearsal)saveOfflineSession();schedule();
+  }else await game.advanceBoard(room,publicState.round,{force:early});
   return;
  }
  case 'emoji-start':{
@@ -1671,6 +1684,8 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export-history':{if(!canHost())return;const players=Object.fromEntries(participantList().map(([id,name])=>[id,{name}]));const rows=historyRows(questionHistory,responses,publicState?.playerScores,players);if(!rows.length)throw Error('Noch keine Fragerunden im Verlauf.');const solutions=Object.fromEntries(quiz.questions.map(q=>[q.id,answerViewContent(q).text]));const metadata=Object.fromEntries(quiz.questions.map(q=>[q.id,q]));const blob=new Blob([historyCsv(rows,solutions,metadata)],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const link=document.createElement('a');link.href=href;link.download='BrainQuiz_Fragenverlauf.csv';link.click();setTimeout(()=>URL.revokeObjectURL(href),500);return;}
  case 'finish-game':{
   if(!canHost()||isOffline()||!mayFinishGame(publicState))throw Error('Quiz kann nur zwischen Fragen oder nach einer Auflösung beendet werden.');
+  if(boardRoundOf(publicState)===1&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===2))
+   throw Error('Vor der Siegerehrung muss Runde 2 gestartet oder ausdrücklich übersprungen werden.');
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
   const left=remainingBoardQuestions(publicState).length;
@@ -1731,7 +1746,7 @@ async function handleBlockUpload(input){const b=chosenBlock(),file=input.files?.
 async function handleAudioUpload(input){const q=currentQuestion(),file=input.files?.[0];if(!q||!file)return;notice('Audio wird lokal verarbeitet …');q.audio=await optimizeAudio(file,q.audioStart,q.audioDuration);saveLocal();schedule();notice('Audioclip verarbeitet, ohne Original-Metadaten gespeichert.');}
 async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(localStorage,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
 function updateClock(){const el=$('clock');if(!el)return;const deadline=publicState?.deadline||0;if(!deadline){el.textContent='–:––';return;}const s=Math.max(0,Math.ceil((deadline-now())/1000));el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
-const CRITICAL_HOST_ACTIONS=new Set(['open','clear-pick','skip-turn','cancel-question','uncover-question','next-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
+const CRITICAL_HOST_ACTIONS=new Set(['open','clear-pick','skip-turn','cancel-question','uncover-question','next-board','skip-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 document.addEventListener('pointerdown',()=>{sfx.unlock()},{capture:true,passive:true});
 document.addEventListener('keydown',()=>{sfx.unlock()},{capture:true});
