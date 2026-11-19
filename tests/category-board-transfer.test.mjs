@@ -118,3 +118,10 @@ test('the editor exposes category transfer only for saved local boards',()=>{
  assert.match(app,/sourceId:boardId,expectedSourceRevision:boardRevision/);
  assert.match(app,/if\(!isOffline\(\)\|\|!boardId\|\|boardConflict\)/);
 });
+
+test('board workspace stays self-contained for isolated browser fixtures',async()=>{
+ const code=readFileSync(new URL('../docs/board-workspace.mjs',import.meta.url),'utf8');
+ const isolated=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+ assert.equal(typeof isolated.transferCategoryBetweenBoards,'function');
+ assert.equal(typeof isolated.loadBoard,'function');
+});
