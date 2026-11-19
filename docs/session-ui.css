@@ -546,3 +546,15 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-rehearsal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .75rem; }
 
 .bq-selection-turn{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;padding:12px 16px;margin:0 0 12px;border:1px solid var(--line);border-left:4px solid #ffd86b}.bq-selection-turn strong{color:#ffd86b}.bq-selection-turn span{font-size:.88rem;color:var(--muted)}
+/* Shared deadline for timed written questions: displayed above the question
+   for host and guests; never shown on untimed/buzzer question scenes. */
+.bq-round-countdown{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;min-width:118px;flex:0 0 auto;padding:5px 12px;border:2px solid #8ed1c2;border-radius:10px;background:#16353d;color:#f7ffff;box-shadow:0 2px 12px #0006}
+.bq-round-countdown-caption{font-size:10px;font-weight:800;letter-spacing:.14em;line-height:1.2}
+.bq-round-countdown #clock{font-size:clamp(23px,2.5vw,34px);font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;min-width:4ch;text-align:center;letter-spacing:.025em}
+.bq-round-countdown.is-urgent{background:#74352e;border-color:#f0ad83;color:#fff9ea}
+.bq-round-countdown.is-expired{background:#51363b;border-color:#d18b94;color:#f7e6ea}
+.bq-round-countdown.is-paused{background:#303c49;border-color:#a4b6c5;color:#e7edf2}
+.bq-review-team-nav{display:flex;align-items:center;gap:6px;margin:7px 0 9px;padding:3px 0;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.bq-review-team-nav .btn{flex:none;min-height:34px;font-size:12px;white-space:nowrap}
+.bq-review-person-team{display:block;margin-top:2px;color:#bdc9d4;font-size:11px;font-weight:600}
+@media(max-width:580px){.bq-scene-heading{gap:6px}.bq-round-countdown{min-width:88px;padding:4px 8px}.bq-round-countdown #clock{font-size:24px}.bq-round-countdown-caption{font-size:9px}}
