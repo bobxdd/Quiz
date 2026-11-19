@@ -46,6 +46,7 @@ async def main():
     await page.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
     players.append(page)
    anna,ben=players
+   await host.locator('[data-action="start-game"]').click()
    await host.locator('.top-nav [data-view="live"]').click()
    await host.locator('[data-action="open"][data-qid="timer-written"]').click()
    await host.locator('[data-action="uncover-question"]').click()
