@@ -96,6 +96,7 @@ async def main():
   await guest.locator('.bq-lobby-notice').wait_for(timeout=12000)
   await host.locator('[data-action="approve"]').first.click()
   await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('[data-action="open"][data-qid="'+ids[0]+'"]').click()
   await host.locator('[data-action="uncover-question"]').click()
