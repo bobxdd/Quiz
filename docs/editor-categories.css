@@ -61,3 +61,15 @@
 @media(max-width:1330px){.se-editor-v3 .se-workgrid.se-category-detail{grid-template-columns:minmax(210px,240px) minmax(0,1fr)}.se-editor-v3 .se-inspector{grid-column:2;max-height:none;overflow:visible}.se-editor-v3 .se-list{grid-column:1;grid-row:1/span 2;max-height:calc(100dvh - 165px)}}
 @media(max-width:820px){.se-editor-v3 .se-workgrid,.se-editor-v3 .se-workgrid.se-category-home,.se-editor-v3 .se-workgrid.se-category-detail{grid-template-columns:minmax(0,1fr)!important}.se-editor-v3 .se-list,.se-editor-v3 .se-main,.se-editor-v3 .se-inspector{grid-column:1!important;grid-row:auto!important;width:100%;max-height:none;overflow:visible}.se-editor-v3 .se-category-nav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;max-height:none;padding-bottom:4px}.se-editor-v3 .se-category-navrow{width:auto;min-width:max-content;max-width:230px}.se-editor-v3 .se-questions{display:flex;max-height:220px;overflow-y:auto}.se-editor-v3 .se-main{min-height:0}.se-editor-v3 .se-category-grid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}}
 @media(prefers-reduced-motion:reduce){.se-editor-v3 button{transition:none}}
+
+/* Transfer a complete saved category to a different local quizboard. */
+.se-editor-v3 .se-category-transfer{align-self:flex-start;margin-top:7px;padding:6px 10px;min-height:31px;border:1px solid #78b1c7;border-radius:7px;background:#203b49;color:#e4f5fc;font-size:12px;font-weight:750;cursor:pointer}
+.se-editor-v3 .se-category-transfer:hover,.se-editor-v3 .se-category-transfer:focus-visible{background:#2e5365;outline-offset:2px}
+.se-category-transfer-form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;padding:16px;border:1px solid #6b9ba9;border-radius:12px;background:#182e3a;color:#f1f9fb;margin:15px 0}
+.se-category-transfer-form h3,.se-category-transfer-form p,.se-category-transfer-form>small{flex:0 0 100%;margin:0;line-height:1.4}
+.se-category-transfer-form h3{font-size:18px}
+.se-category-transfer-form p,.se-category-transfer-form>small{font-size:13px;color:#c0d2d8}
+.se-category-transfer-form label{display:flex;flex-direction:column;gap:5px;min-width:190px;flex:1;font-size:13px;font-weight:750}
+.se-category-transfer-form select{background:#14242e;color:#fff;border:1px solid #8da9b3;border-radius:7px;padding:8px;min-height:42px;width:100%}
+.se-category-transfer-form .se-inline{flex:0 0 100%;display:flex;gap:9px;flex-wrap:wrap}
+.se-category-transfer-form .se-inline button{min-height:39px;padding:8px 13px}

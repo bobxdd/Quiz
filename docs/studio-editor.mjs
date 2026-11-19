@@ -9,7 +9,7 @@ import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategor
 import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
- let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1;
+ let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1,transferCategoryName='';
  let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas',editorPane='question';
  let mapCamera={...DEFAULT_MAP_VIEW},mapQuestionId='';
  const q=()=>api.getQuestion();
@@ -31,10 +31,10 @@ export function createStudioEditor(api){
   const categoryMenu=kind==='category';
   const title=categoryMenu?category:(quiz().questions||[]).find(item=>item.id===id)?.title||'Frage';
   const items=categoryMenu?[
-   ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],
+   ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],['category-transfer-open','In anderes Quizbrett übertragen'],
    ['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']
   ]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
-  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${action==='category-move'?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
+  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${['category-move','category-transfer-open'].includes(action)?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
  }
  const setSaveBadge=(pending)=>{savePending=pending;const el=document.querySelector('.se-save-badge');if(el){el.textContent=pending?'● Wird gespeichert …':saveLabel();el.classList.toggle('is-warning',!pending&&saveLabel().startsWith('⚠'));}if(!pending&&/SPEICHERFEHLER|KONFLIKT/i.test(api.saveStatus?.()||''))draw();};
  const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);if(refresh)draw();};
@@ -185,16 +185,30 @@ export function createStudioEditor(api){
  function categoryCard(name,created,all){
   const count=questionsInCategory(all,name).length;
   const meta=CATEGORY_SUGGESTIONS.find(s=>categoryKey(s.name)===categoryKey(name));
+  const boardInfo=api.boardInfo?.();
+  const canTransfer=api.isOffline()&&(boardInfo?.boards||[]).some(board=>board.id!==boardInfo.id);
   return `<article class="se-category-card ${created?'':'se-category-suggestion'}" ${created?`data-se-library="category" data-category="${escape(name)}"`:''}>
    <button type="button" class="se-category-open" data-se-action="${created?'category-select':'category-preset'}" data-category="${escape(name)}"><strong>${escape(name)}</strong><small>${created?`${count} ${count===1?'Frage':'Fragen'}`:'Vorlage'}</small><span>${escape(meta?.description||'Eigene Quizkategorie')}</span></button>
-   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">${moveCategoryLabel()}</button>`:''}
+   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">${moveCategoryLabel()}</button>${canTransfer?`<button type="button" class="se-category-transfer" data-se-action="category-transfer-open" data-category="${escape(name)}">In anderes Quiz übertragen</button>`:''}`:''}
   </article>`;
  }
  function overview(all,cats){
   const presets=CATEGORY_SUGGESTIONS.filter(s=>!cats.some(cat=>categoryKey(cat)===categoryKey(s.name)));
   const matching=search.trim()?all.filter(item=>[item.title,item.prompt,item.category].join(' ').toLocaleLowerCase('de').includes(search.toLocaleLowerCase('de'))):[];
+  const info=api.boardInfo?.()||{boards:[],id:''};
+  const targets=(info.boards||[]).filter(board=>board.id!==info.id);
+  const transferPanel=transferCategoryName&&targets.length?`<form class="se-category-transfer-form" data-se-category-transfer-form>
+    <h3>Kategorie „${escape(transferCategoryName)}“ übertragen</h3>
+    <p>Alle Fragen, Medien und Antworten werden übernommen. Das Zielquiz wird im Browser gespeichert.</p>
+    <label>Ziel-Quizbrett<select name="target-board" required>${targets.map(board=>`<option value="${escape(board.id)}">${escape(board.title)} (${escape(board.id.slice(1,7).toUpperCase())})</option>`).join('')}</select></label>
+    <label>Zielrunde<select name="target-round"><option value="1" ${editorRound===1?'selected':''}>Runde 1</option><option value="2" ${editorRound===2?'selected':''}>Runde 2</option></select></label>
+    <label>Aktion<select name="transfer-mode"><option value="copy">Kopieren (Original behalten)</option><option value="move">Verschieben (nach dem Kopieren Quelle entfernen)</option></select></label>
+    <div class="se-inline"><button class="se-primary" type="submit">Kategorie übertragen</button><button type="button" data-se-action="category-transfer-cancel">Abbrechen</button></div>
+    <small>Maximal sechs Kategorien pro Runde und sechs Fragen je Kategorie. Bestehende Quizze werden nicht stillschweigend ersetzt.</small>
+   </form>`:'';
   return `<section class="se-category-overview" aria-label="Kategorieübersicht"><div class="se-overview-head"><div><span class="se-eyebrow">Quizstruktur</span><h2>Kategorien</h2><p>Erstelle zuerst eine Kategorie, dann die Fragen darin.</p></div><button type="button" class="se-primary" data-se-action="category-form">+ Kategorie</button></div>
    ${cats.length?`<div class="se-category-grid">${cats.map(name=>categoryCard(name,true,all)).join('')}</div>`:'<p class="se-overview-empty">Noch keine Kategorie angelegt.</p>'}
+   ${transferPanel}
    ${matching.length?`<section class="se-search-results"><h3>Suchergebnisse (${matching.length})</h3>${matching.slice(0,30).map(item=>`<button type="button" data-se-action="select" data-id="${escape(item.id)}">${escape(item.category)} · ${escape(item.title)}</button>`).join('')}</section>`:''}
    ${presets.length?`<div class="se-overview-presets"><h3>Schnell anlegen</h3><p>Das sind Vorschläge – du kannst auch eigene Namen verwenden.</p><div class="se-category-grid">${presets.map(s=>categoryCard(s.name,false,all)).join('')}</div></div>`:''}
   </section>`;
@@ -368,12 +382,19 @@ export function createStudioEditor(api){
   libraryMenu=null;draw();
   if(opener)document.querySelector('#se-root '+opener)?.focus({preventScroll:true});
  }
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
  switch(action){
   case 'board-round':{
    const next=Number(button.dataset.boardRound)===2?2:1;
-   flushDraft();editorRound=next;activeCategory='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
+   flushDraft();editorRound=next;activeCategory='';transferCategoryName='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
   }
+  case 'category-transfer-open':{
+   if(!api.isOffline())throw Error('Nur bei lokal gespeicherten Quizbrettern verfügbar.');
+   const name=categories().find(value=>categoryKey(value)===categoryKey(button.dataset.category||libraryMenu?.category));
+   if(!name)throw Error('Kategorie nicht gefunden.');
+   flushDraft();activeCategory='';transferCategoryName=name;libraryMenu=null;draw();return;
+  }
+  case 'category-transfer-cancel':transferCategoryName='';draw();return;
   case 'category-move':{
    const oldNames=categories(),key=categoryKey(button.dataset.category);
    const name=oldNames.find(category=>categoryKey(category)===key);
@@ -542,6 +563,21 @@ export function createStudioEditor(api){
    try{await applyImageFiles([file],{kind:'answer-image'});api.notice?.('Bild aus der Zwischenablage eingefügt.');}catch(error){api.error(error);}
   });
   root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
+  root.addEventListener('submit',event=>{
+   if(!event.target.matches('[data-se-category-transfer-form]'))return;
+   event.preventDefault();
+   try{
+    const form=event.target,category=transferCategoryName;
+    const targetId=form.querySelector('[name="target-board"]')?.value;
+    const targetRound=Number(form.querySelector('[name="target-round"]')?.value)||editorRound;
+    const move=form.querySelector('[name="transfer-mode"]')?.value==='move';
+    if(!category||!targetId)throw Error('Kategorie und Zielquiz auswählen.');
+    const count=questionsInCategory(visibleQuestions(),category).length;
+    if(move&&!confirm('Kategorie „'+category+'“ mit '+count+' Fragen nach der Übertragung aus diesem Quizbrett entfernen?'))return;
+    flushDraft();api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
+    transferCategoryName='';draw();
+   }catch(err){api.error(err);}
+  });
   root.addEventListener('submit',event=>{if(!event.target.matches('[data-se-category-form]'))return;event.preventDefault();try{const raw=event.target.querySelector('[data-se-category-name]')?.value||'';if(renamingCategory)renameCategory(raw);else addCategory(raw);}catch(err){api.error(err);}});
   root.addEventListener('click',event=>{if((menu||libraryMenu)&&!event.target.closest('.se-context')){menu=null;libraryMenu=null;if(!event.target.closest('[data-se-action],[data-se-element]')){draw();return;}}const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});
   root.addEventListener('focusout',event=>{if(event.target===trackedInput)trackedInput=null;});
@@ -584,5 +620,5 @@ const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!
  }
  return {html,render:()=>html(),mount,flush:flushDraft,
   focusIssue:id=>{const item=quiz()?.questions?.find(v=>v.id===id);if(!item)return;editorRound=boardRoundOf(item);activeCategory=item.category;auditOpen=true;choose(id,{issue:true});},
-  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
+  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';transferCategoryName='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
 }

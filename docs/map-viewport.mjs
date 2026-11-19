@@ -5,13 +5,20 @@ import {normalizeMapView,mapScreenPosition,mapWorldPosition,mapZoomAt,mapPanBy,m
 export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],editable=false,editor=false,visibleSolution=false}={}){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const v=normalizeMapView(view),css=mapViewCss(v);
- const pinMarkup=(pos,cls,label,img=false)=>{
+ const pinMarkup=(pos,cls,label,img=false,number='',name='')=>{
   const p=mapScreenPosition(pos,v);
   if(!p)return '';
   const offscreen=p.x<-4||p.x>104||p.y<-4||p.y>104;
-  return `<span class="bq-map-pin ${cls}" ${offscreen?'hidden':''} style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':'<span class="bq-map-pin-dot" aria-hidden="true"></span>'}</span>`;
+  return `<span class="bq-map-pin ${cls}" ${offscreen?'hidden':''} style="left:${p.x}%;top:${p.y}%" data-map-world="true" data-map-x="${pos.x}" data-map-y="${pos.y}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${img?'<img src="./dagger-pin.svg" alt="" draggable="false">':`<span class="bq-map-pin-dot" aria-hidden="true">${number?esc(number):''}</span>${number?`<span class="bq-map-pin-name" aria-hidden="true">${esc(name)}</span>`:''}`}</span>`;
  };
  const privatePin=normalizePoint(point),answer=normalizePoint(solution);
+ const publicPins=otherPins.map((pin,i)=>{
+  const team=/^t[1-6]$/.test(String(pin.team||''))?String(pin.team):'t0';
+  const number=String(Number.isInteger(pin.number)&&pin.number>0?pin.number:i+1);
+  const name=String(pin.name||'Antwort '+number),teamLabel=String(pin.teamLabel||'');
+  const distance=typeof pin.distanceKm==='number'&&Number.isFinite(pin.distanceKm)?' · '+formatMapDistanceKm(pin.distanceKm)+' Luftlinie':'';
+  return {pin,team,number,name,teamLabel,label:number+'. '+name+(teamLabel?' ('+teamLabel+')':'')+distance};
+ });
  const action=editable?'data-map-choice="true"':'';
  const editBadge=editor?(privatePin?'<span class="bq-map-valid">✓ Zielpunkt gesetzt</span>':'<span class="bq-map-required">● Zielpunkt fehlt – zum Setzen tippen</span>'):'';
  return `<div class="bq-map-question">
@@ -24,7 +31,8 @@ export function mapMarkup({prompt='',view,point=null,solution=null,otherPins=[],
  </div>
  <div class="bq-map-viewport" tabindex="0" role="application" aria-label="Interaktive Weltkarte. Mit Klick oder Tippen einen Punkt setzen. Mit den Pfeiltasten bewegen, Plus und Minus zoomen. Enter setzt den Punkt in die Mitte." ${action} data-map-viewport="true">
   <div class="bq-map-layer" style="left:${css.left}%;top:${css.top}%;width:${css.width}%;height:${css.height}%"><img src="./world-map.svg" alt="" draggable="false"></div>
-  <div class="bq-map-markers" aria-live="off">${privatePin?pinMarkup(privatePin,editor?'is-host':'is-self',editor?'Richtiger Zielpunkt (nur Host)':'Dein Kartenpunkt',editor):''}${visibleSolution&&answer?pinMarkup(answer,'is-solution','Richtiger Zielpunkt',true):''}${otherPins.map((pin,i)=>pinMarkup(pin,'is-public',(pin.name||'Antwort '+(i+1))+(typeof pin.distanceKm==='number'&&Number.isFinite(pin.distanceKm)?' · '+formatMapDistanceKm(pin.distanceKm)+' Luftlinie':''))).join('')}</div>
+  <div class="bq-map-markers" aria-live="off">${privatePin?pinMarkup(privatePin,editor?'is-host':'is-self',editor?'Richtiger Zielpunkt (nur Host)':'Dein Kartenpunkt',editor):''}${visibleSolution&&answer?pinMarkup(answer,'is-solution','Richtiger Zielpunkt',true):''}${publicPins.map(p=>pinMarkup(p.pin,'is-public is-team-'+p.team+(p.pin.muted?' is-muted':''),p.label,false,p.number,p.name)).join('')}</div>
+   ${publicPins.length?`<div class="bq-map-pin-legend" aria-label="Zuordnung der Kartenpunkte">${publicPins.map(p=>`<span class="bq-map-pin-legend-item is-team-${p.team}${p.pin.muted?' is-muted':''}" title="${esc(p.label)}"><b>${esc(p.number)}</b><span>${esc(p.name)}${p.teamLabel?' · '+esc(p.teamLabel):''}</span></span>`).join('')}</div>`:''}
  </div>
  <p class="bq-map-instruction">${editor?'Wähle den richtigen Ort direkt auf der Karte. Der Dolch kennzeichnet die geheime Lösung.':editable?'Tippe auf die Karte, um deinen Pin zu setzen. Du kannst ihn vor dem Absenden jederzeit verschieben.':'Weltkarte – die Position der Lösung wird erst bei der Aufdeckung angezeigt.'} Mit +/− oder Mausrad zoomen, mit Ziehen verschieben.</p>
  </div>`;
