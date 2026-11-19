@@ -106,7 +106,7 @@ async def main():
   # This question tests the manual solution, so reset an accidental buzz,
   # keep the scores unchanged, then reveal normally.
   await expect(host.locator('[data-action="reveal"]')).to_be_disabled()
-  await host.locator('.bq-host-action-bar [data-action="reset-buzz"]').click()
+  await host.locator('.bq-buzzer-winner [data-action="reset-buzz"]').click()
   await expect(host.locator('[data-action="reveal"]')).to_be_enabled()
   await host.locator('[data-action="reveal"]').first.click()
   await alice.wait_for_function("() => window.__probe.info().publicState.phase==='reveal'",timeout=10000)
