@@ -5,6 +5,7 @@ import asyncio, functools, json, threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.async_api import async_playwright
+import idb_board_helper as idb
 
 ROOT=Path(__file__).resolve().parents[1] / 'docs'
 class Handler(SimpleHTTPRequestHandler):
@@ -30,14 +31,14 @@ async def main():
    await page.locator('[data-se-quiztitle]').blur()
    await page.wait_for_timeout(650)
    assert 'Waldquiz' in await page.locator('.se-board-context').inner_text()
-   first=await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1'))[0].id")
+   first=(await idb.get_json(page,'bq-board-workspaces-v1'))[0]['id']
    await page.locator('.se-board-switch>summary').click()
    page.once('dialog',lambda dlg:asyncio.create_task(dlg.accept('Zweites Brett')))
    await page.locator('[data-action="new-board"]').click()
    await page.locator('.se-board-context>strong').get_by_text('Zweites Brett').wait_for()
-   second=await page.evaluate("() => localStorage.getItem('bq-board-active-v1')")
+   second=await idb.get_value(page,'bq-board-active-v1')
    assert first!=second
-   assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==2
+   assert len(await idb.get_json(page,'bq-board-workspaces-v1'))==2
    await page.locator('.se-board-switch>summary').click()
    await page.locator(f'[data-action="open-board"][data-board-id="{first}"]').click()
    await page.locator('.se-board-context>strong').get_by_text('Waldquiz').wait_for()
@@ -75,9 +76,9 @@ async def main():
    await page.locator('[data-se-quiztitle]').blur()
    await page.locator('[data-action="rescue-board"]').click()
    await page.locator('.se-board-context>strong').get_by_text('Meine ungesicherte Version').wait_for()
-   original=await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)
+   original=(await idb.get_json(page,'bq-board-workspace-'+first))['quiz']['title']
    assert original=='Geändert im zweiten Tab',original
-   assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==3
+   assert len(await idb.get_json(page,'bq-board-workspaces-v1'))==3
    await page.locator('.se-board-conflict').wait_for(state='detached',timeout=8000)
    await page.wait_for_timeout(120)  # ensure rescue's scheduled editor redraw cannot replace the import input
    print('PASS: stale-tab change detection, no overwrite, rescue as copy')
@@ -91,10 +92,10 @@ async def main():
     print('DIAG import',{'title':await page.locator('.se-board-context>strong').all_inner_texts(),
                           'toaster':await page.locator('#toaster').all_inner_texts(),
                           'errors':errors,
-                          'file':await page.locator('#import-quiz').count(), 'changeEvents':await page.evaluate('window.__importEvents'), 'workspace':await page.evaluate('JSON.parse(localStorage.getItem("bq-board-workspaces-v1"))?.map(x=>x.title)')})
+                          'file':await page.locator('#import-quiz').count(), 'changeEvents':await page.evaluate('window.__importEvents'), 'workspace':await idb.get_json(page,'bq-board-workspaces-v1')})
     raise
-   assert await page.evaluate("() => JSON.parse(localStorage.getItem('bq-board-workspaces-v1')).length")==4
-   assert await page.evaluate("""id => JSON.parse(localStorage.getItem('bq-board-workspace-'+id)).quiz.title""",first)==original
+   assert len(await idb.get_json(page,'bq-board-workspaces-v1'))==4
+   assert (await idb.get_json(page,'bq-board-workspace-'+first))['quiz']['title']==original
    print('PASS: non-destructive imported board')
    if not await page.locator('.bq-editor-extras').evaluate('(e)=>e.open'):
     await page.locator('.bq-editor-extras>summary').click()
@@ -120,21 +121,24 @@ async def main():
    await page.locator('.se-board-switch-items [data-action="open-board"]').first.wait_for(state='visible')
    print('PASS: mobile workspace menu without horizontal overflow')
 
-   # Emulate a full browser storage: a visible backup option must appear.
+   # localStorage is deliberately blocked: all new board edits must still
+   # succeed in IndexedDB without ever touching localStorage's small quota.
    await page.locator('.se-board-switch>summary').click()
    await page.evaluate("""() => {
-     const original=Storage.prototype.setItem;
-     Storage.prototype.setItem=function(k,v){
-       if(k.startsWith('bq-board-workspace-b'))throw new DOMException('Storage full','QuotaExceededError');
-       return original.call(this,k,v);
+     const old=Storage.prototype.setItem;
+     Storage.prototype.setItem=function(key,value){
+       if(key.startsWith('bq-board-workspace-')||key==='bq-board-workspaces-v1')
+        throw new DOMException('Storage full','QuotaExceededError');
+       return old.call(this,key,value);
      };
    }""")
-   await page.locator('[data-se-quiztitle]').fill('Kann nicht gespeichert werden')
+   await page.locator('[data-se-quiztitle]').fill('Speichern trotz vollem localStorage')
    await page.locator('[data-se-quiztitle]').blur()
-   await page.locator('.se-board-conflict [data-action="export"]').wait_for(timeout=8000)
-   assert 'SPEICHERFEHLER' in await page.locator('.se-board-conflict').inner_text()
-   print('PASS: quota failure visibly exposes backup recovery')
-
+   await page.locator('[data-action="save-board"]').click()
+   await page.wait_for_timeout(150)
+   assert (await idb.get_json(page,'bq-board-workspace-'+await idb.get_value(page,'bq-board-active-v1')))['quiz']['title']=='Speichern trotz vollem localStorage'
+   assert await page.locator('.se-board-conflict').count()==0
+   print('PASS: localStorage quota no longer blocks durable IndexedDB question boards')
    assert not errors,errors
    await browser.close()
  finally: server.shutdown();server.server_close()
