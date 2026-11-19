@@ -910,7 +910,7 @@ async function uncoverSelectedQuestion(){
  if(!isOffline()){await game.uncoverQuestion(room,publicState.round,q.id);return;}
  let visual=q.type==='order'?(q.orderDisplayItems?.length?q.orderDisplayItems:shuffledItems(q.orderItems)):q.image||'';
  if(q.type==='splash')visual=await splashPreview(q.image,q,false);
- publicState={...publicState,phase:'question',current:publicQuestion(q,false,visual),deadline:q.seconds?now()+q.seconds*1000:0,buzzerArmed:true};
+ publicState={...publicState,phase:'question',current:{...publicQuestion(q,false,visual),points:publicState.current.points,basePoints:publicState.current.basePoints,doublePoints:publicState.current.doublePoints},deadline:q.seconds?now()+q.seconds*1000:0,buzzerArmed:true};
  if(rehearsal)startRehearsalQuestion(q);
  schedule();
 }
@@ -1231,7 +1231,7 @@ async function rehearse(action,button){
    if(result==='correct')Object.assign(demo.state,buildRevealPatch(q));
   }else if(player&&p.answerReview?.entries?.[id]?.revealed){
    const before=p.playerScores[id]?.rounds?.[p.round]?.delta||0;
-   p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:q.points,result,at:Date.now()});
+   p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:p.current.points,result,at:Date.now()});
    if(scoreMode(p)==='team')p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
   }
  }
@@ -1298,13 +1298,13 @@ async function hostOpen(id){
   if(isOffline()){
    const next=openQuestionState(publicState,{expectedRound,question:q,playerQuestion,participants,deadline,covered:true});
    if(!next)throw Error('Das Fragenfeld wurde inzwischen geöffnet.');
-   publicState=next;selected=q.id;questionHistory[String(next.round)]=createHistoryEntry(q,next.round,now());if(!rehearsal)saveOfflineSession();schedule();return;
+   publicState=next;selected=q.id;questionHistory[String(next.round)]=createHistoryEntry({...q,points:next.current.points},next.round,now());if(!rehearsal)saveOfflineSession();schedule();return;
   }
   const next=await game.openQuestion(room,expectedRound,q,playerQuestion,participants,deadline,{covered:true});
   // The round is published atomically. Noncritical side effects are deliberately
   // scoped to the committed round and cannot replace another current question.
   await game.clearPicks(room).catch(error);
-  await game.recordQuestion(room,next.round,createHistoryEntry(q,next.round,now())).catch(error);
+  await game.recordQuestion(room,next.round,createHistoryEntry({...q,points:next.current.points},next.round,now())).catch(error);
  }finally{openingQuestion=false;}
 }
 function buildRevealPatch(q){
@@ -1318,6 +1318,9 @@ function buildRevealPatch(q){
   ...(q.type==='splash'?{image:publicState.current.image||''}:{})
  };
  const patch={current:publicQuestion(q,true,v,publicState.current.hintStep||0,sceneStep),phase:'reveal',solutionVisible:true,preRevealDisplay,deadline:0,pausedRemaining:0};
+ patch.current.points=publicState.current.points;
+ patch.current.basePoints=publicState.current.basePoints??q.points;
+ patch.current.doublePoints=publicState.current.doublePoints===true;
  if(q.type==='map'){
   // Publish all submitted pins atomically with the solution; private until now.
   const answers=responses?.[roundKey()]||{};
@@ -1342,7 +1345,7 @@ async function hostReveal(){
 }
 async function hostHint(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||!isOpen())return;const current=Number(activeQuestion()?.hintStep||0);if(current>=4)return;const next=(q.hints||[]).findIndex((h,i)=>i>=current&&h.trim());if(next<0)return;const v=q.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(q,false,v,next+1,Number(activeQuestion()?.scene?.step||0));if(q.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);await game.updateCurrent(room,Number(publicState.round),q.id,{current:pub},['question']);}
 async function hostSplashNext(){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!q||q.type!=='splash'||!isOpen())return;const expectedRound=Number(publicState.round);const next=Math.min(2,Number(activeQuestion().visualStep||0)+1);const visual=await splashPreview(q.image,{...q,zoom:splashStageZoom(q.zoom,next)},false);const pub=publicQuestion(q,false,visual,Number(activeQuestion().hintStep)||0,Number(activeQuestion()?.scene?.step||0));pub.visualStep=next;await game.updateCurrent(room,expectedRound,q.id,{current:pub},['question']);}
-async function hostSceneNext(){const source=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!source?.scene||!isOpen())return;const step=Number(activeQuestion()?.scene?.step||0);if(step>=5)return;const next=step+1;const v=source.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(source,false,v,Number(activeQuestion()?.hintStep||0),next);if(source.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);if(isOffline()){publicState.current=pub;schedule();}else await game.updateCurrent(room,Number(publicState.round),source.id,{current:pub},['question']);}
+async function hostSceneNext(){const source=quiz.questions.find(x=>x.id===activeQuestion()?.id);if(!source?.scene||!isOpen())return;const step=Number(activeQuestion()?.scene?.step||0);if(step>=5)return;const next=step+1;const v=source.type==='order'?activeQuestion().displayItems:activeQuestion().image||'';const pub=publicQuestion(source,false,v,Number(activeQuestion()?.hintStep||0),next);if(source.type==='splash')pub.visualStep=Number(activeQuestion().visualStep||0);if(isOffline()){publicState.current={...pub,points:activeQuestion().points,basePoints:activeQuestion().basePoints,doublePoints:activeQuestion().doublePoints};schedule();}else await game.updateCurrent(room,Number(publicState.round),source.id,{current:pub},['question']);}
 async function hostPreviousReveal(){
  if(!canHost()||!activeQuestion())return;
  const source=quiz.questions.find(q=>q.id===activeQuestion().id);
@@ -1523,7 +1526,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   publicState.teamEmoji=publicTeamEmoji(demo);
   if(demo.phase==='reveal'){
    for(const result of demo.results)publicState.scores[result.id]=(publicState.scores[result.id]||0)+result.points;
-   publicState.phase='reveal';publicState.current=publicQuestion(currentQuestion(),true);
+   publicState.phase='reveal';publicState.current={...publicQuestion(currentQuestion(),true),points:publicState.current.points,basePoints:publicState.current.basePoints,doublePoints:publicState.current.doublePoints};
   }
   schedule();return;
  }
