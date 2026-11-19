@@ -105,7 +105,7 @@ function connectionReport(){
   browser:navigator.userAgent.slice(0,180),online:navigator.onLine,
   role:d.mode||role,connected:!!d.connected,phase:d.phase||'unknown',
   iceState:d.iceState||'unknown',iceErrorCode:d.iceErrorCode||0,
-  turnConfigured:!!d.turnConfigured,reconnectAttempts:d.reconnectAttempts||0,
+  turnConfigured:!!d.turnConfigured,transportProfile:d.transportProfile||'unknown',reconnectAttempts:d.reconnectAttempts||0,
   message:d.error||'',advice:d.guidance||'',participantCount:d.peers?.length||0},null,2);
 }
 function preserveForm(draw){
@@ -643,12 +643,12 @@ function landing(){
  ${!invite?savedQuizzesStart(drafts,workspaceError,hostCode):''}
   <section class="glass panel start-card"><h2>${invite?'Einladung annehmen':'Am Quiz teilnehmen'}</h2><form id="join-form" class="formgrid"><label class="field span2">Raumcode<input id="join-room" required maxlength="16" value="${e(roomFromLink)}" placeholder="16 Zeichen" autocomplete="off" ${invite?'readonly':''}></label><label class="field span2">Dein Name<input id="join-name" required maxlength="28" placeholder="Anzeigename" autocomplete="nickname"></label><button type="submit" class="btn primary" ${configured?'':'disabled'}>Beitreten</button></form><p class="small muted">Keine Installation und kein eigenes Konto erforderlich. Danach wählst du dein Team in der Lobby und kannst dich bereit melden.</p></section>
  </div>
- <details class="bq-online-setup bq-start-connectivity"><summary>Verbindung & Datenschutz</summary><div class="glass panel"><h3>PeerJS / WebRTC</h3>${turnRelaySetup()}<p class="small muted">Host-Browser muss geöffnet bleiben. PeerJS Cloud vermittelt nur die Verbindung, nicht den Spielstand. Bei CGNAT/Firewalls ist ein eigener TURN-Dienst für eine verlässliche Verbindung erforderlich; das Quiz kann keinen TURN-Zugang automatisch bereitstellen.</p></div></details></main></div>`;
+ <details class="bq-online-setup bq-start-connectivity"><summary>Verbindung & Datenschutz</summary><div class="glass panel"><h3>PeerJS / WebRTC</h3>${turnRelaySetup()}<p class="small muted">Host-Browser muss geöffnet bleiben. PeerJS Cloud vermittelt nur die Verbindung, nicht den Spielstand. Beim normalen Beitreten wird automatisch die PeerJS-Standardverbindung wie bei Straßenbingo verwendet. Die darin enthaltenen öffentlichen TURN-Server sind nicht garantiert verfügbar; für besonders restriktive Netzwerke kann ein aktiv betriebener TURN-Dienst nötig sein.</p></div></details></main></div>`;
 }
 
 function turnRelaySetup(){
  return `<details class="bq-auxiliary" data-bq-persist="turnsetup"><summary>Eigenen TURN-Relay einrichten</summary>
-  <p>Bei CGNAT oder restriktiven Firewalls müssen Host und Gäste einen erreichbaren TURN-Server mit gültigen Zugangsdaten konfigurieren. Die Einstellung wird nur in diesem Browser-Tab gespeichert und gilt für neue Peer-Verbindungen. Ein normaler STUN-Server allein ersetzt TURN nicht.</p>
+  <p>Normalerweise ist keine Einrichtung nötig: Host und Gäste verbinden sich über PeerJS wie bei Straßenbingo. Falls direkte Verbindung und öffentliche PeerJS-Relay-Einträge scheitern, kann hier optional ein eigener aktiver TURN-Dienst eingerichtet werden. Die Einstellung gilt nur in diesem Browser-Tab für neue Verbindungen.</p>
   <form id="turn-relay-form" class="formgrid">
    <label class="field span2">TURN-Adresse<input name="url" type="text" placeholder="turns:relay.example:443?transport=tcp" maxlength="300" required></label>
    <label class="field">Nutzername<input name="username" type="text" maxlength="512" autocomplete="off" required></label>
@@ -1133,7 +1133,7 @@ function renderSetup(){
   <p class="small muted">Phase: ${e(diagnostics?.phase||'–')} · ICE: ${e(diagnostics?.iceState||'–')} · TURN: ${diagnostics?.turnConfigured?'Konfiguriert':'Nicht konfiguriert'} · Wiederholungen: ${Number(diagnostics?.reconnectAttempts)||0}</p>
   <p class="small muted">${e(diagnostics?.guidance||'')}</p>
   <div class="row">${btn('Fehlerbericht kopieren','copy-connection-report','small')}${btn('Host-Verbindung neu starten','restart-host-transport','small')}</div>
-  <details class="bq-auxiliary" data-bq-persist="turnsetup-host"><summary>TURN-Relay für neue Verbindungen einrichten</summary>${turnRelaySetup()}<p class="small muted">Nach einer Änderung „Host-Verbindung neu starten“ wählen, damit sie auf dem Host wirksam wird. Die Gäste müssen ebenfalls die Zugangsdaten einrichten.</p></details>
+  <details class="bq-auxiliary" data-bq-persist="turnsetup-host"><summary>TURN-Relay für neue Verbindungen einrichten</summary>${turnRelaySetup()}<p class="small muted">Nur wenn du einen eigenen TURN-Server verwendest: Danach „Host-Verbindung neu starten“. Ohne eigene Konfiguration verwendet das Quiz automatisch PeerJS-Standardeinstellungen.</p></details>
  </div>`;
  const manual=publicState?.settings?.manualBuzzer===true;
  const buzzSettings=canHost()&&!isOffline()?`<section class="glass panel"><div class="panelhead"><h3>Buzzer-Freigabe</h3></div>
@@ -1593,11 +1593,11 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'lobby-ready':{if(role!=='guest')return;await sendGuestAction('Bereitschaft',()=>game.setLobbyReady(room,button.dataset.ready==='true'));notice(button.dataset.ready==='true'?'Bereit gemeldet.':'Bereitschaft zurückgenommen.');return;}
  case 'clear-turn-relay':{
   const {configureTurnRelay}=await import('./peer-client.mjs');
-  configureTurnRelay(null);notice('TURN-Einstellung entfernt. Bei laufendem Host erst nach Netzwerk-Neustart wirksam.');if(view==='setup')schedule();return;
+  configureTurnRelay(null);notice('Eigene TURN-Einstellung entfernt. Neue Verbindungen nutzen wieder automatisch PeerJS-Standardeinstellungen.');if(view==='setup')schedule();return;
  }
  case 'test-turn-relay':{
   const {testTurnRelay}=await import('./peer-client.mjs');
-  await testTurnRelay();notice('TURN-Server erreichbar: Relay-Kandidat erfolgreich empfangen. Host und Gäste müssen denselben Zugang konfigurieren.');return;
+  await testTurnRelay();notice('Eigener TURN-Server erreichbar: Relay-Kandidat empfangen. Für normale PeerJS-Verbindungen ist keine manuelle Konfiguration nötig.');return;
  }
  case 'restart-host-transport':{
   if(!canHost()||isOffline()||!game?.restartHostTransport)throw Error('Nur für einen geöffneten Live-Hostraum verfügbar.');
