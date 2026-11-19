@@ -1024,7 +1024,37 @@ export class PeerGame{
   if(!Number.isFinite(Number(delta))||!Number(delta)||Math.abs(Number(delta))>10000)throw Error('Ungültige Punkteänderung.');
   const before=clone(d.public);d.public.scores[team]=Math.max(-999999,Math.min(999999,(Number(d.public.scores?.[team])||0)+Number(delta)));
   this._auditScore(d,before,{kind:'manual-team',team,round:d.public.round});this._changed()}
- async judgeWritten(room,round,uid,result){const d=this._getHostData(room),p=d.public,before=clone(d.public);const key=String(round);if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||!p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))throw Error('Diese schriftliche Antwort ist nicht bewertbar.');const pts=Number(p.current.points),old=Number(p.playerScores?.[uid]?.rounds?.[key]?.delta)||0;const next=updatePlayerScore(p.playerScores?.[uid],{kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()});p.playerScores={...(p.playerScores||{}),[uid]:next};if(p.scoreMode!=='individual'){const team=d.roster[uid].team;if(!p.teams?.[team])throw Error('Spielerteam nicht mehr vorhanden.');p.scores={...(p.scores||{}),[team]:(Number(p.scores?.[team])||0)+(Number(next.rounds[key].delta)||0)-old};}this._auditScore(d,before,{kind:'written-judgement',person:uid,team:p.scoreMode!=='individual'?d.roster[uid].team:'',round:key,questionId:p.current.id,verdict:result});this._changed();return clone(next)}
+ async judgeWritten(room,round,uid,result){
+  const d=this._getHostData(room),p=d.public,key=String(round);
+  if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||
+     !p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))
+   throw Error('Diese schriftliche Antwort ist nicht bewertbar.');
+  const teamMode=p.scoreMode!=='individual',team=teamMode?d.roster[uid].team:'';
+  if(teamMode){
+   if(!Object.hasOwn(p.teams||{},team))throw Error('Spielerteam nicht mehr vorhanden.');
+   const official=p.writtenTeamRepresentatives?.[key]?.[team];
+   if(official&&official!==uid)
+    throw Error('Für dieses Team ist bereits eine andere Antwort offiziell gewertet. Bitte deren Bewertung korrigieren oder die letzte Wertung zurücknehmen.');
+  }
+  // Work on a copy: rejecting a second team's answer must not leave partial
+  // personal points or team scores behind in the host checkpoint.
+  const before=clone(p),nextPublic=clone(p),pts=Number(p.current.points);
+  const previous=Number(nextPublic.playerScores?.[uid]?.rounds?.[key]?.delta)||0;
+  const nextScore=updatePlayerScore(nextPublic.playerScores?.[uid],{
+   kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()
+  });
+  nextPublic.playerScores={...(nextPublic.playerScores||{}),[uid]:nextScore};
+  if(teamMode){
+   nextPublic.writtenTeamRepresentatives={...(nextPublic.writtenTeamRepresentatives||{}),
+    [key]:{...(nextPublic.writtenTeamRepresentatives?.[key]||{}),[team]:uid}};
+   nextPublic.scores={...(nextPublic.scores||{}),
+    [team]:(Number(nextPublic.scores?.[team])||0)+(Number(nextScore.rounds[key].delta)||0)-previous};
+  }
+  d.public=nextPublic;
+  this._auditScore(d,before,{kind:'written-judgement',person:uid,team,round:key,
+   questionId:nextPublic.current.id,verdict:result});
+  this._changed();return clone(nextScore);
+ }
  async judgeBuzzer(room,round,uid,result,revealPatch=null){
   const d=this._getHostData(room),before=clone(this._getHostData(room).public);
   const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
