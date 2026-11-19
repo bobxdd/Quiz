@@ -6,6 +6,7 @@ import {latestUndoableEvent,mayRegradeScore} from './score-ledger.mjs';
 import {loadLocalHostQuiz,saveLocalHostQuiz} from './backup-store.mjs';
 import {createSoundEffects} from './sound-effects.mjs';
 import {boardList,createBoard,loadBoard,persistBoard,resumeBoard,selectBoard,transferCategoryBetweenBoards} from './board-workspace.mjs';
+import {openBoardStorage} from './board-idb.mjs';
 import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,mapAnswerDistances,formatMapDistanceKm} from './map-tools.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
@@ -31,15 +32,64 @@ let reviewTeam='all',reviewTeamRound=-1; // Local host filter; does not change s
 let playerEmoji=null,emojiDraft=null;
 let rehearsal=null;
 let boardId='',boardRevision=0,boardConflict=false;
+let boardStore=localStorage,boardStoreReady=Promise.resolve(),boardStoreError='';
+let boardFlushTimer=null,boardSaving=null;
 let mapCamera={...DEFAULT_MAP_VIEW},mapCameraQuestion='';
 const consumedMapThrows=new Set();let activeMapThrow=null;
 let activeQuestionCover=null;
 let soundPlayer=null; // Detached audio survives regular host/guest redraws.
 const makeBoardId=()=>'b'+uid().slice(1);
+function queueBoardFlush(){
+ if(boardStore.kind!=='indexeddb')return;
+ saveState='Wird lokal gespeichert …';clearTimeout(boardFlushTimer);
+ boardFlushTimer=setTimeout(()=>{void confirmBoardSave();},550);
+ schedule();
+}
+async function confirmBoardSave(){
+ clearTimeout(boardFlushTimer);boardFlushTimer=null;
+ if(boardStore.kind!=='indexeddb')return true;
+ if(boardSaving)return boardSaving;
+ boardSaving=(async()=>{
+  try{
+   await boardStore.flush();
+   if(!boardConflict&&isOffline())saveState='Lokal gesichert';
+   return true;
+  }catch(err){
+   if(/anderen Tab|anderer Tab/.test(String(err?.message)))boardConflict=true;
+   saveState=boardConflict?'KONFLIKT – als Kopie sichern!':'SPEICHERFEHLER – Backup exportieren!';
+   notice('Quizbrett konnte nicht sicher gespeichert werden: '+String(err?.message||err).slice(0,190));
+   return false;
+  }finally{boardSaving=null;schedule();}
+ })();
+ return boardSaving;
+}
+function notifyOtherBoardTab(keys){
+ if(!isOffline()||!boardId||!keys.includes('bq-board-workspace-'+boardId))return;
+ boardConflict=true;saveState='KONFLIKT – als Kopie sichern!';
+ schedule();notice('Ein anderer Tab hat dieses Quizbrett geändert. Bitte Änderungen als Kopie retten oder gespeicherten Stand öffnen.');
+}
 function applyBoardWorkspace(record){boardConflict=false;saveState='Lokal gesichert';boardId=record.id;boardRevision=record.revision;quiz=normalizedQuiz(record.quiz);selected=quiz.questions[0]?.id||'';undoStack=[];redoStack=[];editingBlock='';previewOpen=false;previewRevealed=false;mapPick=null;mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion='';pickedOrder=[];boardPage=0;scorePage=0;historyFilter='';try{sessionStorage.setItem('bq-board-current-tab',boardId);}catch{}studio?.reset?.();}
-function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');studio.flush?.();if(!saveLocal())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(localStorage,id);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
-function rescueStoredBoard(){if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');studio.flush?.();const created=createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();schedule();notice('Änderungen als eigenes Quizbrett gerettet. Das ursprüngliche bleibt unverändert.');}
-function reloadStoredBoard(){if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');if(!confirm('Die derzeit ungesicherten Änderungen an diesem Quizbrett verwerfen und den zuletzt gespeicherten Stand öffnen?'))return;const record=selectBoard(localStorage,boardId);applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Zuletzt gespeicherte Brettversion geladen.');}
+async function openStoredBoard(id){if(!isOffline())throw Error('Bitte zuerst den lokalen Editor öffnen. Der laufende Live-Raum bleibt unverändert.');await boardStoreReady;studio.flush?.();if(!saveLocal()||!await confirmBoardSave())throw Error('Aktuelles Quizbrett konnte nicht gesichert werden.');const record=selectBoard(boardStore,id);if(!await confirmBoardSave())throw Error('Quizbrett-Auswahl konnte nicht gesichert werden.');applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Quizbrett „'+quiz.title+'“ geöffnet.');}
+async function rescueStoredBoard(){
+ if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');
+ await boardStoreReady;studio.flush?.();const rescue=normalizedQuiz(quiz);
+ clearTimeout(boardFlushTimer);
+ if(boardSaving)await boardSaving;
+ if(boardStore.kind==='indexeddb')await boardStore.reload({discardPending:true});
+ const created=createBoard(boardStore,rescue,makeBoardId);
+ if(!await confirmBoardSave())throw Error('Rettungskopie wurde nicht bestätigt. Bitte das Backup herunterladen, bevor du den Tab schließt.');
+ applyBoardWorkspace(created);loadOfflineBoardState();schedule();
+ notice('Änderungen als eigenes Quizbrett gerettet. Das ursprüngliche bleibt unverändert.');
+}
+async function reloadStoredBoard(){
+ if(!isOffline()||!boardId)throw Error('Nur im lokalen Quizbrett verfügbar.');
+ if(!confirm('Die derzeit ungesicherten Änderungen an diesem Quizbrett verwerfen und den zuletzt gespeicherten Stand öffnen?'))return;
+ clearTimeout(boardFlushTimer);if(boardSaving)await boardSaving;
+ if(boardStore.kind==='indexeddb')await boardStore.reload({discardPending:true});
+ const record=selectBoard(boardStore,boardId);
+ if(!await confirmBoardSave())throw Error('Brettauswahl konnte nicht gespeichert werden.');
+ applyBoardWorkspace(record);loadOfflineBoardState();schedule();notice('Zuletzt gespeicherte Brettversion geladen.');
+}
 function loadOfflineBoardState(){const session=loadOfflineSession();questionHistory=session.questionHistory||{};publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',boardRound:boardRoundOf(session),boardSequence:true,round:session.round||0,board:buildPublicBoard(quiz,session.used),teams:buildTeams(quiz),scores:{...buildScores(quiz),...session.scores},settings:{buzzerEnabled:true,chatOpen:false,lockOnBuzz:false,timerSeconds:60},manualPlayers:manualPlayerLabels(quiz),playerScores:session.playerScores||{},used:session.used||{},buzzerBlocked:session.buzzerBlocked||{}};}
 const pendingTeamChoices=new Map(); // Keep pending team assignments across live re-renders.
 let boardPage=0,scorePage=0; // Purely local pagination; never changes host authority.
