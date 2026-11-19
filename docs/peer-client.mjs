@@ -881,9 +881,12 @@ export class PeerGame{
    participants:emoji?null:participants,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
   d.public=next;
+  if(emoji)emoji.points=next.current.points;
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
-   d.pendingQuestion={round:next.round,id:question.id,current:clone(playerQuestion),participants:clone(participants),
+   d.pendingQuestion={round:next.round,id:question.id,
+    current:{...clone(playerQuestion),points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints},
+    participants:clone(participants),
     duration:deadline?Math.max(0,deadline-Date.now()):0};
   }
   else if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
@@ -897,6 +900,7 @@ export class PeerGame{
   const question=this.hostQuiz?.questions.find(item=>item.id===id);
   if(!question)throw Error('Die Originalfrage fehlt im Host-Quiz.');
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
+  if(emoji)emoji.points=d.public.current.points;
   d.public={...d.public,phase:'question',current:clone(pending.current),
    answerParticipants:emoji?null:pending.participants,
    deadline:!emoji&&pending.duration?Date.now()+pending.duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
@@ -980,7 +984,7 @@ export class PeerGame{
     this._auditScore(d,before,{kind:TEAM_EMOJI,team:result.id,round:p.round,questionId:p.current.id});
    }
    const question=this.hostQuiz?.questions.find(item=>item.id===p.current.id);
-   p.current=question?publicQuestion(question,true):{...p.current,answerText:round.target};
+   p.current=question?{...publicQuestion(question,true),points:p.current.points,basePoints:p.current.basePoints,doublePoints:p.current.doublePoints}:{...p.current,answerText:round.target};
    p.phase='reveal';
    const entry=d.questionHistory?.[String(p.round)];
    if(entry)entry.emojiResults=round.results.map(result=>({...result,name:p.teams[result.id]}));
@@ -1016,7 +1020,9 @@ export class PeerGame{
  async setLobbyReady(room,ready){if(this.mode==='guest')return this._rpc('lobby-ready',{ready});throw Error('Bereitschaft nur für Teilnehmer.')}
  async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid,round:this.guestData.public?.round});throw Error('Nur Teilnehmer können Fragen wünschen.')}
  async clearPicks(room){const d=this._getHostData(room);d.picks={};d.public.questionPick=null;this._changed()}
- async scorePerson(room,personId,action){const d=this._getHostData(room);if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');
+ async scorePerson(room,personId,action){const d=this._getHostData(room);
+  if(d.public?.scoreMode!=='individual')throw Error('Im Teammodus gibt es ausschließlich einen gemeinsamen Punktestand pro Team. Korrigiere stattdessen die Teamwertung.');
+  if(!safeUid(personId)&&!/^(manual_[0-9]{1,2})$/.test(personId))throw Error('Ungültige Person-ID.');
   const before=clone(d.public);d.public.playerScores??={};
   const result=updatePlayerScore(d.public.playerScores[personId],action);d.public.playerScores[personId]=result;
   this._auditScore(d,before,{kind:'manual-person',person:personId,round:d.public.round});this._changed();return clone(result)}
