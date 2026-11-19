@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,publicQuestion,validateQuestion} from '../docs/core.mjs';
-import {advanceTeamEmoji,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
+import {advanceTeamEmoji,emojiGroup,emojiName,MAX_EMOJI_PALETTE,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
 import {canBuzz} from '../docs/round-rules.mjs';
 import {templateScene,reconcileQuestion} from '../docs/studio-model.mjs';
 
@@ -13,8 +13,19 @@ const roster={a:{team:'t1'},b:{team:'t1'},c:{team:'t2'},d:{team:'t2'},e:{team:'t
 
 test('palette parsing preserves emoji sequences and rejects text',()=>{
  assert.deepEqual(parseEmojiPalette('👩‍🚀👩‍🚀 🏴‍☠️ #️⃣ ❄️'),['👩‍🚀','🏴‍☠️','#️⃣','❄️']);
- assert.equal(parseEmojiPalette(normalizeTeamEmoji().palette).length,48);
  for(const invalid of ['','A 🦊','123','\u200D'])assert.throws(()=>parseEmojiPalette(invalid),/Emojis/);
+});
+
+test('The larger default palette is available without author configuration and custom picks retain their indices',()=>{
+ const settings=normalizeTeamEmoji();
+ const defaults=parseEmojiPalette(settings.palette);
+ assert.ok(defaults.length>=80&&defaults.length<=MAX_EMOJI_PALETTE);
+ assert.equal(new Set(defaults.map(emojiGroup)).size,6);
+ assert.equal(emojiName('⚓'),'Anker');
+ assert.equal(normalizeTeamEmoji({palette:' '}).palette,settings.palette);
+ assert.equal(normalizeTeamEmoji({palette:'🔥 ❄️ ⚡ 🌊 🌪️ 🌿 🌙 ☀️ ⭐ ✨ 🌈 🌋 🗡️ 🏹 🛡️ 🔨 ⚙️ 🤖 💣 ☠️ 👻 😈 🎭 👑 🧪 🎵 🔮 💎 ❤️ 🤝 🦊 🐻 🐺 🐱 🐦 🐉 🕷️ 🐍 🦈 🦋 🐵 🍄 👁️ 🩸 ⏳ 🧊 🍌 🏴‍☠️'}).palette,settings.palette);
+ assert.deepEqual(parseEmojiPalette(normalizeTeamEmoji({palette:'👩‍🚀 🦊'}).palette),['👩‍🚀','🦊']);
+ assert.equal(emojiGroup('👩‍🚀'),'Weitere');
 });
 
 test('team question imports with private settings and never opens a buzzer',()=>{

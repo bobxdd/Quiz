@@ -28,7 +28,7 @@ test('Browser-local settings persist, reset gracefully and allow independent mut
  assert.equal(loadSfxSettings(storage).master,97);
 });
 
-test('Synthesizer plays three distinct short effects only with browser gesture and honors mute',()=>{
+test('Synthesizer plays an electric buzzer, rising chime and falling error tones at audible levels',async()=>{
  const events=[];
  class FakeOscillator{
   constructor(){this.frequency={setValueAtTime:(...x)=>events.push(['frequency',...x]),exponentialRampToValueAtTime:(...x)=>events.push(['slide',...x])};}
@@ -46,20 +46,35 @@ test('Synthesizer plays three distinct short effects only with browser gesture a
   resume(){this.state='running';return Promise.resolve();}
   createOscillator(){return new FakeOscillator();}
   createGain(){return new FakeGain();}
+  createDynamicsCompressor(){
+   return {threshold:{},knee:{},ratio:{},attack:{},release:{},connect:()=>events.push(['compressor'])};
+  }
  }
  const fx=createSoundEffects({storage:store(),AudioContextClass:FakeContext});
  assert.equal(fx.play('buzz'),false);
- fx.unlock();
- assert.equal(fx.play('buzz'),true);
- assert.equal(events.filter(x=>x[0]==='start').length,1);
- assert.equal(fx.play('correct'),true);
- assert.equal(events.filter(x=>x[0]==='start').length,3);
- assert.equal(fx.play('wrong'),true);
- assert.equal(events.filter(x=>x[0]==='start').length,5);
- assert.ok(events.filter(x=>x[0]==='fade').every(x=>x[1]>0&&x[1]<.05),'Default effect amplitude must be quiet');
+ assert.equal(await fx.unlock(),true);
+ const render=key=>{
+  assert.equal(fx.play(key),true);
+  const sound=events.splice(0);
+  const values=event=>sound.filter(x=>x[0]===event).map(x=>x[1]);
+  assert.ok(Math.max(...values('fade'))>=.06,'Default cue should reach a clear peak');
+  assert.ok(Math.max(...values('stop'))-Math.min(...values('start'))<.6,'Cue should end promptly');
+  return values;
+ };
+ const buzz=render('buzz');
+ assert.ok(buzz('wave').includes('square'));
+ assert.equal(new Set(buzz('start')).size,1,'Buzzer voices sound together');
+ assert.equal(buzz('compressor').length,1);
+ const correct=render('correct')('frequency');
+ assert.equal(correct.length,4);
+ assert.ok(correct.every((note,index)=>index===0||note>correct[index-1]));
+ const wrong=render('wrong');
+ assert.equal(new Set(wrong('start')).size,2);
+ assert.ok(wrong('slide').every((note,index)=>note<wrong('frequency')[index]));
+ assert.equal(wrong('compressor').length,0,'Cues reuse one output bus');
  fx.setMuted(true);
  assert.equal(fx.play('correct'),false);
- assert.equal(events.filter(x=>x[0]==='start').length,5);
+ assert.equal(events.length,0);
  fx.setMuted(false);
  fx.setVolume('master',0);
  assert.equal(fx.play('buzz'),false);

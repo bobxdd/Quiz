@@ -6,6 +6,28 @@ export const DEFAULT_SFX_SETTINGS=Object.freeze({
 export const SFX_STORAGE_KEY='brainquiz-sfx-local-v1';
 const KEYS=['master','buzz','correct','wrong'];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+const SILENCE=.0001;
+const CUES={
+ // A sustained electric buzz with a brief contact click at the start.
+ buzz:[
+  {frequency:226,wave:'square',duration:.28,peak:.50,hold:.78},
+  {frequency:473,wave:'triangle',duration:.26,peak:.21,hold:.62},
+  {frequency:920,endFrequency:650,wave:'triangle',duration:.045,peak:.14}
+ ],
+ // A rising major chord, played as four short bell notes.
+ correct:[
+  {frequency:523.25,wave:'triangle',duration:.16,peak:.45},
+  {frequency:659.25,wave:'triangle',delay:.085,duration:.17,peak:.46},
+  {frequency:783.99,wave:'triangle',delay:.17,duration:.18,peak:.47},
+  {frequency:1046.50,wave:'triangle',delay:.255,duration:.29,peak:.50,hold:.18}
+ ],
+ // Two separated falling tones. The lower one has a little grit.
+ wrong:[
+  {frequency:349,endFrequency:245,wave:'triangle',duration:.13,peak:.58,hold:.55},
+  {frequency:224,endFrequency:145,wave:'triangle',delay:.15,duration:.25,peak:.49,hold:.52},
+  {frequency:238,endFrequency:155,wave:'sawtooth',delay:.15,duration:.23,peak:.24,hold:.45}
+ ]
+};
 export function normalizeSfxSettings(value){
  const data=value&&typeof value==='object'?value:{};
  const settings={muted:data.muted===true};
@@ -31,7 +53,7 @@ export function saveSfxSettings(storage,settings){
 export function createSoundEffects({storage,AudioContextClass}={}){
  const store=storage??(typeof localStorage==='undefined'?null:localStorage);
  const AudioCtor=AudioContextClass??(globalThis.AudioContext||globalThis.webkitAudioContext);
- let settings=loadSfxSettings(store),context=null;
+ let settings=loadSfxSettings(store),context=null,output=null;
  function values(){return {...settings};}
  function setVolume(key,value){
   if(!KEYS.includes(key))return values();
@@ -41,41 +63,45 @@ export function createSoundEffects({storage,AudioContextClass}={}){
  function setMuted(muted){
   settings={...settings,muted:!!muted};saveSfxSettings(store,settings);return values();
  }
- function unlock(){
+ async function unlock(){
   if(!AudioCtor)return false;
   try{
    context??=new AudioCtor();
-   if(context.state==='suspended')void context.resume().catch(()=>{});
+   if(context.state==='closed')return false;
+   if(context.state!=='running')await context.resume();
    return context.state==='running';
   }catch{return false;}
  }
- function tone(frequency,at,duration,type,amp,endFrequency){
+ function connectEffects(){
+  const compressor=context.createDynamicsCompressor();
+  compressor.threshold.value=-5;
+  compressor.knee.value=3;
+  compressor.ratio.value=12;
+  compressor.attack.value=.003;
+  compressor.release.value=.085;
+  compressor.connect(context.destination);
+  return compressor;
+ }
+ function tone({frequency,wave,duration,peak,endFrequency,delay=0,hold=.14},start,level){
+  const at=start+delay,amp=Math.max(SILENCE,peak*level);
   const osc=context.createOscillator(),gain=context.createGain();
-  osc.type=type;osc.frequency.setValueAtTime(frequency,at);
-  if(endFrequency&&endFrequency!==frequency)osc.frequency.exponentialRampToValueAtTime(endFrequency,at+duration);
-  gain.gain.setValueAtTime(0.0001,at);
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.00011,amp),at+0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001,at+duration);
-  osc.connect(gain);gain.connect(context.destination);
-  osc.start(at);osc.stop(at+duration+0.009);
+  osc.type=wave;osc.frequency.setValueAtTime(frequency,at);
+  if(endFrequency)osc.frequency.exponentialRampToValueAtTime(endFrequency,at+duration);
+  gain.gain.setValueAtTime(SILENCE,at);
+  gain.gain.exponentialRampToValueAtTime(amp,at+.007);
+  gain.gain.exponentialRampToValueAtTime(Math.max(SILENCE,amp*hold),at+duration*.73);
+  gain.gain.exponentialRampToValueAtTime(SILENCE,at+duration);
+  osc.connect(gain);gain.connect(output);
+  osc.start(at);osc.stop(at+duration+.008);
  }
  function play(key){
-  if(!['buzz','correct','wrong'].includes(key)||settings.muted||!settings.master||!settings[key])return false;
+  if(!Object.hasOwn(CUES,key)||settings.muted||!settings.master||!settings[key])return false;
   if(!context||context.state!=='running')return false;
-  // Keep default cues intentionally soft. The user's per-cue + master sliders
-  // multiply the peak: changing one effect never changes the audio quiz clip.
   const level=(settings.master/100)*(settings[key]/100);
   try{
-   const now=context.currentTime+0.009;
-   if(key==='buzz'){
-    tone(260,now,.125,'triangle',.16*level,175);
-   }else if(key==='correct'){
-    tone(440,now,.102,'sine',.19*level,494);
-    tone(660,now+.11,.17,'sine',.20*level,880);
-   }else{
-    tone(280,now,.11,'triangle',.14*level,235);
-    tone(200,now+.12,.18,'triangle',.13*level,150);
-   }
+   output??=connectEffects();
+   const start=context.currentTime+.006;
+   for(const voice of CUES[key])tone(voice,start,level);
    return true;
   }catch{return false;}
  }

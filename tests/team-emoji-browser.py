@@ -39,7 +39,7 @@ async def edit_questions(host):
     await host.locator('[data-se-action="category-preset"][data-category="Emoji-Teamrunde"]').click()
     await host.locator('[data-se-action="new"][data-template="team-emoji"]').click()
     await expect(host.locator('.se-team-emoji')).to_be_visible()
-    for field, value in [('emojiClueSeconds', '9'), ('emojiGuessSeconds', '8'), ('emojiPalette', '🦊 ❄️ 🔥')]:
+    for field, value in [('emojiClueSeconds', '12'), ('emojiGuessSeconds', '8'), ('emojiPalette', '🦊 ❄️ 🔥')]:
         control = host.locator(f'[data-se-field="{field}"]')
         await control.fill(value)
         await control.blur()
@@ -94,6 +94,15 @@ def tile(host, category):
 
 async def save_clue(player, labels):
     await expect(player.locator('.bq-emoji-target')).to_contain_text(TARGET)
+    await expect(player.locator('.bq-emoji-palette button')).to_have_count(3)
+    if labels[0] == 'Fuchs':
+        await player.get_by_role('button', name='Tiere', exact=True).click()
+        await expect(player.locator('.bq-emoji-palette button')).to_have_count(1)
+        await player.get_by_role('button', name='Fuchs', exact=True).click()
+        await player.get_by_role('button', name='Natur', exact=True).click()
+        await expect(player.locator('.bq-emoji-palette button')).to_have_count(2)
+        await expect(player.locator('.bq-emoji-selection')).to_contain_text('🦊')
+        labels = labels[1:]
     for label in labels:
         await player.get_by_role('button', name=label, exact=True).click()
     await player.get_by_role('button', name='Hinweis speichern').click()
@@ -149,8 +158,12 @@ async def run(browser, root):
     await deniz.get_by_role('button', name='Raten', exact=True).click()
     await expect(host.get_by_text('Rollen bereit', exact=True)).to_have_count(2)
     await host.get_by_role('button', name='Emoji-Phase starten').click()
+    await expect(host.locator('.bq-host-solution-preview')).to_contain_text(TARGET)
+    await expect(host.locator('.bq-host-solution-preview')).to_be_in_viewport(ratio=1)
     await asyncio.gather(save_clue(alice, ['Fuchs', 'Schneeflocke']), save_clue(claire, ['Feuer']))
     await expect(viewer.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
+    await expect(viewer.locator('.bq-host-solution')).to_have_count(0)
+    await expect(bob.locator('.bq-host-solution')).to_have_count(0)
     await expect(bob.locator('.bq-emoji-palette')).to_have_count(0)
     await expect(deniz.locator('.bq-emoji-palette')).to_have_count(0)
 

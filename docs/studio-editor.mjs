@@ -1,6 +1,6 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
-import {TEAM_EMOJI,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,normalizeTeamEmoji} from './team-emoji.mjs';
+import {TEAM_EMOJI,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
@@ -23,7 +23,19 @@ export function createStudioEditor(api){
  const current=()=>{const item=q();if(!activeCategory||boardRoundOf(item)!==editorRound||categoryKey(item?.category)!==categoryKey(activeCategory))return null;if(item)ensureScene(item);return item;};
  const find=()=>current()?.scene?.elements.find(x=>x.id===sel)||null;
  const saveLabel=()=>{const status=api.saveStatus?.()||'Gespeichert';return /fehler|voll|exportieren|konflikt/i.test(status)?'⚠ '+status:'✓ '+status;};
- const libraryMenuHTML=()=>{if(!libraryMenu)return '';const {kind,x,y,id,category}=libraryMenu;const title=kind==='category'?(category||'Kategorie'):(quiz().questions||[]).find(q=>q.id===id)?.title||'Frage';const items=kind==='category'?[['library-open','Öffnen'],['library-new','Neue Frage'],['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-200,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" class="${cls}" data-se-action="${action}">${label}</button>`).join('')}</div>`;};
+ const otherRound=()=>editorRound===1?2:1;
+ const moveCategoryLabel=()=>`Nach Runde ${otherRound()} verschieben`;
+ function libraryMenuHTML(){
+  if(!libraryMenu)return '';
+  const {kind,x,y,id,category}=libraryMenu;
+  const categoryMenu=kind==='category';
+  const title=categoryMenu?category:(quiz().questions||[]).find(item=>item.id===id)?.title||'Frage';
+  const items=categoryMenu?[
+   ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],
+   ['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']
+  ]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
+  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${action==='category-move'?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
+ }
  const setSaveBadge=(pending)=>{savePending=pending;const el=document.querySelector('.se-save-badge');if(el){el.textContent=pending?'● Wird gespeichert …':saveLabel();el.classList.toggle('is-warning',!pending&&saveLabel().startsWith('⚠'));}if(!pending&&/SPEICHERFEHLER|KONFLIKT/i.test(api.saveStatus?.()||''))draw();};
  const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);if(refresh)draw();};
  const snapshot=()=>api.snapshot();
@@ -79,7 +91,7 @@ export function createStudioEditor(api){
     <div class="se-two">${input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
     ${input('emojiPalette','Vorgegebene Emojis',settings.palette,{rows:3})}
-    <p class="se-muted">Füge bis zu 48 Emojis ein. Die Hinweisgeber können daraus bis zu fünf Symbole in Reihenfolge speichern.</p>
+    <p class="se-muted">Die Hinweisgeber wählen direkt im Spiel bis zu fünf Emojis. Für eine eigene Auswahl bis zu ${MAX_EMOJI_PALETTE} Emojis einfügen. Ein leeres Feld lädt die Standardauswahl.</p>
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
     ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${mainTemplate(item.scene)}
    </div></section>`;
@@ -173,9 +185,9 @@ export function createStudioEditor(api){
  function categoryCard(name,created,all){
   const count=questionsInCategory(all,name).length;
   const meta=CATEGORY_SUGGESTIONS.find(s=>categoryKey(s.name)===categoryKey(name));
-  return `<article class="se-category-card ${created?'':'se-category-suggestion'}">
+  return `<article class="se-category-card ${created?'':'se-category-suggestion'}" ${created?`data-se-library="category" data-category="${escape(name)}"`:''}>
    <button type="button" class="se-category-open" data-se-action="${created?'category-select':'category-preset'}" data-category="${escape(name)}"><strong>${escape(name)}</strong><small>${created?`${count} ${count===1?'Frage':'Fragen'}`:'Vorlage'}</small><span>${escape(meta?.description||'Eigene Quizkategorie')}</span></button>
-   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">Nach Runde ${editorRound===1?2:1} verschieben</button>`:''}
+   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">${moveCategoryLabel()}</button>`:''}
   </article>`;
  }
  function overview(all,cats){
@@ -265,7 +277,7 @@ export function createStudioEditor(api){
     if(element)element.scrollTop=top;
    }
    mount(editor);
-   if(menu)editor.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});
+   if(menu||libraryMenu)editor.querySelector('.se-context [role=menuitem]')?.focus({preventScroll:true});
    else if(field?.id){
     const replacement=editor.querySelector('#'+CSS.escape(field.id));
     if(!replacement||replacement.closest('[hidden]'))return;
@@ -342,24 +354,46 @@ export function createStudioEditor(api){
  }
  function addCategory(raw){if(categories().length>=6)throw Error('Pro Spielbrett sind sechs Kategorien möglich. Wähle oben das andere Spielbrett.');const name=assertNewCategory(categories(),raw);flushDraft();snapshot();setCategories([...categories(),name]);api.save();activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';search='';draw();}
  function renameCategory(raw){if(!activeCategory)return;const from=activeCategory;const name=assertNewCategory(categories(),raw,from);flushDraft();snapshot();const names=categories().map(c=>categoryKey(c)===categoryKey(from)?name:c);for(const question of visibleQuestions()){if(categoryKey(question.category)===categoryKey(from))question.category=name;}setCategories(names);activeCategory=name;showCategoryForm=false;renamingCategory=false;categoryDraft='';api.save();draw();}
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){libraryMenu=null;draw();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function openLibraryMenu(node,event){
+  const {seLibrary:kind,id='',category=''}=node.dataset;
+  const rect=node.getBoundingClientRect();
+  const opener=kind==='question'?`[data-se-library="question"][data-id="${CSS.escape(id)}"]`:
+   node.matches('button')?`.se-category-navrow[data-category="${CSS.escape(category)}"]`:
+   `.se-category-card[data-category="${CSS.escape(category)}"] .se-category-open`;
+  menu=null;libraryMenu={kind,id,category,opener,x:event.clientX||rect.left+18,y:event.clientY||rect.top+18};
+  draw();
+ }
+ function closeLibraryMenu(){
+  const opener=libraryMenu?.opener;
+  libraryMenu=null;draw();
+  if(opener)document.querySelector('#se-root '+opener)?.focus({preventScroll:true});
+ }
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
  switch(action){
   case 'board-round':{
    const next=Number(button.dataset.boardRound)===2?2:1;
    flushDraft();editorRound=next;activeCategory='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
   }
   case 'category-move':{
-   const name=button.dataset.category||activeCategory;
-   const destination=editorRound===1?2:1,oldNames=categories(),target=roundCategories(quiz(),destination);
+   const oldNames=categories(),key=categoryKey(button.dataset.category);
+   const name=oldNames.find(category=>categoryKey(category)===key);
+   if(!name)return;
+   const destination=otherRound(),target=roundCategories(quiz(),destination);
+   const targetName=target.find(category=>categoryKey(category)===key);
+   const targetQuestions=questionsInCategory(roundQuestions(quiz(),destination),name);
    const moving=questionsInCategory(visibleQuestions(),name);
-   if(!target.some(cat=>categoryKey(cat)===categoryKey(name))&&target.length>=6||questionsInCategory(roundQuestions(quiz(),destination),name).length+moving.length>6)throw Error('Im anderen Spielbrett ist diese Kategorie bereits voll.');
+   if(!targetName&&target.length>=6)throw Error(`Runde ${destination} hat bereits sechs Kategorien.`);
+   if(targetQuestions.length+moving.length>6)throw Error(`In Runde ${destination} sind insgesamt höchstens sechs Fragen in „${targetName||name}“ möglich.`);
    flushDraft();snapshot();
-   const sourceRound=editorRound;
-   const sourceNames=oldNames.filter(cat=>categoryKey(cat)!==categoryKey(name));
    for(const question of moving)question.boardRound=destination;
-   quiz().roundCategories={1:roundCategories(quiz(),1),2:roundCategories(quiz(),2),[sourceRound]:sourceNames,[destination]:collectCategories(target,moving)};
+   for(const question of [...targetQuestions,...moving])question.category=targetName||name;
+   quiz().roundCategories={[editorRound]:oldNames.filter(category=>categoryKey(category)!==key),[destination]:targetName?target:[...target,name]};
    quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2]],quiz().questions);
-   activeCategory='';api.save();draw();api.notice?.('Kategorie nach Runde '+destination+' verschoben.');return;
+   if(categoryKey(activeCategory)===key){activeCategory='';search='';sel='';preview=false;showCategoryForm=false;}
+   for(const question of moving)selectedQuestions.delete(question.id);
+   libraryMenu=null;api.save();draw();
+   document.querySelector(`#se-root [data-se-action="board-round"][data-board-round="${editorRound}"]`)?.focus({preventScroll:true});
+   api.notice?.(`„${name}“ nach Runde ${destination} verschoben.`);return;
   }
   case 'map-clear':{if(scene?.template!=='map'||!item?.mapTargetSet)return;flushDraft();snapshot();item.mapTargetSet=false;api.save();draw();return;}
   case 'audit':flushDraft();auditOpen=!auditOpen;draw();return;
@@ -507,7 +541,7 @@ export function createStudioEditor(api){
    event.preventDefault();
    try{await applyImageFiles([file],{kind:'answer-image'});api.notice?.('Bild aus der Zwischenablage eingefügt.');}catch(error){api.error(error);}
   });
-  root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();const rect=libraryNode.getBoundingClientRect();libraryMenu={kind:libraryNode.dataset.seLibrary,x:event.clientX||rect.left+18,y:event.clientY||rect.top+18,id:libraryNode.dataset.id||'',category:libraryNode.dataset.category||''};if(libraryNode.dataset.id){const chosen=quiz().questions.find(x=>x.id===libraryNode.dataset.id);if(chosen)activeCategory=chosen.category;}draw();requestAnimationFrame(()=>document.querySelector('.se-context [role=menuitem]')?.focus());return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
+  root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
   root.addEventListener('submit',event=>{if(!event.target.matches('[data-se-category-form]'))return;event.preventDefault();try{const raw=event.target.querySelector('[data-se-category-name]')?.value||'';if(renamingCategory)renameCategory(raw);else addCategory(raw);}catch(err){api.error(err);}});
   root.addEventListener('click',event=>{if((menu||libraryMenu)&&!event.target.closest('.se-context')){menu=null;libraryMenu=null;if(!event.target.closest('[data-se-action],[data-se-element]')){draw();return;}}const elementNode=event.target.closest('[data-se-element]');const control=event.target.closest('[data-se-action]');if(control){event.preventDefault();try{onAction(control.dataset.seAction,control)}catch(err){api.error(err)}return;}if(elementNode&&!preview&&!event.target.closest('[data-se-resize]')){sel=elementNode.dataset.seElement;draw();}});
   root.addEventListener('focusout',event=>{if(event.target===trackedInput)trackedInput=null;});
@@ -530,18 +564,21 @@ export function createStudioEditor(api){
   root.addEventListener('pointermove',event=>{if(!drag)return;const {node,el,rect,startX,startY}=drag;let dx=(event.clientX-startX)/rect.width*1000,dy=(event.clientY-startY)/rect.height*560;if(snap){dx=Math.round(dx/10)*10;dy=Math.round(dy/10)*10;}if(drag.resizing){el.w=Math.max(50,Math.min(1000-el.x,drag.w+dx));el.h=Math.max(30,Math.min(560-el.y,drag.h+dy));node.style.width=el.w/10+'%';node.style.height=el.h/5.6+'%';}else{el.x=Math.max(0,Math.min(1000-el.w,drag.x+dx));el.y=Math.max(0,Math.min(560-el.h,drag.y+dy));node.style.left=el.x/10+'%';node.style.top=el.y/5.6+'%';}});
   const finish=(cancelled=false)=>{if(!drag)return;const old=drag;drag=null;if(cancelled){old.el.x=old.x;old.el.y=old.y;old.el.w=old.w;old.el.h=old.h;}if(cancelled||(old.el.x===old.x&&old.el.y===old.y&&old.el.w===old.w&&old.el.h===old.h)){api.discardSnapshot?.();draw();return;}persist(true);};root.addEventListener('pointerup',()=>finish(false));root.addEventListener('pointercancel',()=>finish(true));
   root.addEventListener('keydown',event=>{
-   if((menu||libraryMenu)&&event.key==='Escape'){event.preventDefault();menu=null;libraryMenu=null;draw();requestAnimationFrame(()=>document.querySelector(sel?`[data-se-element="${sel}"]`:'.se-scene')?.focus({preventScroll:true}));return;}
+   if(libraryMenu&&event.key==='Escape'){event.preventDefault();closeLibraryMenu();return;}
+   if(menu&&event.key==='Escape'){event.preventDefault();menu=null;draw();requestAnimationFrame(()=>document.querySelector(sel?`[data-se-element="${sel}"]`:'.se-scene')?.focus({preventScroll:true}));return;}
    if(event.target.matches?.('.se-editor-pane-tabs [role="tab"]')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
      event.preventDefault();const pane=event.key==='Home'?'question':event.key==='End'?'answer':event.target.dataset.pane==='question'?'answer':'question';
      onAction('editor-pane',{dataset:{pane}});return;
     }
-   if(menu&&event.target.closest('.se-context')){
+   if((menu||libraryMenu)&&event.target.closest('.se-context')){
     const items=[...root.querySelectorAll('.se-context [role="menuitem"]')],index=items.indexOf(document.activeElement);
     if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)&&items.length){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next].focus();return;}
    }
-   if((event.key==='F10'&&event.shiftKey||event.key==='ContextMenu')&&!preview){
+   if(event.key==='F10'&&event.shiftKey||event.key==='ContextMenu'){
+    const libraryNode=event.target.closest('[data-se-library]');
+    if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}
     const node=event.target.closest('[data-se-element]'),canvas=event.target.closest('.se-scene');
-    if(node||canvas){event.preventDefault();sel=node?.dataset.seElement||'';const r=(node||canvas).getBoundingClientRect();menu={x:r.left+Math.min(48,r.width/2),y:r.top+Math.min(48,r.height/2)};draw();return;}
+    if(!preview&&(node||canvas)){event.preventDefault();libraryMenu=null;sel=node?.dataset.seElement||'';const r=(node||canvas).getBoundingClientRect();menu={x:r.left+Math.min(48,r.width/2),y:r.top+Math.min(48,r.height/2)};draw();return;}
    }
 const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!editable&&['Enter',' '].includes(event.key)&&event.target.matches?.('[data-se-element]')){event.preventDefault();sel=event.target.dataset.seElement;draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='d'&&sel){event.preventDefault();onAction('duplicate');return;}if((event.key==='Delete'||event.key==='Backspace')&&!editable&&sel){event.preventDefault();onAction('remove');return;}if(event.key==='Escape'&&!editable&&sel){sel='';draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='z'){event.preventDefault();onAction(event.shiftKey?'redo':'undo');return;}if(!sel||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)||editable)return;event.preventDefault();const el=find();if(!el)return;snapshot();const n=event.shiftKey?20:5;if(event.key==='ArrowLeft')el.x=Math.max(0,el.x-n);if(event.key==='ArrowRight')el.x=Math.min(1000-el.w,el.x+n);if(event.key==='ArrowUp')el.y=Math.max(0,el.y-n);if(event.key==='ArrowDown')el.y=Math.min(560-el.h,el.y+n);persist(true);});
  }

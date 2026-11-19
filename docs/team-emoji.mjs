@@ -1,24 +1,37 @@
 export const TEAM_EMOJI = 'team-emoji';
 export const MAX_EMOJI_CLUES = 5;
+export const MAX_EMOJI_PALETTE = 96;
 export const EMOJI_TIMER_MIN = 5;
 export const EMOJI_TIMER_MAX = 180;
 
-const emojiNames = {
- '🔥':'Feuer', '❄️':'Schneeflocke', '⚡':'Blitz', '🌊':'Welle', '🌪️':'Wirbelsturm', '🌿':'Blatt',
- '🌙':'Mond', '☀️':'Sonne', '⭐':'Stern', '✨':'Funkeln', '🌈':'Regenbogen', '🌋':'Vulkan',
- '🗡️':'Dolch', '🏹':'Bogen', '🛡️':'Schild', '🔨':'Hammer', '⚙️':'Zahnrad', '🤖':'Roboter',
- '💣':'Bombe', '☠️':'Totenkopf', '👻':'Geist', '😈':'Teufel', '🎭':'Masken', '👑':'Krone',
- '🧪':'Reagenzglas', '🎵':'Musik', '🔮':'Kristallkugel', '💎':'Edelstein', '❤️':'Herz', '🤝':'Händedruck',
- '🦊':'Fuchs', '🐻':'Bär', '🐺':'Wolf', '🐱':'Katze', '🐦':'Vogel', '🐉':'Drache',
- '🕷️':'Spinne', '🐍':'Schlange', '🦈':'Hai', '🦋':'Schmetterling', '🐵':'Affe', '🍄':'Pilz',
- '👁️':'Auge', '🩸':'Blutstropfen', '⏳':'Sanduhr', '🧊':'Eiswürfel', '🍌':'Banane', '🏴‍☠️':'Piratenflagge'
+// Older quiz files stored the exact original default as if it were a custom palette.
+const legacyDefaultPalette = '🔥 ❄️ ⚡ 🌊 🌪️ 🌿 🌙 ☀️ ⭐ ✨ 🌈 🌋 🗡️ 🏹 🛡️ 🔨 ⚙️ 🤖 💣 ☠️ 👻 😈 🎭 👑 🧪 🎵 🔮 💎 ❤️ 🤝 🦊 🐻 🐺 🐱 🐦 🐉 🕷️ 🐍 🦈 🦋 🐵 🍄 👁️ 🩸 ⏳ 🧊 🍌 🏴‍☠️';
+const emojiByGroup = {
+ Natur:{'🔥':'Feuer','❄️':'Schneeflocke','⚡':'Blitz','🌊':'Welle','🌪️':'Wirbelsturm','🌿':'Blatt','🌙':'Mond','☀️':'Sonne',
+  '🌈':'Regenbogen','🌋':'Vulkan','🧊':'Eiswürfel','💧':'Wassertropfen','☁️':'Wolke','🌳':'Baum','⛰️':'Berg','🍄':'Pilz'},
+ Tiere:{'🦊':'Fuchs','🐻':'Bär','🐺':'Wolf','🐱':'Katze','🐦':'Vogel','🐉':'Drache','🕷️':'Spinne','🐍':'Schlange',
+  '🦈':'Hai','🦋':'Schmetterling','🐵':'Affe','🦇':'Fledermaus','🐸':'Frosch','🐢':'Schildkröte','🐝':'Biene','🦂':'Skorpion'},
+ Kampf:{'🗡️':'Dolch','⚔️':'Gekreuzte Schwerter','🏹':'Bogen','🛡️':'Schild','🔨':'Hammer','🪓':'Axt','💣':'Bombe',
+  '🪃':'Bumerang','🎯':'Zielscheibe','🩸':'Blutstropfen','🦾':'Roboterarm','🥊':'Boxhandschuh','🦴':'Knochen','💥':'Explosion'},
+ Magie:{'⭐':'Stern','✨':'Funkeln','🔮':'Kristallkugel','🧪':'Reagenzglas','👻':'Geist','☠️':'Totenkopf','😈':'Teufel',
+  '🧙':'Magier','🧛':'Vampir','🧚':'Fee','🦄':'Einhorn','🌀':'Wirbel','🪄':'Zauberstab','🧞':'Flaschengeist'},
+ Figuren:{'🤖':'Roboter','🎭':'Masken','👁️':'Auge','🤝':'Händedruck','😀':'Lächeln','😂':'Lachen','😭':'Weinen',
+  '😠':'Wut','😱':'Schreck','😴':'Schlaf','🤡':'Clown','👶':'Baby','👵':'Ältere Frau','👀':'Augen'},
+ Dinge:{'⚙️':'Zahnrad','👑':'Krone','🎵':'Musik','💎':'Edelstein','❤️':'Herz','⏳':'Sanduhr','🍌':'Banane','🏴‍☠️':'Piratenflagge',
+  '⚓':'Anker','🧭':'Kompass','🪙':'Münze','🗝️':'Schlüssel','🎩':'Zylinder','🍺':'Bier','🥕':'Karotte','📖':'Buch'}
 };
-const defaultPalette = Object.keys(emojiNames).join(' ');
+const emojiMetadata = new Map(Object.entries(emojiByGroup).flatMap(([group, names]) =>
+ Object.entries(names).map(([symbol, name]) => [symbol, {group, name}])));
+const defaultPalette = [...emojiMetadata.keys()].join(' ');
 const emojiGrapheme = /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|[\u200D\uFE0F\u20E3\u{E0020}-\u{E007F}]|[0-9#*](?=\uFE0F?\u20E3))+$/u;
 const hasEmojiBase = /[\p{Extended_Pictographic}\p{Emoji_Presentation}\u20E3]/u;
 
 export function emojiName(emoji) {
- return emojiNames[emoji] || 'Emoji ' + emoji;
+ return emojiMetadata.get(emoji)?.name || 'Emoji ' + emoji;
+}
+
+export function emojiGroup(emoji) {
+ return emojiMetadata.get(emoji)?.group || 'Weitere';
 }
 
 export function normalizeTeamEmoji(settings = {}) {
@@ -26,8 +39,9 @@ export function normalizeTeamEmoji(settings = {}) {
   const number = Math.round(Number(value));
   return number > 0 ? Math.min(EMOJI_TIMER_MAX, Math.max(EMOJI_TIMER_MIN, number)) : fallback;
  };
+ const palette = String(settings?.palette ?? '').trim();
  return {
-  palette: String(settings?.palette ?? defaultPalette).slice(0, 2400),
+  palette: !palette || palette === legacyDefaultPalette ? defaultPalette : palette.slice(0, 4000),
   clueSeconds: seconds(settings?.clueSeconds, 35),
   guessSeconds: seconds(settings?.guessSeconds, 25)
  };
@@ -40,8 +54,8 @@ export function parseEmojiPalette(text) {
   : value.split(/\s+/u);
  const symbols = segments.filter(symbol => symbol.trim());
  const unique = [...new Set(symbols)];
- if(!unique.length || unique.length > 48 || unique.some(symbol => symbol.length > 40 || !hasEmojiBase.test(symbol) || !emojiGrapheme.test(symbol))) {
-  throw Error('Bitte 1 bis 48 unterschiedliche Emojis als Auswahl hinterlegen.');
+ if(!unique.length || unique.length > MAX_EMOJI_PALETTE || unique.some(symbol => symbol.length > 40 || !hasEmojiBase.test(symbol) || !emojiGrapheme.test(symbol))) {
+  throw Error(`Bitte 1 bis ${MAX_EMOJI_PALETTE} unterschiedliche Emojis als Auswahl hinterlegen.`);
  }
  return unique;
 }

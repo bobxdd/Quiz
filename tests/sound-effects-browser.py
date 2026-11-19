@@ -9,6 +9,9 @@ from playwright.async_api import async_playwright,expect
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_fx_fixture',ROOT/'tests/categories-3_0-browser.py')
 fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+BUZZ_VOICES=3
+WRONG_VOICES=3
+CORRECT_VOICES=4
 
 async def count(page):
  return await page.evaluate('window.__sfxOscCount||0')
@@ -59,6 +62,13 @@ async def main():
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-big-buzzer')).to_be_visible(timeout=12000)
+  cheat_sheet=host.locator('.bq-host-solution-preview')
+  await host.set_viewport_size({'width':390,'height':844})
+  await expect(cheat_sheet).to_have_text('Anivia')
+  await expect(cheat_sheet).to_be_in_viewport(ratio=1)
+  await expect(alice.locator('.bq-host-solution')).to_have_count(0)
+  await expect(alice.locator('.bq-question-panel')).not_to_contain_text('Anivia')
+  await host.set_viewport_size({'width':1366,'height':850})
   # The icon and the separate controls are available to guest and host.
   for page in (host,alice):
    speaker=page.locator('.bq-sfx-menu>summary')
@@ -73,9 +83,9 @@ async def main():
   saved=await alice.evaluate("JSON.parse(localStorage.getItem('brainquiz-sfx-local-v1'))")
   assert saved['buzz']==17 and saved['master']==35 and saved['correct']==40,saved
   host_before=await count(host);guest_before=await count(alice)
-  # Preview generates exactly one buzz oscillator; owner retains local settings.
+  # Preview generates one buzzer cue; owner retains local settings.
   await host.locator('[data-action="sfx-preview"][data-sfx="buzz"]').click()
-  assert await count(host)==host_before+1
+  assert await count(host)==host_before+BUZZ_VOICES
   # Close settings before pressing the large buzzer.
   await host.locator('.bq-sfx-menu>summary').click()
   await alice.locator('.bq-sfx-menu>summary').click()
@@ -83,8 +93,8 @@ async def main():
   await alice.locator('[data-action="buzz"]').click()
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.buzzers||{}).some(b=>b?.name==='Alice')",timeout=12000)
   await host.wait_for_function("(n) => (window.__sfxOscCount||0)>n",arg=host_before,timeout=5000)
-  assert await count(host)==host_before+1,'Host must beep only once for the approved buzzer'
-  assert await count(alice)==guest_before+1,'Participant must hear their own buzzer once'
+  assert await count(host)==host_before+BUZZ_VOICES,'Host must beep only once for the approved buzzer'
+  assert await count(alice)==guest_before+BUZZ_VOICES,'Participant must hear their own buzzer once'
   # Repeated snapshots, UI redraws and unrelated network updates cannot replay the cue.
   stable=await count(host)
   await host.evaluate('window.__probe.getGame()._changed()')
@@ -95,8 +105,8 @@ async def main():
   await host.locator('[data-action="buzz-wrong"]').click()
   await host.wait_for_function("() => window.__probe.info().publicState.buzzerJudgements?.['1']?.result==='wrong'",timeout=10000)
   await alice.wait_for_function("() => window.__probe.info().publicState.buzzerJudgements?.['1']?.result==='wrong'",timeout=10000)
-  await host.wait_for_function('(n) => (window.__sfxOscCount||0)>=n+2',arg=h0,timeout=4000)
-  assert await count(host)==h0+2 and await count(alice)==a0+2,(await count(host),await count(alice))
+  assert await count(host)==h0+WRONG_VOICES and await count(alice)==a0+WRONG_VOICES,(await count(host),await count(alice))
+  await expect(cheat_sheet).to_contain_text('Anivia')
   h1=await count(host)
   await host.evaluate('window.__probe.getGame()._changed()')
   await host.wait_for_timeout(300)
@@ -110,7 +120,9 @@ async def main():
   h2=await count(host);a2=await count(alice)
   await host.locator('[data-action="buzz-correct"]').click()
   await alice.wait_for_function("() => window.__probe.info().publicState.buzzerJudgements?.['1']?.result==='correct'",timeout=10000)
-  assert await count(host)==h2+2 and await count(alice)==a2+2,(await count(host),await count(alice))
+  assert await count(host)==h2+CORRECT_VOICES and await count(alice)==a2+CORRECT_VOICES,(await count(host),await count(alice))
+  await expect(host.locator('.bq-host-solution')).to_have_count(0)
+  await expect(alice.locator('.bq-answer-view')).to_contain_text('Anivia')
   # Mute blocks preview, changes only this device, and survives navigation redraw.
   await alice.locator('.bq-sfx-menu>summary').click()
   await alice.locator('[data-action="sfx-mute"]').click()

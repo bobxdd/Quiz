@@ -118,6 +118,7 @@ body.bq-game-mode{overflow:hidden;min-height:100dvh}
 .se-context-hint{color:#9fb1b5;font-size:11px;margin:0 0 5px}
 .se-context{position:fixed;z-index:10000;display:flex;flex-direction:column;width:226px;max-height:calc(100dvh - 16px);overflow:auto;padding:7px;background:#20262d;border:1px solid #778389;border-radius:11px;box-shadow:0 16px 36px rgba(0,0,0,.7)}
 .se-context-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#e9efec;font-size:12px;padding:2px 4px 6px;border-bottom:1px solid #ffffff24;margin-bottom:4px}
+.se-context-head strong{min-width:0;overflow-wrap:anywhere}
 .se-studio .se-context button[role=menuitem]{width:100%;display:block;min-height:35px;text-align:left;padding:7px 10px;margin:1px 0;background:transparent;color:#e4e9e7;border:1px solid transparent}
 .se-studio .se-context button[role=menuitem]:hover,.se-studio .se-context button[role=menuitem]:focus-visible{background:#435159;border-color:#7a9598;outline:0}
 .se-studio .se-context button.se-destructive{color:#f0b3b7}
@@ -162,10 +163,41 @@ body.bq-game-mode{overflow:hidden;min-height:100dvh}
 .bq-buzzer-winner small{color:#c9c8bc;font-size:12px}
 .bq-judge-actions{display:flex;gap:9px;flex-wrap:wrap}
 .bq-judge-actions .btn{min-height:49px;padding:10px 18px;font-size:clamp(14px,1.15vw,18px);font-weight:800}
-.bq-host-solution{border:1px solid #474754;background:rgba(23,25,32,.9);border-radius:10px;padding:8px 12px}
-.bq-host-solution>summary{cursor:pointer;font-weight:750;letter-spacing:.01em}
-.bq-host-solution-body{padding:13px 6px 3px;display:grid;gap:8px}
-.bq-host-solution-body strong{color:#ffe0b5;font-size:18px}
+.bq-host-solution{
+ position:sticky;top:6px;z-index:5;flex:0 0 auto;min-width:0;
+ display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:5px 13px;
+ padding:5px 10px;border:1px solid #695942;border-inline-start:3px solid #e9b668;
+ border-radius:10px;background:#28231e;color:#fff0d7;
+}
+.bq-host-solution-label{display:grid;gap:1px;font-size:.79rem;font-weight:750;line-height:1.14}
+.bq-host-solution-label small{font-size:.68rem;color:#d6bd9c;font-weight:500}
+.bq-host-solution-preview{min-width:0;display:flex;align-items:center;gap:8px}
+.bq-host-solution-preview strong{
+ display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+ min-width:0;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;
+ font-size:clamp(.92rem,1.45vw,1.15rem);line-height:1.2;
+}
+.bq-host-solution-image{display:block;width:auto;max-width:100%;object-fit:contain}
+.bq-host-solution-preview .bq-host-solution-image{height:clamp(32px,6dvh,52px);max-width:110px;flex:0 1 auto}
+.bq-host-solution-map{position:relative;display:block;width:100%;max-width:440px;overflow:hidden;border-radius:5px}
+.bq-host-solution-map img{display:block;width:100%;height:auto}
+.bq-host-solution-map>span{position:absolute;width:11px;height:11px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;background:#bf3323;box-shadow:0 0 0 1px #38211b}
+.bq-host-solution-preview .bq-host-solution-map{width:clamp(61px,11dvh,100px);flex:0 0 auto}
+.bq-host-solution summary{cursor:pointer;padding:5px 3px;font-size:.82rem;font-weight:650;white-space:nowrap}
+.bq-host-solution-body{
+ position:absolute;top:calc(100% + 4px);right:0;width:min(36rem,100%);max-height:min(56dvh,420px);overflow:auto;
+ display:grid;gap:9px;padding:12px;border:1px solid #695942;border-radius:10px;
+ background:#28231e;box-shadow:0 12px 24px #0009;overflow-wrap:anywhere;white-space:pre-wrap;
+}
+.bq-host-solution-body p{margin:0;color:#ecd9bc}
+.bq-host-solution-body .bq-host-solution-image{max-height:35dvh}
+@media(max-width:450px){
+ .bq-host-solution{grid-template-columns:minmax(0,1fr) auto;gap:1px 6px}
+ .bq-host-solution-label{display:flex;align-items:baseline;gap:7px}
+ .bq-host-solution-preview{grid-area:2/1/3/-1}
+ .bq-host-solution details{grid-area:1/2/2/3}
+ .bq-host-solution summary{padding:3px 2px}
+}
 .bq-guest-mode{border:1px solid #465453;background:#222e30;border-radius:10px;padding:12px;display:grid;gap:7px;line-height:1.4}
 .bq-guest-mode h3{margin:0;font-size:20px}.bq-guest-mode p{margin:0;color:#c7d5d2}
 .bq-big-buzzer{min-height:86px!important;display:block;width:100%;font-size:clamp(19px,2.4vw,30px)!important;letter-spacing:.025em;font-weight:850;border:2px solid #e1d7bd!important;box-shadow:0 5px 0 #344346!important}
@@ -491,7 +523,12 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-team-emoji .panelhead { flex-wrap: wrap; align-items: center; gap: .65rem; }
 .bq-emoji-target { display: grid; gap: .3rem; }
 .bq-emoji-target strong { font-size: clamp(1.35rem, 4vw, 2.15rem); overflow-wrap: anywhere; }
-.bq-emoji-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: .35rem; max-width: 46rem; }
+.bq-emoji-filters{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.bq-emoji-filters .btn{min-height:30px;padding:3px 9px}
+.bq-emoji-palette {
+ display:grid;grid-template-columns:repeat(auto-fill,minmax(45px,1fr));gap:.35rem;max-width:46rem;
+ max-height:clamp(96px,31dvh,280px);overflow-y:auto;scrollbar-width:thin;padding:3px;
+}
 .bq-emoji-palette .btn, .bq-emoji-selection .btn { min-height: 44px; min-width: 44px; padding: .2rem; font-size: 1.45rem; }
 .bq-emoji-selection { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; min-height: 50px; }
 .bq-emoji-hint { padding: .75rem; border-radius: .65rem; background: rgba(155, 186, 171, .13); font-size: clamp(1.55rem, 5vw, 2.7rem); overflow-wrap: anywhere; }
