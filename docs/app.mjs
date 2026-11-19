@@ -27,6 +27,7 @@ let service=null,game=null,room='',role='landing',view='start',member=null,guest
 let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cloudWriteTail=Promise.resolve();
 let projectorChannel=null,projectorRoom='',projectorToken='';
 let guestReceipt=null;
+let reviewTeam='all'; // Local host filter; does not change scoring.
 let playerEmoji=null,emojiDraft=null;
 let rehearsal=null;
 let boardId='',boardRevision=0,boardConflict=false;
@@ -740,12 +741,21 @@ function renderReviewGallery(readOnly=false){
  const host=canHost()&&!readOnly;
  const board=publicState?.answerReview;if(!board)return '';
  const entries=Object.entries(board.entries||{});const visible=entries.filter(([,a])=>a.revealed).length;
+ const teamIds=host&&roundMode(activeQuestion())==='written'
+  ?Object.keys(publicState?.teams||{}).filter(team=>entries.some(([id])=>roster?.[id]?.team===team)):[];
+ const selectedTeam=teamIds.includes(reviewTeam)?reviewTeam:'all';
+ const visibleEntries=host&&selectedTeam!=='all'?entries.filter(([id])=>roster?.[id]?.team===selectedTeam):entries;
+ const teamNav=teamIds.length>1?`<nav class="bq-review-team-nav" aria-label="Antworten nach Teams">
+  ${btn('‹ Team','review-team-step','small','data-step="-1"')}
+  ${[['all','Alle'],...teamIds.map(id=>[id,teamName(id)])].map(([id,name])=>`<button type="button" class="btn small ${selectedTeam===id?'primary':''" data-action="review-team" data-team="${e(id)" aria-pressed="${selectedTeam===id?'true':'false'">${e(name)} · ${id==='all'?entries.length:entries.filter(([uid])=>roster?.[uid]?.team===id).length}</button>`).join('')}
+  ${btn('Team ›','review-team-step','small','data-step="1"')}
+ </nav>`:'';
  const mapQuestion=activeQuestion()?.type==='map';
  const solution=mapQuestion&&publicState?.phase==='reveal'&&publicState?.solutionVisible!==false?normalizePoint({x:activeQuestion().mapTargetX,y:activeQuestion().mapTargetY}):null;
  const mapDistances=new Map(mapAnswerDistances(board,solution).map(row=>[row.id,row.distanceKm]));
  return `<div class="answer-review ${mapQuestion?'bq-map-answer-review':''}">
   <div class="review-summary"><span class="pill">${entries.length} Personen</span><span class="pill">${visible} aufgedeckt</span><span class="small muted">${solution?(roundMode(activeQuestion())==='buzzer'&&publicState?.buzzerResolved?.[roundKey()]?'Entfernungen in km Luftlinie. Die Buzzerentscheidung und Punktevergabe sind abgeschlossen.':'Entfernungen in km Luftlinie. Der Host entscheidet weiterhin selbst über die Gewinner und Punkte.'):'Antworten erscheinen erst nach Freigabe durch den Host.'}</span></div>
-  <div class="review-grid" style="--review-columns:${Math.min(4,Math.max(1,Math.ceil(entries.length/2)))}">${entries.map(([id,a])=>{
+  ${teamNav}<div class="review-grid" style="--review-columns:${Math.min(4,Math.max(1,Math.ceil(entries.length/2)))}">${visibleEntries.map(([id,a])=>{
    const state=answerCardState(a),hidden=state==='hidden',submitted=state!=='missing';
    const display=!submitted?'<span class="small muted">Keine Antwort abgegeben</span>':hidden?`<div class="frosted-shield" aria-label="Antwort verdeckt – wird erst nach Host-Freigabe geladen"><span class="frosted-symbol" aria-hidden="true">◇</span><span class="frosted-title">Antwort verdeckt</span><span class="frosted-bars" aria-hidden="true"><i></i><i></i><i></i></span></div>`:`<span class="review-answer">${e(a.value||'')}</span>`;
    const distanceKm=mapDistances.get(id);
@@ -1555,6 +1565,20 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   scoreTarget=person;notice(result==='correct'?'Antwort richtig bewertet.':'Antwort falsch bewertet: halbe Fragepunkte abgezogen.');return;
  }
  case 'adjust-player':{if(scoreMode(publicState)==='team')throw Error('Im Teammodus nur den einen gemeinsamen Teampunktestand korrigieren.');if(!canHost()||!scoreTarget)throw Error('Person auswählen.');const delta=Number($('person-adjust')?.value);const actionData={kind:'manual',delta,at:now()};if(isOffline()){publicState.playerScores??={};publicState.playerScores[scoreTarget]=updatePlayerScore(publicState.playerScores[scoreTarget],actionData);saveOfflineSession();schedule();}else await game.scorePerson(room,scoreTarget,actionData);notice('Punkte korrigiert.');return;}
+ case 'review-team':{
+  if(!canHost()||!reviewIsCurrent(publicState))return;
+  const team=button.dataset.team;
+  if(team==='all'||Object.hasOwn(publicState.teams||{},team)){reviewTeam=team;schedule();}
+  return;
+ }
+ case 'review-team-step':{
+  if(!canHost()||!reviewIsCurrent(publicState))return;
+  const ids=Object.keys(publicState.teams||{}).filter(team=>Object.keys(publicState.answerReview.entries||{}).some(id=>roster?.[id]?.team===team));
+  if(!ids.length)return;
+  const index=ids.indexOf(reviewTeam),step=Number(button.dataset.step)===-1?-1:1;
+  reviewTeam=ids[(index<0?(step===1?0:ids.length-1):(index+step+ids.length)%ids.length)];
+  schedule();return;
+ }
  case 'score-page':{scorePage=Math.max(0,scorePage+Number(button.dataset.delta||0));schedule();return;}
  case 'board-page':{boardPage=Math.max(0,Math.min(boardPages().length-1,boardPage+Number(button.dataset.delta||0)));schedule();return;}
  case 'request-pick':{if(role!=='guest'||member?.status!=='approved')return;const turn=selectingTeam(publicState);if(turn&&turn!==member.team)throw Error('Gerade wählt ein anderes Team.');await sendGuestAction(turn?'Fragenauswahl':'Fragenwunsch',()=>game.requestPick(room,button.dataset.qid,member.name));notice(turn?'Frage ausgewählt. Der Host deckt sie auf.':'Fragenwunsch an den Host gesendet.');return;}
