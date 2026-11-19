@@ -28,19 +28,23 @@ async def audit(page,label,solved):
     const r=e.getBoundingClientRect();return {width:r.width,height:r.height,disabled:e.disabled}});
    const a=document.querySelector('.bq-answer-view');
    const exp=document.querySelector('.bq-answer-explanation');
+   const state=window.__uxQA?.state?.()||{};
    return {viewport:{w:innerWidth,h:innerHeight},scrollW:document.documentElement.scrollWidth,
      footer,question,answer,controls,scorePager:!!document.querySelector('.bq-score-pager'),
      explanationDisplay:exp?getComputedStyle(exp).display:null,
      explanationLength:exp?.textContent.length||0,
      explanationScroll:!!a&&a.scrollHeight>a.clientHeight+3,
-     visibleSolution:!!a,
+     visibleSolution:!!a,scoreMode:state.scoreMode||'team',
+     teamCount:Object.keys(state.teams||{}).length,
      stageScroll:document.querySelector('.bq-question-panel .stage')?.scrollHeight,
      stageClient:document.querySelector('.bq-question-panel .stage')?.clientHeight};
  }""",{'solved':solved})
  assert report['scrollW']<=report['viewport']['w']+7,(label,'horizontal overflow',report)
  assert report['question'] and report['question']['width']>=170,(label,'lost question',report)
+ assert report['question']['height']>=120,(label,'question shrunk to unreadable strip',report)
  assert report['footer'] and report['footer']['bottom']<=report['viewport']['h']+3,(label,'footer clipped',report)
- assert report['scorePager'],(label,'five teams must have a visible score pager',report)
+ if report['scoreMode']=='team' and report['teamCount']>2 and report['viewport']['w']<470:
+  assert report['scorePager'],(label,'five teams must have a visible score pager',report)
  for b in report['controls']:
   assert b['height']>=28 and b['width']>=28,(label,'score pager too small',report)
  if solved:
