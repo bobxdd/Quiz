@@ -67,7 +67,7 @@ async function restoreHostQuiz(){
  const saved=await game.getHostQuiz(room);
  if(saved){quiz=normalizedQuiz(saved);selected=quiz.questions[0]?.id||'';saveLocal();}
  else{loadLocal();await game.saveHostQuiz(room,normalizedQuiz(quiz));}
- hostCloudReady=true;void maybeOpenSelectedQuestion();
+ hostCloudReady=true;
 }
 const roomFromLink=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,16);
 const canHost=()=>role==='host';
