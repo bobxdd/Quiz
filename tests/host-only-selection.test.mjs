@@ -13,7 +13,7 @@ test('only host can choose a question, guest board is read-only',()=>{
  assert.doesNotMatch(app,/data-action="request-pick"/);
  assert.doesNotMatch(app,/case 'request-pick'/);
  assert.doesNotMatch(app,/maybeOpenSelectedQuestion/);
- assert.doesNotMatch(app,/wählt die nächste Frage/);
+ assert.doesNotMatch(app,/Team [0-9] wählt die nächste Frage/);
  assert.match(app,/Der Host wählt die nächste Frage/);
  assert.match(source('session-ui.css'),/bq-tile-view-only/);
 });
@@ -25,7 +25,7 @@ test('old clients and forged RPCs cannot reserve a question, host gets no stale 
  assert.match(peer,/case 'buzz'/);
  assert.match(peer,/case 'answer'/);
  assert.match(peer,/case 'message'/);
- assert.match(peer,/case 'lobby-join'/);
+ assert.match(peer,/action==='lobby-join'/);
  assert.doesNotMatch(flow,/if\(state\.questionPick&&state\.questionPick\.qid!==question\?\.id\)return null/);
  assert.match(flow,/questionPick:null/);
 });
