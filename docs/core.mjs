@@ -157,7 +157,7 @@ export function categoryColumns(questions){
  return [...grouped].map(([category,items])=>({category,items:[...items].sort((a,b)=>a.points-b.points||String(a.title).localeCompare(String(b.title)))}));
 }
 export function judgementDelta(points,result){
- const value=Number(points);if(!Number.isFinite(value)||value<0||value>10000)throw Error('Ungültiger Fragewert.');
+ const value=Number(points);if(!Number.isFinite(value)||value<0||value>20000)throw Error('Ungültiger Fragewert.'); // Editor base max 10,000; final-six modifier ×2.
  if(result==='correct')return value;if(result==='wrong')return -value/2;
  throw Error('Unbekannte Bewertung.');
 }
