@@ -33,7 +33,7 @@ test('timed written rounds show a host and guest countdown based on shared deadl
  const app=source('app.mjs'),css=source('session-ui.css');
  assert.match(app,/function roundTimerMarkup\(\)/);
  assert.match(app,/roundMode\(q\)!=='written'/);
- assert.match(app,/roundTimerMarkup\(\)<\/div>/);
+ assert.match(app,/roundTimerMarkup\(\)\}<\/div>/);
  assert.match(app,/id="clock" role="timer" aria-live="off"/);
  assert.match(app,/p\.phase==='paused'\?Number\(p\.pausedRemaining\)/);
  assert.match(app,/const seconds=Math\.max\(0,Math\.ceil\(remaining\/1000\)\)/);
