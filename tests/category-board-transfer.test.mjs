@@ -1,7 +1,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {boardList,createBoard,loadBoard,transferCategoryBetweenBoards} from '../docs/board-workspace.mjs';
+import {boardList,createBoard,loadBoard,persistBoard,transferCategoryBetweenBoards} from '../docs/board-workspace.mjs';
 import {emptyQuiz} from '../docs/core.mjs';
 
 class Store{
@@ -77,7 +77,6 @@ test('merges matching categories but rejects overflow without modifying either b
  target.quiz.questions.push(q(11),q(12),q(13),q(14),q(15));
  target.quiz.roundCategories[1].push('Lorefragen');
  // Reset destination using the public persistence API to keep a valid revision.
- const {persistBoard}=await import('../docs/board-workspace.mjs');
  persistBoard(store,b.id,b.revision,target.quiz);
  const srcBefore=JSON.stringify(loadBoard(store,a.id));
  const dstBefore=JSON.stringify(loadBoard(store,b.id));
