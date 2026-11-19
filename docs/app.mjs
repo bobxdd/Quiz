@@ -981,7 +981,7 @@ function renderHostLive(){
  if(!hasLiveQuestion())return boardScene(true)+(mayFinishGame(publicState)&&!canAdvanceBoard(publicState)?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
- const awaitingVerdict=!!winner()&&p.phase==='question'&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()];
+ const awaitingVerdict=!!winner()&&['question','paused'].includes(p.phase)&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()];
  const canCancelQuestion=['question','paused'].includes(p.phase)&&!winner()&&!Object.keys(responses?.[roundKey()]||{}).length&&!p.buzzerJudgements?.[roundKey()]&&!p.buzzerResolved?.[roundKey()];
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${isOpen()?'good':''}">${p.phase==='paused'?'Pausiert':isOpen()?'Frage offen':'Auflösung'}</span></div>
  ${p.phase==='reveal'?'':hostBuzzerControl()}<section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
@@ -1616,7 +1616,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
  case 'back':{
   if(!canHost()||!activeQuestion())return;
-  if(publicState.phase==='question'&&winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
+  if(winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
   const changed=publicState.phase!=='reveal';
   if(changed&&!confirm('Die Frage wird als GESPIELT markiert, auch wenn sie nicht richtig beantwortet wurde.\n\nUngespielt zurücklegen geht stattdessen über die separate Schaltfläche. Trotzdem beenden?'))return;
   if(isOffline()){publicState=returnToBoardState(publicState)||publicState;if(!rehearsal)saveOfflineSession();schedule();}
