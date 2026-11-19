@@ -791,18 +791,7 @@ export class PeerGame{
     this._syncTeamEmoji();
     return true;
    }
-   case 'pick':{
-    const qid=safeText(payload.qid,80),cell=pub?.board?.[qid];
-    if(!Object.hasOwn(pub?.board||{},qid)||!cell||cell.used||pub.phase!=='board'||(Number(cell.boardRound)===2?2:1)!==(Number(pub.boardRound)===2?2:1))throw Error('Frage nicht mehr verfügbar.');
-    const team=selectingTeam(pub);
-    if(team){
-     if(Number(payload.round)!==Number(pub.round))throw Error('Die Fragenauswahl gehört zu einer früheren Runde.');
-     if(team!==member.team)throw Error('Gerade wählt ein anderes Team die Frage. Alle dürfen danach buzzern.');
-     if(pub.questionPick)throw Error('Dein Team hat bereits eine Frage ausgewählt.');
-     pub.questionPick={qid,uid:ctx.uid,team:member.team,round:Number(pub.round)};
-    }
-    this.data.picks[ctx.uid]={uid:ctx.uid,qid,team:member.team,name:member.name,round:Number(pub.round),at:now};return true;
-   }
+   case 'pick':throw Error('Nur der Host darf Fragen auswählen.');
    case 'buzz':{
     if(round!==String(payload.round))throw Error('Die Buzzer-Runde ist nicht mehr offen.');
     if(this.data.buzzers[round])return false;
@@ -1025,7 +1014,7 @@ export class PeerGame{
  async chooseLobbyTeam(room,team){if(this.mode==='guest')return this._rpc('lobby-join',{team});throw Error('Teamwahl nur für Teilnehmer.')}
  async createLobbyTeam(room,name){if(this.mode==='guest')return this._rpc('lobby-create',{name});throw Error('Teamerstellung nur für Teilnehmer.')}
  async setLobbyReady(room,ready){if(this.mode==='guest')return this._rpc('lobby-ready',{ready});throw Error('Bereitschaft nur für Teilnehmer.')}
- async requestPick(room,qid,name){if(this.mode==='guest')return this._rpc('pick',{qid,round:this.guestData.public?.round});throw Error('Nur Teilnehmer können Fragen wünschen.')}
+ async requestPick(room,qid,name){throw Error('Nur der Host darf Fragen auswählen.');}
  async clearPicks(room){const d=this._getHostData(room);d.picks={};d.public.questionPick=null;this._changed()}
  async scorePerson(room,personId,action){const d=this._getHostData(room);
   if(d.public?.scoreMode!=='individual')throw Error('Im Teammodus gibt es ausschließlich einen gemeinsamen Punktestand pro Team. Korrigiere stattdessen die Teamwertung.');
