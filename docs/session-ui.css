@@ -558,3 +558,8 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-review-team-nav .btn{flex:none;min-height:34px;font-size:12px;white-space:nowrap}
 .bq-review-person-team{display:block;margin-top:2px;color:#bdc9d4;font-size:11px;font-weight:600}
 @media(max-width:580px){.bq-scene-heading{gap:6px}.bq-round-countdown{min-width:88px;padding:4px 8px}.bq-round-countdown #clock{font-size:24px}.bq-round-countdown-caption{font-size:9px}}
+
+/* The dedicated non-buzzer team-emoji round already owns a synced #clock.
+   Make that existing timer as visible as the written-round countdown. */
+.bq-team-emoji .panelhead #clock{display:inline-grid;place-items:center;flex:none;min-width:110px;min-height:51px;padding:5px 13px;border:2px solid #8ed1c2;border-radius:10px;background:#16353d;color:#f7ffff;font-size:clamp(23px,2.5vw,34px);font-weight:900;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:.025em}
+@media(max-width:580px){.bq-team-emoji .panelhead #clock{min-width:88px;min-height:44px;padding:5px 9px;font-size:24px}}
