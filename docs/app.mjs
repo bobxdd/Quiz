@@ -52,7 +52,7 @@ async function confirmBoardSave(){
  boardSaving=(async()=>{
   try{
    await boardStore.flush();
-   if(boardStore.hasPending())return confirmBoardSave();
+   while(boardStore.hasPending())await boardStore.flush();
    if(!boardConflict&&isOffline())saveState='Lokal gesichert';
    return true;
   }catch(err){
