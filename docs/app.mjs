@@ -710,7 +710,7 @@ function savedQuizzesStart(drafts,workspaceError,hostCode){
 }
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
- let drafts=[],workspaceError='';try{drafts=boardList(boardStore);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
+ let drafts=[],workspaceError=boardStoreError;try{drafts=boardList(boardStore);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
  const invite=hasValidRoom(roomFromLink);
  return `<div class="start-shell"><header class="start-head"><div class="brand"><div class="logo">B</div><div><strong>BrainQuiz Studio</strong><small>Version ${VERSION}</small></div></div></header>
  <main class="start-main"><h1>${invite?'Quiz beitreten':'Quiz erstellen oder beitreten'}</h1>
@@ -2001,6 +2001,7 @@ document.addEventListener('submit',async ev=>{if(!['join-form','chat-form','answ
  }});
 document.addEventListener('input',ev=>{const input=ev.target;if(input.dataset.blockfield){blockPropertyUpdate(input);return;}if(input.id==='history-search'){historyFilter=input.value;schedule();return;}if(input.id==='editor-search'){editorSearch=input.value;schedule();return;}if(input.id?.startsWith('q-')||['quiz-title','quiz-description','quiz-teams','quiz-manual-players'].includes(input.id)){updateDraftField(input);clearTimeout(updateDraftField.timer);updateDraftField.timer=setTimeout(schedule,350);}});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&cloudDirty)void flushHostCloudSave();
+ if(document.visibilityState==='hidden'&&isOffline()&&boardStore.hasPending?.())void confirmBoardSave();
  if(document.visibilityState==='visible'&&role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});
 });
 window.addEventListener('online',()=>{if(role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});});
@@ -2010,13 +2011,21 @@ window.addEventListener('storage',event=>{
  boardConflict=true;saveState='KONFLIKT – als Kopie sichern!';schedule();notice('Ein anderer Tab hat dieses Quizbrett geändert. Deine Änderungen werden nicht überschrieben.');
 });
 window.addEventListener('beforeunload',event=>{
- if(role==='host'&&(boardConflict||/SPEICHERFEHLER|KONFLIKT/.test(saveState))){event.preventDefault();event.returnValue='';}
+ if(role==='host'&&(boardConflict||boardStore.hasPending?.()||/SPEICHERFEHLER|KONFLIKT/.test(saveState))){event.preventDefault();event.returnValue='';}
 });
 document.addEventListener('change',async ev=>{const target=ev.target;try{if(target.id==='import-quiz')await handleImport(target);else if(target.dataset.blockimage)await handleBlockUpload(target);else if(target.dataset.blockfield){blockPropertyUpdate(target);schedule();}else if(target.dataset.image)await handleUpload(target);else if(target.dataset.audio)await handleAudioUpload(target);else if(target.id==='q-type'){updateDraftField(target);schedule();}else if(target.id?.startsWith('team-')){pendingTeamChoices.set(target.id.slice(5),target.value);}else if(target.id==='chat-team'){chatTeam=target.value;schedule();}else if(target.id?.startsWith('q-'))updateDraftField(target);}catch(err){error(err);}});
 document.addEventListener('keydown',ev=>{if(ev.defaultPrevented)return;if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}});
 
 document.addEventListener('keydown',ev=>{if(ev.code!=='KeyB'||ev.ctrlKey||ev.altKey||ev.metaKey||canHost()||role!=='guest')return;const el=document.activeElement;if(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName))return;ev.preventDefault();const b=document.querySelector('[data-action="buzz"]');if(b&&!b.disabled)b.click();});
 setInterval(()=>{updateClock();if(publicState?.phase==='question'&&roundMode(activeQuestion())==='written'&&publicState.deadline&&now()>=publicState.deadline)void maybeAutoBeginReview();const play=soundEvent();if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}},350);
+boardStoreReady=openBoardStorage(localStorage).then(store=>{
+ boardStore=store;boardStoreError='';store.onExternalChange(notifyOtherBoardTab);
+ schedule();
+}).catch(err=>{
+ boardStoreError='Große Quizbretter konnten nicht in IndexedDB geöffnet werden: '+String(err?.message||err);
+ saveState='SPEICHERFEHLER – Backup exportieren!';
+ notice(boardStoreError+' Bitte Browserdaten nicht löschen.');schedule();
+});
 render();
 // A host may restore a previous session from its own browser; returning guests
 // need the per-tab identity/secret created on their original visit.
