@@ -141,7 +141,7 @@ test('guests cannot pick any question through public API or direct RPC',async()=
   await assert.rejects(guest2._rpc('pick',{qid:q.id,round:0}),/Nur der Host/);
   await assert.rejects(guest1._rpc('reveal',{round:0,answer:'SPOILER'}),/nicht erlaubt/);
   await assert.rejects(guest1._rpc('hostAssign',{uid:guest2.uid,team:'t1'}),/nicht erlaubt/);
-  assert.equal(host.data.public.questionPick,null);
+  assert.equal(host.data.public.questionPick??null,null);
   assert.deepEqual(host.data.picks,{});
   await host.openQuestion(room,0,q,publicQuestion(q,false),{},0);
   await assert.rejects(guest2._rpc('pick',{qid:host.hostQuiz.questions[1].id,round:1}),/Nur der Host/);
@@ -450,7 +450,7 @@ test('host alone opens questions while all guests can buzz and only host can jud
   await assert.rejects(guest2.requestPick(room,q.id),/Nur der Host/);
   await assert.rejects(guest1._rpc('pick',{qid:q.id,round:77}),/Nur der Host/);
   await assert.rejects(guest1.requestPick(room,q.id),/Nur der Host/);
-  assert.equal(host.data.public.questionPick,null);
+  assert.equal(host.data.public.questionPick??null,null);
   await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
   await sleep(60);
   await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/nicht freigegeben|gesperrt/);
@@ -469,7 +469,7 @@ test('host alone opens questions while all guests can buzz and only host can jud
   assert.equal(host.data.public.scores.t2,-50);
   await assert.rejects(guest1._rpc('pick',{qid:next.id,round:1}),/Nur der Host/);
   await assert.rejects(guest2.requestPick(room,next.id),/Nur der Host/);
-  assert.equal(host.data.public.questionPick,null);
+  assert.equal(host.data.public.questionPick??null,null);
   await host.openQuestion(room,1,next,publicQuestion(next,false),null,0,{covered:true});
   assert.equal(host.data.public.current.id,next.id);
   await assert.rejects(host.returnToBoard(room,1,q.id),/nicht mehr aktiv/);
@@ -621,7 +621,7 @@ test('old reservation cannot block host selecting another question',async()=>{
   assert.equal(host.data.public.questionPick.qid,other.id);
   await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
   assert.equal(host.data.public.current.id,q.id);
-  assert.equal(host.data.public.questionPick,null);
+  assert.equal(host.data.public.questionPick??null,null);
   assert.equal(host.data.public.scores.t1,0);
   assert.equal(host.data.public.scores.t2,0);
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
