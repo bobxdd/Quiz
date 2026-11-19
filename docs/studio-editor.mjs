@@ -563,7 +563,7 @@ export function createStudioEditor(api){
    try{await applyImageFiles([file],{kind:'answer-image'});api.notice?.('Bild aus der Zwischenablage eingefügt.');}catch(error){api.error(error);}
   });
   root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
-  root.addEventListener('submit',event=>{
+  root.addEventListener('submit',async event=>{
    if(!event.target.matches('[data-se-category-transfer-form]'))return;
    event.preventDefault();
    try{
@@ -574,7 +574,7 @@ export function createStudioEditor(api){
     if(!category||!targetId)throw Error('Kategorie und Zielquiz auswählen.');
     const count=questionsInCategory(visibleQuestions(),category).length;
     if(move&&!confirm('Kategorie „'+category+'“ mit '+count+' Fragen nach der Übertragung aus diesem Quizbrett entfernen?'))return;
-    flushDraft();api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
+    flushDraft();await api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
     transferCategoryName='';draw();
    }catch(err){api.error(err);}
   });
