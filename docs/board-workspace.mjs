@@ -1,3 +1,4 @@
+import {categoryKey,roundCategories,roundQuestions,questionsInCategory,collectCategories} from './category-model.mjs';
 /* BrainQuiz local board workspaces: distinct drafts, explicit switching, no silent overwrite.
    This module deliberately never touches public PeerJS room state. */
 const INDEX='bq-board-workspaces-v1',ACTIVE='bq-board-active-v1';
@@ -75,4 +76,71 @@ export function persistBoard(store,id,expectedRevision,quiz){
  const list=boardList(store).map(x=>x.id===id?{...x,title:String(quiz.title||'Unbenanntes Quizbrett').slice(0,100),updatedAt:Date.now()}:x);
  try{store.setItem(INDEX,JSON.stringify(list));}catch{ /* Draft is saved; index title can be repaired at next save. */ }
  return next;
+}
+
+/**
+ * Transfer a complete category between TWO distinct local saved quizzes.
+ * The destination is always saved first: a failed source removal leaves a
+ * duplicate category, never a missing one. No live-room data is involved.
+ */
+export function transferCategoryBetweenBoards(store,{
+ sourceId,targetId,expectedSourceRevision,category,sourceRound=1,targetRound=sourceRound,
+ move=false,makeQuestionId
+}={}){
+ if(!validId(sourceId)||!validId(targetId)||sourceId===targetId)
+  throw Error('Bitte ein anderes gespeichertes Quizbrett auswählen.');
+ if(![1,2].includes(Number(sourceRound))||![1,2].includes(Number(targetRound)))
+  throw Error('Ungültige Spielrunde.');
+ const fromRound=Number(sourceRound),toRound=Number(targetRound);
+ const source=loadBoard(store,sourceId),target=loadBoard(store,targetId);
+ if(source.revision!==expectedSourceRevision)
+  throw Error('Das Quellquiz wurde in einem anderen Tab geändert. Bitte neu laden; es wurde nichts übertragen.');
+ const sourceNames=roundCategories(source.quiz,fromRound);
+ const sourceName=sourceNames.find(name=>categoryKey(name)===categoryKey(category));
+ if(!sourceName)throw Error('Kategorie im ausgewählten Quellbrett nicht gefunden.');
+ const sourceQuestions=questionsInCategory(roundQuestions(source.quiz,fromRound),sourceName);
+ const destinationNames=roundCategories(target.quiz,toRound);
+ const existingName=destinationNames.find(name=>categoryKey(name)===categoryKey(sourceName));
+ const destinationName=existingName||sourceName;
+ const destinationQuestions=questionsInCategory(roundQuestions(target.quiz,toRound),destinationName);
+ if(!existingName&&destinationNames.length>=6)
+  throw Error('Im Zielbrett sind bereits sechs Kategorien. Es wurde nichts übertragen.');
+ if(destinationQuestions.length+sourceQuestions.length>6)
+  throw Error('Die Kategorie würde im Zielbrett mehr als sechs Fragen enthalten. Es wurde nichts übertragen.');
+ if(target.quiz.questions.length+sourceQuestions.length>180)
+  throw Error('Das Zielquiz würde mehr als 180 Fragen enthalten. Es wurde nichts übertragen.');
+ const targetQuiz=structuredClone(target.quiz);
+ const existingIds=new Set(targetQuiz.questions.map(q=>q.id));
+ const copiedQuestions=sourceQuestions.map(q=>{
+  if(typeof makeQuestionId!=='function')throw Error('Keine sichere Fragen-ID-Quelle vorhanden.');
+  const id=makeQuestionId();
+  if(typeof id!=='string'||!/^q[0-9a-f]{32}$/.test(id)||existingIds.has(id))
+   throw Error('Neue Fragen-ID ungültig oder doppelt. Kein Quiz wurde verändert.');
+  existingIds.add(id);
+  return {...structuredClone(q),id,category:destinationName,boardRound:toRound};
+ });
+ const targetRounds={1:roundCategories(targetQuiz,1),2:roundCategories(targetQuiz,2)};
+ if(!existingName)targetRounds[toRound].push(destinationName);
+ targetQuiz.questions.push(...copiedQuestions);
+ targetQuiz.roundCategories=targetRounds;
+ targetQuiz.categories=collectCategories([...targetRounds[1],...targetRounds[2]],targetQuiz.questions);
+ // Validate BOTH future board states before changing any stored data.
+ let sourceQuiz=null;
+ if(move){
+  sourceQuiz=structuredClone(source.quiz);
+  const movingIds=new Set(sourceQuestions.map(q=>q.id));
+  sourceQuiz.questions=sourceQuiz.questions.filter(q=>!movingIds.has(q.id));
+  const sourceRounds={1:roundCategories(source.quiz,1),2:roundCategories(source.quiz,2)};
+  sourceRounds[fromRound]=sourceRounds[fromRound].filter(name=>categoryKey(name)!==categoryKey(sourceName));
+  sourceQuiz.roundCategories=sourceRounds;
+  sourceQuiz.categories=collectCategories([...sourceRounds[1],...sourceRounds[2]],sourceQuiz.questions);
+ }
+ const targetRevision=persistBoard(store,target.id,target.revision,targetQuiz);
+ let sourceRevision=source.revision;
+ if(move){
+  try{sourceRevision=persistBoard(store,source.id,source.revision,sourceQuiz);}
+  catch(error){throw Error('Zielbrett gespeichert, aber Quelle nicht entfernt. Die Kategorie liegt sicher in beiden Brettern. '+String(error?.message||error));}
+ }
+ return {sourceId,targetId,sourceRevision,targetRevision,sourceQuiz,
+  copiedQuestions:copiedQuestions.length,category:destinationName,sourceRound:fromRound,targetRound:toRound,move:!!move};
 }
