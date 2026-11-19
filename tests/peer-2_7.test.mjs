@@ -479,8 +479,8 @@ test('fixed team turns reserve one field while every team can buzz and only the 
 test('connection errors distinguish a missing host from an occupied host peer ID', async()=>{
  assert.match(peerError({type:'peer-unavailable'},'guest'),/Host.*nicht erreichbar/);
  assert.match(peerError({type:'unavailable-id'},'host'),/Raumcode.*vergeben/);
- assert.match(peerError({type:'webrtc'},'guest'),/TURN-Relay/);
- assert.match(connectionAdvice({iceState:'failed',relay:false}),/CGNAT\/Firewall/);
+ assert.match(peerError({type:'webrtc'},'guest'),/TURN-Server/);
+ assert.match(connectionAdvice({iceState:'failed',relay:false}),/PeerJS-Relays/);
  assert.match(connectionAdvice({iceState:'failed',relay:true}),/Host UND Gast/);
  const missing=new PeerGame();
  try{
@@ -489,17 +489,17 @@ test('connection errors distinguish a missing host from an occupied host peer ID
  }finally{missing.shutdown();}
 });
 
-test('public STUN defaults and optional TURN credentials are privacy-safe and confined to this tab',()=>{
+test('PeerJS default ICE remains active unless a private TURN was explicitly configured',()=>{
  configureTurnRelay(null);
  const base=peerOptions();
- assert.equal(base.config.iceTransportPolicy,'all');
- assert.ok(base.config.iceServers.some(server=>server.urls.includes('stun:stun.cloudflare.com:3478')));
- assert.equal(base.config.iceServers.some(server=>String(server.urls).startsWith('turn:')),false);
+ assert.equal(base.debug,0);
+ assert.equal(base.config,undefined,'PeerJS must retain its own default ICE servers, as in Straßenbingo');
  assert.equal(hasTurnRelay(),false);
  configureTurnRelay({url:'turns:relay.example:443?transport=tcp',username:'tester',credential:'VERY_SECRET_DO_NOT_LEAK'});
  try{
   assert.equal(hasTurnRelay(),true);
   const opts=peerOptions();
+  assert.ok(opts.config.iceServers.some(server=>server.urls.includes('stun:stun.cloudflare.com:3478')));
   assert.ok(opts.config.iceServers.some(server=>server.username==='tester'&&server.credential==='VERY_SECRET_DO_NOT_LEAK'));
   const data=new PeerGame().diagnostics();
   assert.equal(data.turnConfigured,true);
