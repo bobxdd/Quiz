@@ -48,6 +48,7 @@ async def main():
   before=await guest.evaluate("JSON.stringify(window.__probe.info().publicState)")
   assert 'Nur der Host darf' not in before and 'scoreEvents' not in before
   await host.evaluate("() => window.__probe.getGame().setState(window.__probe.room(),{started:true})")
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.evaluate("async() => {const g=window.__probe.getGame(),room=window.__probe.room();await g.score(room,'t1',100);await g.score(room,'t1',100)}")
   await host.locator('.top-nav [data-view="history"]').click()
