@@ -56,7 +56,10 @@ test('Map solution reveal publishes all valid pins in one state update without c
  assert.match(source,/review=revealAnswer\(review,id,response\)/);
  assert.match(source,/patch\.answerReview=review/);
  assert.match(source,/updateCurrent\(room,Number\(publicState\.round\),q\.id,buildRevealPatch\(q\)/);
- assert.doesNotMatch(source,/judgeWritten|scorePerson|winner\(|scoreTarget|buzzerResolved/);
+ // Verify the pure map-publication patch. The *following* hostReveal() may
+ // legitimately inspect winner()/buzzerResolved to enforce a pending verdict.
+ const patchOnly=app.slice(begin,app.indexOf('async function hostReveal(){',begin));
+ assert.doesNotMatch(patchOnly,/judgeWritten|scorePerson|winner\(|scoreTarget|buzzerResolved/);
  assert.match(app,/const solution=publicState\.phase==='reveal'&&publicState\.solutionVisible!==false&&activeQuestion\(\)\?\.type==='map'/);
  assert.match(app,/mapAnswerDistances\(board,solution\)/);
  assert.match(app,/Der Host entscheidet weiterhin selbst/);
