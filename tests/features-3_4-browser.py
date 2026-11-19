@@ -59,6 +59,7 @@ async def main():
   print('CHAT DIAG',[(await x.locator('.chatfeed').inner_text()) for x in [a,b,c]],flush=True)
   assert await c.locator('.chatfeed').get_by_text('Nur Team Rot sieht mich').count()==0
   print('PASS: shared team chat, protected from other team',flush=True)
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()

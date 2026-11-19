@@ -785,6 +785,8 @@ export class PeerGame{
     return true;
    }
    case 'pick':{
+    // A guest's early or replayed RPC must not reserve a field during setup.
+    if(pub?.started!==true)throw Error('Das Quiz wurde vom Host noch nicht gestartet.');
     const qid=safeText(payload.qid,80),cell=pub?.board?.[qid];
     if(!Object.hasOwn(pub?.board||{},qid)||!cell||cell.used||pub.phase!=='board'||(Number(cell.boardRound)===2?2:1)!==(Number(pub.boardRound)===2?2:1))throw Error('Frage nicht mehr verfügbar.');
     const team=selectingTeam(pub);
@@ -875,6 +877,11 @@ export class PeerGame{
  async setState(room,changes){const d=this._getHostData(room);if(changes.started===true&&!d.public.started){d.public.selectionTurn=makeSelectionTurn(d.public,d.roster);d.public.boardSequence=true;}for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
  async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
   const d=this._getHostData(room);
+  // Published game sessions require the explicit lobby start transition.
+  // Unpublished rooms are kept compatible with local fixtures/rehearsals.
+  if(d.public?.published===true&&d.public.started!==true)
+   throw Error('Zuerst das Spiel in der Team-Lobby starten.');
+
   const state=covered&&!d.public.selectionTurn?{...d.public,selectionTurn:makeSelectionTurn(d.public,d.roster),boardSequence:true}:d.public;
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,

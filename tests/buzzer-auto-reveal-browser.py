@@ -68,6 +68,7 @@ async def main():
   bob=await join(ctx,host,room,'Bob','t2')
   for page,name in [(alice,'Alice'),(bob,'Bob')]:
    page.on('pageerror',lambda ex,n=name:errors.append(n+': '+str(ex)))
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
 
   # First answer is wrong: hide solution, deduct -50, unlock Bob's buzzer.

@@ -134,6 +134,9 @@ test('P2P session restores only on host browser; cannot resume with another room
 
 test('P2P guest cannot send forbidden room actions, request an inherited fake question, or choose a question during another round',async()=>{
  const {host,guest1,guest2}=await setup(),q=host.hostQuiz.questions[0];
+ // This fixture tests invalid selections *during* a game. Pre-start requests
+ // are separately checked in the dedicated start-gate regression below.
+ await host.setState(room,{started:true});
  await assert.rejects(guest1.requestPick(room,'constructor','Alice'),/nicht mehr verfügbar/);
  await assert.rejects(guest1.requestPick(room,'__proto__','Alice'),/nicht mehr verfügbar/);
  await assert.rejects(guest1._rpc('reveal',{round:0,answer:'SPOILER'}),/nicht erlaubt/);
@@ -679,5 +682,34 @@ test('Host cannot secretly skip unanswered round-one fields without an explicit 
   assert.equal(advanced.boardRound,2);
   assert.equal(host.data.public.scores.t1,0);
   await assert.rejects(host.advanceBoard(room,0,{force:true}),/Runde 2/);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('published team lobby cannot be bypassed with an early guest pick or direct host question open',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const q=host.hostQuiz.questions[0];
+  await host.setState(room,{published:true});
+  assert.equal(host.data.public.started,false);
+  await assert.rejects(
+    guest1.requestPick(room,q.id),
+    /noch nicht gestartet/
+  );
+  assert.equal(host.data.public.questionPick??null,null);
+  assert.deepEqual(host.data.picks,{});
+  await assert.rejects(
+    host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true}),
+    /Zuerst das Spiel/
+  );
+  assert.equal(host.data.public.phase,'board');
+  assert.equal(host.data.public.board[q.id].used,false);
+  assert.equal(host.data.public.round,0);
+  // This is the only state transition that unlocks published questions.
+  await host.setState(room,{started:true});await sleep(50);
+  assert.equal(await guest1.requestPick(room,q.id),true);
+  assert.equal(host.data.public.questionPick.qid,q.id);
+  const opened=await host.openQuestion(room,0,q,publicQuestion(q,false),null,0,{covered:true});
+  assert.equal(opened.phase,'ready');
+  assert.equal(opened.round,1);
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
