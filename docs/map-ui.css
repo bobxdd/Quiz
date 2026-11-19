@@ -361,3 +361,20 @@
 .bq-review-map-distance strong{font-size:clamp(15px,1.35vw,20px);font-variant-numeric:tabular-nums;color:#e0f5ec}
 .bq-review-map-distance small{font-size:11px;color:#b8ccc8}
 @media(max-width:470px){.bq-map-answer-review .bq-review-map-distance{padding:7px;gap:3px 6px}}
+
+/* Published pins: readable IDs and owner names, in addition to team colors.
+   Private guest guesses and the host's solution retain their own appearance. */
+.bq-map-pin.is-public{z-index:6;--pin-fill:#ac86b7}
+.bq-map-pin.is-team-t1,.bq-map-pin-legend-item.is-team-t1{--pin-fill:#85bde4}
+.bq-map-pin.is-team-t2,.bq-map-pin-legend-item.is-team-t2{--pin-fill:#e3a09e}
+.bq-map-pin.is-team-t3,.bq-map-pin-legend-item.is-team-t3{--pin-fill:#a7c989}
+.bq-map-pin.is-team-t4,.bq-map-pin-legend-item.is-team-t4{--pin-fill:#c2a4e5}
+.bq-map-pin.is-team-t5,.bq-map-pin-legend-item.is-team-t5{--pin-fill:#e4bd72}
+.bq-map-pin.is-team-t6,.bq-map-pin-legend-item.is-team-t6{--pin-fill:#74c8be}
+.bq-map-pin.is-public .bq-map-pin-dot{width:29px;height:29px;border:3px solid #fff;color:#162430;background:var(--pin-fill);font-size:13px;font-weight:900;display:grid;place-items:center;box-shadow:0 1px 0 2px #182d3e,0 3px 7px #0008;line-height:1}
+.bq-map-pin.is-public .bq-map-pin-name{position:absolute;left:50%;bottom:39px;transform:translateX(-50%);max-width:146px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;background:#152c37;border:1px solid var(--pin-fill);font-size:12px;font-weight:800;line-height:1.25;border-radius:5px;padding:3px 6px;box-shadow:0 2px 7px #0009}
+.bq-map-pin-legend{position:absolute;bottom:8px;left:8px;right:8px;z-index:10;max-width:calc(100% - 16px);display:flex;align-items:center;gap:5px;padding:7px;border-radius:9px;background:rgba(18,35,44,.94);border:1px solid #aec1c5;box-shadow:0 4px 12px #0007;overflow-x:auto;scrollbar-width:thin;pointer-events:auto}
+.bq-map-pin-legend-item{--pin-fill:#ac86b7;display:flex;align-items:center;gap:5px;white-space:nowrap;color:#f2f7f9;font-size:12px;font-weight:750;flex:none}
+.bq-map-pin-legend-item:not(:last-child){padding-right:8px;border-right:1px solid #68777f}
+.bq-map-pin-legend-item>b{background:var(--pin-fill);color:#172430;border:2px solid white;width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-size:11px}
+@media(max-width:580px){.bq-map-pin.is-public .bq-map-pin-name{display:none}.bq-map-pin-legend-item{font-size:11px}.bq-map-pin-legend{padding:5px;gap:4px}}
