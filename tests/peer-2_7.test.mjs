@@ -628,3 +628,56 @@ test('host may pass selection rights to an absent team without affecting scores 
   assert.equal(host.data.public.questionPick.team,'t2');
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
+
+test('A three-player two-team written round awards exactly ONE official answer per team',async()=>{
+ const {host,guest1,guest2}=await setup();
+ sessionStorage.clear();const guest3=new PeerGame();
+ try{
+  await guest3.init();
+  await guest3.connect(room,'Alina');
+  await host.hostAssign(room,guest3.uid,host.data.members[guest3.uid],'t1');
+  const question=host.hostQuiz.questions[0];question.roundMode='written';
+  const snapshot=Object.fromEntries([[guest1.uid,{name:'Alice'}],[guest2.uid,{name:'Bob'}],[guest3.uid,{name:'Alina'}]]);
+  await host.openQuestion(room,0,question,publicQuestion(question,false),snapshot,0,{covered:true});
+  await host.uncoverQuestion(room,1,question.id);
+  const entries=Object.fromEntries(Object.entries(snapshot).map(([uid,person])=>[uid,{
+   name:person.name,submitted:true,revealed:true,value:person.name+' answer'
+  }]));
+  await host.updateCurrent(room,1,question.id,{phase:'review',answerReview:{round:1,entries}},['question']);
+  const one=await host.judgeWritten(room,1,guest1.uid,'correct');
+  assert.equal(one.total,100);
+  assert.equal(host.data.public.scores.t1,100);
+  assert.equal(host.data.public.writtenTeamRepresentatives['1'].t1,guest1.uid);
+  await assert.rejects(host.judgeWritten(room,1,guest3.uid,'correct'),/andere Antwort offiziell gewertet/);
+  assert.equal(host.data.public.scores.t1,100,'three-member teams must not accumulate extra question values');
+  assert.equal(host.data.public.playerScores?.[guest3.uid],undefined,'rejected judgement is atomic');
+  const firstEvent=host.hostScoreAudit(room).at(-1);
+  await host.hostUndoScore(room,firstEvent.id);
+  assert.equal(host.data.public.scores.t1,0);
+  assert.equal(host.data.public.writtenTeamRepresentatives['1']?.t1,undefined,'undo allows host to choose a different official team answer');
+  await host.judgeWritten(room,1,guest3.uid,'wrong');
+  assert.equal(host.data.public.scores.t1,-50);
+  await host.judgeWritten(room,1,guest2.uid,'correct');
+  assert.equal(host.data.public.scores.t2,100,'other team has its own one-score opportunity');
+  await host.judgeWritten(room,1,guest2.uid,'wrong');
+  assert.equal(host.data.public.scores.t2,-50,'official response can be corrected without stacking scores');
+  assert.equal(host.data.public.scores.t1,-50);
+ }finally{guest3.shutdown();guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('Host cannot secretly skip unanswered round-one fields without an explicit force flag',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  // The default quiz has only round one; declare a second board field.
+  const q=host.hostQuiz.questions[1];
+  q.boardRound=2;
+  host.data.public.board[q.id].boardRound=2;
+  await host.setState(room,{published:true,started:true});
+  await assert.rejects(host.advanceBoard(room,0),/Runde 2/);
+  assert.equal(host.data.public.boardRound,1);
+  const advanced=await host.advanceBoard(room,0,{force:true});
+  assert.equal(advanced.boardRound,2);
+  assert.equal(host.data.public.scores.t1,0);
+  await assert.rejects(host.advanceBoard(room,0,{force:true}),/Runde 2/);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});

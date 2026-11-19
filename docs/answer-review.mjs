@@ -13,6 +13,19 @@ export function answerProgress(expected,responses){
  const count=ids.filter(id=>typeof responses?.[id]?.text==='string'&&responses[id].text.trim().length>0).length;
  return {total:ids.length,submitted:count,complete:ids.length>0&&count===ids.length};
 }
+/** When all written answers arrive, open review immediately. Timed written
+ * questions must ALSO conclude at the deadline even if someone disconnected.
+ * A map question keeps its original rule: pins remain editable until timeout;
+ * if no timer was configured, only the host can close map submissions. */
+export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
+ if(state?.phase!=='question'||state?.current?.roundMode!=='written')return false;
+ const expected=state.answerParticipants||{};
+ const progress=answerProgress(expected,responses);
+ if(!progress.total)return false;
+ const deadline=Number(state.deadline)||0;
+ const expired=deadline>0&&time>=deadline;
+ return state.current?.type==='map'?expired:expired||progress.complete;
+}
 export function makeAnswerReview(expected,responses,round){
  const entries={};
  for(const [id,person] of Object.entries(expected||{})){

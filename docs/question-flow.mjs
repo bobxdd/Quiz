@@ -18,18 +18,23 @@ export function selectingTeam(state){
 export function resetBoardGameState(state,board,roster={}){
  return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
-  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},
+  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
   selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
 }
 export function remainingBoardQuestions(state,round=boardRound(state)){
  return Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round&&!cell.used&&!state.used?.[cell.id]);
 }
-export function canAdvanceBoard(state){
- return state?.phase==='board'&&boardRound(state)===1&&Object.values(state.board||{}).some(cell=>boardRound(cell)===2);
+/** Round two starts only after the first board is exhausted. A deliberate
+ * host override is a separate action requiring an explicit force flag; stale
+ * guest RPCs and the regular Next action cannot skip unanswered questions. */
+export function canAdvanceBoard(state,{force=false}={}){
+ return state?.phase==='board'&&boardRound(state)===1&&
+  Object.values(state.board||{}).some(cell=>boardRound(cell)===2)&&
+  (force===true||remainingBoardQuestions(state,1).length===0);
 }
-export function advanceBoardState(state){
- if(!canAdvanceBoard(state))return null;
+export function advanceBoardState(state,{force=false}={}){
+ if(!canAdvanceBoard(state,{force}))return null;
  return {...state,boardRound:2,current:null,deadline:0,pausedRemaining:0,presentation:null};
 }
 export function returnToBoardState(state){

@@ -64,8 +64,17 @@ async def main():
   await host.locator('[data-action="uncover-question"]').click()
   for p in [a,b,c]:
    await p.locator('.bq-map-viewport').wait_for(state='visible',timeout=10000)
-   await p.locator('.bq-map-viewport').click(position={'x':190,'y':135})
-   await p.locator('.bq-map-pin.is-self').wait_for()
+   await p.wait_for_function("""() => {
+     const element=document.querySelector('.bq-map-viewport');
+     const bounds=element?.getBoundingClientRect();
+     const image=element?.querySelector('.bq-map-layer img');
+     return element?.dataset.mapBound==='yes'&&bounds?.width>180&&bounds?.height>100&&image?.complete&&image.naturalWidth>0;
+   }""",timeout=12000)
+   box=await p.locator('.bq-map-viewport').bounding_box()
+   # Fixed 190px/135px clicks could miss the active map on smaller
+   # dynamically reflowed viewports. Click near the middle of the map.
+   await p.locator('.bq-map-viewport').click(position={'x':box['width']*.42,'y':box['height']*.47})
+   await p.locator('.bq-map-pin.is-self').wait_for(timeout=10000)
    await p.locator('[data-action="submit-answer"]').click()
   await host.locator('[data-action="start-review"]').first.click()
   await a.locator('.review-grid .review-card').first.wait_for(timeout=12000)
