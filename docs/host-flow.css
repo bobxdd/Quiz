@@ -440,3 +440,131 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 .bq-question-scene:not(:has(.bq-map-viewport)) .bq-question-panel .stage{
  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
 }
+
+/* VISUAL / INTERACTION AUDIT — responsive, information-preserving adjustments.
+   WCAG 2.2 reflow: meaningful answer copy must never disappear merely because
+   the question is viewed on a phone or with large browser text. */
+.bq-question-scene .bq-action-bar{
+ max-height:min(24dvh,192px);
+ min-height:40px;
+ overflow-x:hidden;
+ overflow-y:auto;
+ align-content:flex-start;
+ scrollbar-gutter:stable;
+}
+.bq-question-scene .bq-action-bar>.btn,
+.bq-question-scene .bq-action-bar>.bq-auxiliary>summary{
+ min-height:40px;
+ line-height:1.3;
+ white-space:normal;
+ text-wrap:balance;
+}
+.bq-question-scene .bq-stage-is-answer .bq-answer-explanation{
+ display:block;
+ white-space:normal;
+ overflow-wrap:anywhere;
+ font-size:clamp(12px,1.2vw,15px);
+ line-height:1.45;
+}
+/* Full solution is preserved. Overflow stays INSIDE its own answer pane, never
+   behind the surrounding fixed-height scene or under its controls. */
+.bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+ overflow-x:hidden;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ scrollbar-width:thin;
+}
+.bq-question-scene .bq-stage-is-answer .bq-answer-view-content{
+ min-height:0;
+}
+.bq-question-scene .bq-stage-is-answer .bq-answer-image img{
+ max-width:100%;
+ object-fit:contain;
+}
+@media(max-width:880px){
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  max-height:min(36cqh,240px);
+  min-height:min(100px,22cqh);
+  overflow-y:auto;
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-image img{
+  max-height:min(19cqh,135px);
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-explanation{
+  display:block;
+  font-size:12px;
+  line-height:1.45;
+ }
+}
+/* At small phone widths the scoreboard and host buttons wrap rather than
+   shrinking their text below useful tap target sizes. */
+@media(max-width:540px){
+ .bq-question-scene .bq-action-bar{max-height:min(30dvh,228px);gap:5px}
+ .bq-question-scene .bq-action-bar>.btn{
+  flex:1 1 42%;
+  min-width:0;
+  min-height:42px;
+  padding:7px 8px;
+  font-size:12px;
+ }
+ .bq-question-scene .bq-action-bar>.bq-auxiliary>summary{
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  font-size:12px;
+ }
+ .bq-question-scene .stage.bq-stage-is-answer{
+  grid-template-rows:minmax(105px,1fr) minmax(120px,auto);
+ }
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  max-height:min(37cqh,225px);
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-image img{max-height:92px}
+}
+/* The hard one-screen lock is appropriate when it fits. Short landscape
+   viewports, keyboard zoom and large-text browsing require document scrolling
+   rather than clipping the question or an action below the browser edge. */
+@media(max-height:540px){
+ body.bq-game-mode:has(.bq-question-scene){overflow-x:hidden!important;overflow-y:auto!important}
+ body.bq-game-mode:has(.bq-question-scene) .shell{
+  height:auto!important;min-height:100dvh!important;overflow:visible!important
+ }
+ .bq-question-scene{
+  height:auto!important;min-height:calc(100dvh - 90px)!important;
+  overflow:visible!important;
+ }
+ .bq-question-scene .bq-question-body,
+ .bq-question-scene .bq-answer-review-body,
+ .bq-question-scene .bq-question-panel,
+ .bq-question-scene .bq-scene-content,
+ .bq-question-scene .bq-question-panel .stage{
+  flex:0 0 auto!important;max-height:none!important;height:auto!important;
+  overflow:visible!important;
+ }
+ .bq-question-scene .bq-scene-content{container-type:normal!important}
+ .bq-question-scene .bq-question-panel .stage:has(>.se-scene)>.se-scene{
+  width:100%!important;max-width:100%!important;max-height:none!important;
+ }
+ .bq-question-scene .bq-action-bar{
+  max-height:none!important;overflow:visible!important;
+ }
+ .bq-question-scene .bq-stage-is-answer{
+  display:flex!important;flex-direction:column!important;
+  align-items:stretch!important;
+ }
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-context,
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  flex:none!important;max-height:none!important;overflow:visible!important;
+  width:100%!important;
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-context>.se-scene{
+  width:100%!important;max-height:none!important;
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-image img{max-height:220px}
+ .bq-question-scene .bq-guest-compose{max-height:none!important;overflow:visible!important}
+}
+/* Text enlargement should preserve the ability to read a full explanation and
+   to reach the next-step controls, even when the question occupies more space. */
+@media(prefers-reduced-motion:reduce){
+ .bq-question-scene .bq-answer-view{scroll-behavior:auto}
+}
