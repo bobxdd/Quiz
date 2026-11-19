@@ -5,7 +5,7 @@ import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
 import {latestUndoableEvent,mayRegradeScore} from './score-ledger.mjs';
 import {loadLocalHostQuiz,saveLocalHostQuiz} from './backup-store.mjs';
 import {createSoundEffects} from './sound-effects.mjs';
-import {boardList,createBoard,loadBoard,persistBoard,resumeBoard,selectBoard} from './board-workspace.mjs';
+import {boardList,createBoard,loadBoard,persistBoard,resumeBoard,selectBoard,transferCategoryBetweenBoards} from './board-workspace.mjs';
 import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,mapAnswerDistances,formatMapDistanceKm} from './map-tools.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
@@ -1441,6 +1441,24 @@ function makeQuestion(){return normalizedQuiz({questions:[{id:uid(),roundMode:'b
 const studio=createStudioEditor({
  getQuiz:()=>quiz,getQuestion:()=>currentQuestion(),setSelected:id=>{selected=id},
  boardInfo:()=>({id:boardId,title:quiz.title,isLocal:isOffline(),conflict:boardConflict,boards:isOffline()?boardList(localStorage):[]}),
+ transferCategory:options=>{
+  if(!isOffline()||!boardId||boardConflict)throw Error('Kategorien lassen sich nur im lokalen Editor ohne Speicherkonflikt übertragen.');
+  studio.flush?.();
+  if(!saveLocal())throw Error('Zuerst das Ausgangsquiz sicher speichern.');
+  const result=transferCategoryBetweenBoards(localStorage,{
+   sourceId:boardId,expectedSourceRevision:boardRevision,targetId:options.targetId,
+   category:options.category,sourceRound:options.sourceRound,targetRound:options.targetRound,
+   move:options.move,makeQuestionId:uid
+  });
+  if(result.move){
+   boardRevision=result.sourceRevision;quiz=normalizedQuiz(result.sourceQuiz);
+   selected=quiz.questions[0]?.id||'';
+   studio.reset?.();loadOfflineBoardState();
+  }
+  schedule();
+  notice('Kategorie „'+result.category+'“ mit '+result.copiedQuestions+' Fragen '+(result.move?'verschoben':'kopiert')+'. Das Zielquiz ist lokal gespeichert.');
+  return result;
+ },
  save:()=>saveLocal(),saveStatus:()=>saveState,notice,newId:uid,snapshot:()=>snapshotLayout(),discardSnapshot:()=>{undoStack.pop();},undo:()=>undoLayout('undo'),redo:()=>undoLayout('redo'),error:error,isOffline,onlineReady:()=>configured,
  optimizeImage,optimizeAudio,backup:()=>safeDownload(backupFilename('BrainQuiz_Backup'),JSON.stringify(normalizedQuiz(quiz),null,2)),
  makeQuestion:(category,template='text',boardRound=1)=>{
