@@ -701,13 +701,14 @@ function renderBoard(readOnly=false){
  if(!pages.length)return '<div class="empty">Noch keine Fragen veröffentlicht.</div>';
  const page=pages[readOnly?0:Math.min(boardPage,pages.length-1)];
  const choose=canHost()?'open':'request-pick';
+ const beforeStart=!isOffline()&&publicState?.published===true&&publicState?.started!==true;
  const reserved=publicState.questionPick?.qid||'';
  const canSelect=canHost()||(!reserved&&(!selectingTeam(publicState)||selectingTeam(publicState)===member?.team));
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
  const used=isBoardCellPlayed(q,publicState);
  if(readOnly)return `<div class="tile ${used?'used is-played':''}" aria-label="${e(q.points)} Punkte${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(q.points)}</span></div>`;
- return `<button type="button" class="tile ${used?'used is-played':''} ${reserved===q.id?'bq-tile-reserved':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':reserved===q.id?' · vom Team gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':reserved===q.id?' · vorgemerkt':''}" ${used||!canSelect||(canHost()&&reserved&&reserved!==q.id)||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
+ return `<button type="button" class="tile ${used?'used is-played':''} ${reserved===q.id?'bq-tile-reserved':''}" data-action="${choose}" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gewählt':reserved===q.id?' · vom Team gewählt':''}" aria-label="${e(col.category)} · ${e(q.points)} Punkte${used?' · bereits gespielt':reserved===q.id?' · vorgemerkt':''}" ${used||beforeStart||!canSelect||(canHost()&&reserved&&reserved!==q.id)||(!canHost()&&publicState.phase!=='board')?'disabled':''}><span class="tile-points">${used?'✓':e(q.points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
@@ -1280,6 +1281,7 @@ function updateDraftField(target){if(!canHost()||view!=='editor'||isPublished())
 async function hostOpen(id){
  if(openingQuestion)throw Error('Eine Frage wird bereits geöffnet.');
  if(!canHost()||!publicState||publicState.phase!=='board')throw Error('Kehre zuerst zur Fragenübersicht zurück.');
+ if(!isOffline()&&publicState.published===true&&publicState.started!==true)throw Error('Zuerst in der Team-Lobby das Spiel starten.');
  const q=quiz.questions.find(x=>x.id===id);
  if(!q||!validQuestionPair(publicState,q))throw Error('Dieses Fragenfeld ist nicht mehr verfügbar oder gehört nicht zum aktuellen Quizbrett.');
  const invalid=validateQuestion(q,quiz.scoreMode);if(invalid)throw Error('Diese Frage ist noch unvollständig: '+invalid);
