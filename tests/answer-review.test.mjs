@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState} from '../docs/answer-review.mjs';
+import {participantSnapshot,answerProgress,makeAnswerReview,revealAnswer,reviewIsCurrent,answerCardState,shouldAutoBeginAnswerReview} from '../docs/answer-review.mjs';
 const roster=n=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{name:'Spieler '+(i+1),team:'t'+((i%2)+1)}]));
 const responses=(n,type='estimate')=>Object.fromEntries(Array.from({length:n},(_,i)=>['user_'+(i+1),{uid:'user_'+(i+1),team:'t1',text:type==='estimate'?String(100+i):`Antwort ${i+1}`} ]));
 for(const n of [4,5,6,7,8,9,10])test(`Gemeinsamer Review bei ${n} Spielern bleibt bis zur letzten Antwort geschlossen`,()=>{
@@ -93,4 +93,23 @@ test('Security part 2: malicious reserved participant IDs cannot contaminate ans
   assert.equal(Object.hasOwn(review.entries,special),false);
   assert.throws(()=>revealAnswer(review,special,{text:'No'}),/nicht zur aktuellen/);
  }
+});
+
+test('Timed written questions always open review at deadline with absent or disconnected participants',()=>{
+ const expected=participantSnapshot(roster(3)),first={'user_1':{text:'Anivia'}};
+ const state={phase:'question',round:7,current:{type:'text',roundMode:'written'},deadline:2000,answerParticipants:expected};
+ assert.equal(shouldAutoBeginAnswerReview(state,first,1999),false);
+ assert.equal(shouldAutoBeginAnswerReview(state,first,2000),true);
+ assert.equal(shouldAutoBeginAnswerReview(state,{},2001),true,'zero answers still concludes a timed round');
+ assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},first,999999),false,'untimed still awaits players or host');
+ assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},responses(3),100),true,'complete untimed written set opens immediately');
+ assert.equal(shouldAutoBeginAnswerReview({...state,phase:'paused'},first,4000),false,'a paused clock does not auto-end');
+ assert.equal(shouldAutoBeginAnswerReview({...state,phase:'review'},first,4000),false,'no duplicate review');
+ assert.equal(shouldAutoBeginAnswerReview({...state,answerParticipants:{}},first,4000),false,'no fake review for no players');
+});
+test('Map pins remain editable until their timed deadline; untimed map review is host controlled',()=>{
+ const state={phase:'question',round:2,current:{type:'map',roundMode:'written'},deadline:6000,answerParticipants:participantSnapshot(roster(2))};
+ assert.equal(shouldAutoBeginAnswerReview(state,responses(2),5999),false,'map does not auto-close when everybody submits');
+ assert.equal(shouldAutoBeginAnswerReview(state,responses(1),6000),true);
+ assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},responses(2),90000),false);
 });
