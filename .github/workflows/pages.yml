@@ -36,6 +36,7 @@ jobs:
           # promptly rather than after the entire legacy browser suite.
           timeout -k 10s 120s python tests/visual-answer-usability-browser.py
           timeout -k 10s 120s python tests/board-workspace-browser.py || failed=1
+           timeout -k 10s 120s python tests/board-idb-quota-browser.py || failed=1
           timeout -k 10s 120s python tests/written-deadline-fairness-browser.py || failed=1
           timeout -k 10s 120s python tests/map-step3-browser.py || failed=1
           timeout -k 10s 120s python tests/publish-lock-lobby-exit-browser.py || failed=1
