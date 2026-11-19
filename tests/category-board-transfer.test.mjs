@@ -1,6 +1,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {boardList,createBoard,loadBoard,persistBoard,transferCategoryBetweenBoards} from '../docs/board-workspace.mjs';
 import {emptyQuiz} from '../docs/core.mjs';
 
@@ -107,7 +108,6 @@ test('destination write failure keeps source and destination untouched',()=>{
  assert.equal(loadBoard(store,b.id).revision,1);
 });
 test('the editor exposes category transfer only for saved local boards',()=>{
- const {readFileSync}=await import('node:fs');
  const editor=readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
  const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  assert.match(editor,/data-se-action="category-transfer-open"/);
