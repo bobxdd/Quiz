@@ -927,7 +927,7 @@ export class PeerGame{
  async returnToBoard(room,round,id){
   const d=this._getHostData(room);
   if(d.public.round!==Number(round)||d.public.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
-  if(d.buzzers[String(round)]&&d.public?.phase==='question'&&!d.public?.buzzerResolved?.[String(round)])
+  if(d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Offener Buzzer: erst Richtig oder Falsch entscheiden oder den Buzzer zurücksetzen.');
   const previous=d.public,next=returnToBoardState(previous);
   if(!next)throw Error('Keine aktive Frage.');
@@ -944,7 +944,7 @@ export class PeerGame{
   d.public=next;this._changed();return clone(next);
  }
  async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Die Emoji-Teamrunde hat eine eigene Phasensteuerung.');
-  if(changes?.phase==='reveal'&&d.public?.phase==='question'&&
+  if(changes?.phase==='reveal'&&['question','paused','review','answered'].includes(d.public?.phase)&&
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Ein Buzzer ist noch offen. Zuerst Richtig oder Falsch bestätigen oder den Buzzer zurücksetzen.');
   const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
