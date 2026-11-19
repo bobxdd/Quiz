@@ -50,6 +50,7 @@ async def main():
   bob=await join_guest(ctx,host,code,'Bob')
   for guest,name in [(alice,'alice'),(bob,'bob')]:
    guest.on('pageerror',lambda err,label=name:errors.append(label+': '+str(err)))
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()
