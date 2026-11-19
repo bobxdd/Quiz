@@ -563,3 +563,5 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
    Make that existing timer as visible as the written-round countdown. */
 .bq-team-emoji .panelhead #clock{display:inline-grid;place-items:center;flex:none;min-width:110px;min-height:51px;padding:5px 13px;border:2px solid #8ed1c2;border-radius:10px;background:#16353d;color:#f7ffff;font-size:clamp(23px,2.5vw,34px);font-weight:900;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:.025em}
 @media(max-width:580px){.bq-team-emoji .panelhead #clock{min-width:88px;min-height:44px;padding:5px 9px;font-size:24px}}
+/* The shared quizboard is view-only for guests; only host tiles are interactive. */
+.bq-board-scene .bq-board-full .tile.bq-tile-view-only{cursor:default;pointer-events:none;user-select:none}
