@@ -1079,7 +1079,21 @@ export class PeerGame{
  }
  _auditScore(d,before,meta){const event=scoreEvent(before,d.public,{...meta,points:meta.verdict?before.current?.points:undefined,id:randomHex(8),at:Date.now()});if(event)d.scoreEvents=appendScoreEvent(d.scoreEvents,event);}
  hostScoreAudit(room){const d=this._getHostData(room);return clone((d.scoreEvents||[]).slice(-40));}
- async hostUndoScore(room,id){const d=this._getHostData(room);const done=undoScoreEvent(d.public,d.scoreEvents,id);d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);}
+ async hostUndoScore(room,id){
+  const d=this._getHostData(room),done=undoScoreEvent(d.public,d.scoreEvents,id);
+  const event=done.event,team=event.changes?.team?.id,person=event.changes?.person?.id;
+  // Undoing the FIRST official written answer releases this team's official
+  // slot only if the original per-round verdict was actually removed.
+  if(event.kind==='written-judgement'&&team&&person&&
+     done.state.writtenTeamRepresentatives?.[event.round]?.[team]===person&&
+     !done.state.playerScores?.[person]?.rounds?.[event.round]){
+   const reps=structuredClone(done.state.writtenTeamRepresentatives);
+   delete reps[event.round][team];
+   if(!Object.keys(reps[event.round]).length)delete reps[event.round];
+   done.state.writtenTeamRepresentatives=reps;
+  }
+  d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);
+ }
  async hostRegradeScore(room,id){
   const d=this._getHostData(room),target=d.scoreEvents?.find(event=>event.id===id);
   const questionPoints=d.public.board?.[target?.questionId]?.points;
