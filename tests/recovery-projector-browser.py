@@ -3,6 +3,7 @@ import asyncio,os,threading
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from pathlib import Path
 from playwright.async_api import async_playwright,expect
+from board_library_test_support import read_boards, wait_board_saved
 DOCS=Path(__file__).resolve().parents[1]/'docs'
 class Handler(SimpleHTTPRequestHandler):
  def __init__(self,*args,**kw):super().__init__(*args,directory=str(DOCS),**kw)
@@ -103,9 +104,10 @@ async def rehearse_locally(browser,root):
  await page.locator('#se-answer-text').fill('Anivia aus der Generalprobe')
  await page.locator('[data-se-upload="answer-image"]').set_input_files(DOCS/'pixel-corner.png')
  await expect(page.locator('.se-answer-live-preview img')).to_be_visible()
+ await wait_board_saved(page)
  await page.locator('[data-action="editor-probe"]').click()
  await expect(page.locator('.bq-rehearsal')).to_be_visible()
- saved=lambda:page.evaluate("Object.entries(localStorage).filter(([key])=>key.startsWith('bq-board-workspace-'))")
+ saved=lambda:read_boards(page,load_records=True)
  before=await saved()
  await page.locator('.bq-board-scene [data-action="open"]').first.click()
  await page.locator('[data-action="uncover-question"]').click()

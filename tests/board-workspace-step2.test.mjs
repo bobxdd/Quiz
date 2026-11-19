@@ -55,10 +55,10 @@ test('board identifiers must be valid and unique',()=>{
 test('source wiring keeps offline editor and live room separate',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  const editor=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
- assert.match(app,/resumeBoard\(localStorage,emptyQuiz,makeBoardId,preferred\)/);
- assert.match(app,/case 'new-board':newStoredBoard\(\)/);
- assert.match(app,/case 'open-board':openStoredBoard\(button.dataset.boardId\)/);
- assert.match(app,/if\(isOffline\(\)\)\{studio.flush\?\.\(\).*createBoard\(localStorage,imported,makeBoardId\)/);
+ assert.match(app,/await library\.resume\(emptyQuiz,makeBoardId,preferred\)/);
+ assert.match(app,/case 'new-board':await newStoredBoard\(\)/);
+ assert.match(app,/case 'open-board':await openStoredBoard\(button.dataset.boardId\)/);
+ assert.match(app,/if\(isOffline\(\)\)\{\s+if\(!await saveEditorDraft\(\)\)return;\s+await activateOfflineBoard\(await boardLibrary\.create\(imported,makeBoardId\)\)/);
  assert.match(editor,/DU BEARBEITEST DIESES QUIZBRETT/);
  assert.match(editor,/data-action="new-board"/);
  assert.match(editor,/data-action="open-board"/);
@@ -77,7 +77,7 @@ test('editing a board updates its library label without changing identity',()=>{
 
 test('reset action uses per-board session key and cannot erase other boards',async()=>{
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
- assert.match(app,/localStorage\.removeItem\('bq-session-LOCAL-'\+boardId\)/);
+ assert.match(app,/await boardLibrary\.clearSession\(boardId\)/);
  assert.doesNotMatch(app,/localStorage\.removeItem\('bq-session-LOCAL'\)/);
 });
 
@@ -123,9 +123,9 @@ test('conflict recovery UX and original board load are present and reachable',as
  const ui=fs.readFileSync(new URL('../docs/studio-editor.mjs',import.meta.url),'utf8');
  assert.match(app,/function rescueStoredBoard\(/);
  assert.match(app,/function reloadStoredBoard\(/);
- assert.match(app,/case 'rescue-board':rescueStoredBoard\(\)/);
- assert.match(app,/case 'reload-board':reloadStoredBoard\(\)/);
- assert.match(app,/window\.addEventListener\('storage'/);
+ assert.match(app,/case 'rescue-board':await rescueStoredBoard\(\)/);
+ assert.match(app,/case 'reload-board':await reloadStoredBoard\(\)/);
+ assert.match(app,/openBoardLibrary\(\{onChange:ids=>void syncBoardLibrary\(ids\)\}\)/);
  assert.match(app,/boardConflict=true/);
  assert.match(ui,/data-action="rescue-board"/);
  assert.match(ui,/data-action="reload-board"/);
@@ -161,8 +161,8 @@ test('every board export contains a distinct title and board identifier',async()
  const fs=await import('node:fs');const app=fs.readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
  assert.match(app,/function backupFilename\(/);
  assert.match(app,/location=isOffline\(\)\?boardId\.slice\(1,8\):room/);
- assert.match(app,/case 'export':safeDownload\(backupFilename\(\)/);
- assert.ok(app.includes("backup:()=>safeDownload(backupFilename('BrainQuiz_Backup')"));
+ assert.match(app,/case 'export':studio.flush\(\);safeDownload\(backupFilename\(\)/);
+ assert.ok(app.includes("backup:()=>{studio.flush();safeDownload(backupFilename('BrainQuiz_Backup')"));
  assert.match(app,/safeDownload\(backupFilename\('BrainQuiz_Autosicherung'\)/);
 });
 test('destructive live room import first exports a private backup',async()=>{

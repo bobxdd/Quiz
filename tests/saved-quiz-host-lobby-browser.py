@@ -4,6 +4,7 @@ Real Chromium DOM + existing mocked PeerJS transport; no real TURN/ICE claims.
 import asyncio,importlib.util,shutil
 from pathlib import Path
 from playwright.async_api import async_playwright,expect
+from board_library_test_support import active_board_id, read_board, read_boards, wait_board_saved
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'qa-artifacts';OUT.mkdir(exist_ok=True)
@@ -28,7 +29,7 @@ async def main():
 
   await page.locator('[data-action="create-new-quiz"]').click()
   await page.locator('.se-board-context').wait_for()
-  first=await page.evaluate('localStorage.getItem("bq-board-active-v1")')
+  first=await active_board_id(page)
   await expect(page.locator('[data-action="save-board"]')).to_have_count(1)
   await expect(page.locator('[data-action="host-current-board"]')).to_have_count(1)
   # Empty quizzes can be saved as drafts but must never open an unusable lobby.
@@ -37,7 +38,8 @@ async def main():
   assert 'noch nicht bereit' in (await page.locator('#toaster').inner_text()).lower()
   await page.evaluate('(q)=>window.__probe.setQuiz(q)',make_quiz('Quiz eins','q-one','Birne'))
   await page.locator('[data-action="save-board"]').click()
-  one=await page.evaluate("""(id)=>JSON.parse(localStorage.getItem('bq-board-workspace-'+id))""",first)
+  await wait_board_saved(page)
+  one=await read_board(page,first)
   assert one['quiz']['title']=='Quiz eins' and one['quiz']['questions'][0]['answer']=='Birne',one
   await page.locator('[data-action="back-to-quizzes"]').click()
   await expect(page.locator('.bq-saved-quiz')).to_have_count(1)
@@ -45,7 +47,7 @@ async def main():
 
   await page.locator('[data-action="create-new-quiz"]').click()
   await page.locator('.se-board-context').wait_for()
-  second=await page.evaluate('localStorage.getItem("bq-board-active-v1")')
+  second=await active_board_id(page)
   assert second!=first
   await page.evaluate('(q)=>window.__probe.setQuiz(q)',make_quiz('Quiz zwei','q-two','Apfel'))
   await page.locator('[data-action="save-board"]').click()
@@ -81,7 +83,7 @@ async def main():
   await expect(page.locator('[data-action="leave-host-room"]')).to_have_count(1)
   await expect(page.get_by_role('button',name='Lobby schließen')).to_have_count(1)
   await page.screenshot(path=str(OUT/'saved-quiz-host-lobby-desktop.png'),full_page=True,animations='disabled')
-  saved_count=await page.evaluate('JSON.parse(localStorage.getItem("bq-board-workspaces-v1")).length')
+  saved_count=len(await read_boards(page))
   assert saved_count==2
   assert await page.evaluate('(r)=>localStorage.getItem("bq-published-"+r)',code)=='1'
   print('PASS: host selected saved quiz directly in team lobby; published lock and solutions remain host-only',flush=True)
@@ -113,7 +115,7 @@ async def main():
   assert await page.evaluate('localStorage.getItem("bq-last-host")') is None
   assert await page.evaluate('(r)=>localStorage.getItem("bq-published-"+r)',code) is None
   await expect(page.locator('.bq-saved-quiz')).to_have_count(2)
-  assert await page.evaluate('(id)=>JSON.parse(localStorage.getItem("bq-board-workspace-"+id)).quiz.questions[0].answer',first)=='Birne'
+  assert (await read_board(page,first))['quiz']['questions'][0]['answer']=='Birne'
   print('PASS: cancelling a waiting lobby preserves both source quizzes and allows another room',flush=True)
 
   # Host from the editor itself; this must save before creating the room.

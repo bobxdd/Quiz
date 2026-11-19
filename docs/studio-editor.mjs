@@ -10,7 +10,7 @@ import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normaliz
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
  let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1,transferCategoryName='';
- let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas',editorPane='question';
+ let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,mobileTab='canvas',editorPane='question';
  let mapCamera={...DEFAULT_MAP_VIEW},mapQuestionId='';
  const q=()=>api.getQuestion();
  const quiz=()=>api.getQuiz();
@@ -22,7 +22,14 @@ export function createStudioEditor(api){
  };
  const current=()=>{const item=q();if(!activeCategory||boardRoundOf(item)!==editorRound||categoryKey(item?.category)!==categoryKey(activeCategory))return null;if(item)ensureScene(item);return item;};
  const find=()=>current()?.scene?.elements.find(x=>x.id===sel)||null;
- const saveLabel=()=>{const status=api.saveStatus?.()||'Gespeichert';return /fehler|voll|exportieren|konflikt/i.test(status)?'⚠ '+status:'✓ '+status;};
+ const saveWarning=()=>api.boardInfo?.().conflict?'conflict':/SPEICHERFEHLER/i.test(api.saveStatus?.()||'')?'error':'';
+ const saveLabel=()=>saveWarning()?'⚠ '+api.saveStatus():draftTimer||api.isSaving?.()?'● Wird gespeichert …':'✓ '+(api.saveStatus?.()||'Gespeichert');
+ const boardContextLabel=info=>info.conflict?'Sicherungskonflikt – Schreibschutz aktiv':info.isLocal?'Lokales Quizbrett · bleibt geöffnet':'Aktueller Hostraum';
+ function saveAlert(warning){
+  if(warning==='conflict')return '<section class="se-board-conflict" role="alert" data-save-warning="conflict"><strong>Das Quizbrett wurde in einem anderen Tab verändert.</strong><p>Sichere deine Änderungen als eigenes Brett oder öffne bewusst die gespeicherte Version.</p><div class="se-inline"><button type="button" class="se-primary" data-action="rescue-board">Änderungen als Kopie retten</button><button type="button" data-action="reload-board">Gespeicherte Version öffnen</button><button type="button" data-action="export">Backup herunterladen</button></div></section>';
+  if(warning==='error')return '<section class="se-board-conflict" role="alert" data-save-warning="error"><strong>Dieses Brett konnte nicht sicher gespeichert werden.</strong><p>Dein Entwurf ist noch im geöffneten Editor. Lade vor dem Schließen ein Backup herunter.</p><button type="button" data-action="export">Backup herunterladen</button></section>';
+  return '';
+ }
  const otherRound=()=>editorRound===1?2:1;
  const moveCategoryLabel=()=>`Nach Runde ${otherRound()} verschieben`;
  function libraryMenuHTML(){
@@ -36,10 +43,31 @@ export function createStudioEditor(api){
   ]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
   return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${['category-move','category-transfer-open'].includes(action)?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
  }
- const setSaveBadge=(pending)=>{savePending=pending;const el=document.querySelector('.se-save-badge');if(el){el.textContent=pending?'● Wird gespeichert …':saveLabel();el.classList.toggle('is-warning',!pending&&saveLabel().startsWith('⚠'));}if(!pending&&/SPEICHERFEHLER|KONFLIKT/i.test(api.saveStatus?.()||''))draw();};
- const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);if(refresh)draw();};
+ function refreshSaveStatus(){
+  const root=document.getElementById('se-root');
+  if(!root)return;
+  const badge=root.querySelector('.se-save-badge'),warning=saveWarning();
+  if(badge){
+   const label=saveLabel();
+   if(badge.textContent!==label)badge.textContent=label;
+   badge.classList.toggle('is-warning',!!warning);
+  }
+  const context=root.querySelector('.se-board-context');
+  const alert=root.querySelector('[data-save-warning]');
+  if((alert?.dataset.saveWarning||'')===warning)return;
+  alert?.remove();
+  if(warning)context?.insertAdjacentHTML('afterend',saveAlert(warning));
+  const lock=context?.querySelector('.se-board-context-lock');
+  if(lock)lock.textContent='▣ '+boardContextLabel(api.boardInfo());
+ }
+ const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();if(refresh)draw();};
  const snapshot=()=>api.snapshot();
- const flushDraft=()=>{if(draftTimer){clearTimeout(draftTimer);draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);}};
+ const flushDraft=()=>{
+  if(!draftTimer)return;
+  clearTimeout(draftTimer);draftTimer=null;
+  const item=q();if(item)reconcileQuestion(item);
+  return api.save();
+ };
  const preventFileNavigation=event=>{
   if(typeof document==='undefined'||!document.getElementById('se-root')||!hasDraggedFiles(event.dataTransfer)||event.defaultPrevented)return;
   event.preventDefault();
@@ -51,7 +79,7 @@ export function createStudioEditor(api){
  }
  if(typeof window!=='undefined')window.addEventListener('pagehide',flushDraft);
  if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushDraft();});
- const deferDraft=()=>{setSaveBadge(true);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;const item=q();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);},450)};
+ const deferDraft=()=>{clearTimeout(draftTimer);draftTimer=setTimeout(flushDraft,450);refreshSaveStatus();};
  const letterList='ABCDEFGHIJ'.split('');
  // Find a low-overlap position within the 1000x560 canvas; never spawn outside it.
  function findInsertion(elements,w,h){
@@ -230,15 +258,15 @@ export function createStudioEditor(api){
    +'</nav>':'';
   const currentBoard=api.boardInfo?.()||{isLocal:false,boards:[]};
   const otherBoards=(currentBoard.boards||[]).filter(b=>b.id!==currentBoard.id);
-  const boardSaveError=/SPEICHERFEHLER|KONFLIKT/i.test(api.saveStatus?.()||'');
+  const warning=saveWarning();
   return `<div class="se-studio se-editor-v3" id="se-root">
    <div class="se-board-context" role="status" aria-label="Aktuell bearbeitetes Quizbrett"><span class="se-board-context-caption">DU BEARBEITEST DIESES QUIZBRETT</span><strong title="${escape(quiz().title)}">${escape(quiz().title)}</strong><span class="se-board-context-lock">▣ ${currentBoard.conflict?'Sicherungskonflikt – Schreibschutz aktiv':currentBoard.isLocal?'Lokales Quizbrett · bleibt geöffnet':'Aktueller Hostraum'}</span>${currentBoard.isLocal?`<details class="se-board-switch"><summary>Quizbretter</summary><div class="se-board-switch-items"><b>Aktuelles Quizbrett</b><span aria-current="true">${escape(quiz().title)}</span>${otherBoards.length?`<b>Andere Quizbretter</b>${otherBoards.map(b=>`<button type="button" data-action="open-board" data-board-id="${escape(b.id)}"><span>${escape(b.title)}</span><small>Letzte Bearbeitung: ${b.updatedAt?new Date(b.updatedAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'–'} · Kennung ${escape(b.id.slice(1,7).toUpperCase())}</small></button>`).join('')}`:''}<button type="button" class="se-primary" data-action="new-board">+ Neues Quizbrett erstellen</button><p class="se-board-storage-hint">Bretter liegen in diesem Browser. Für Backups: Dateien → Quiz exportieren.</p></div></details>`:''} </div>
-   ${currentBoard.conflict?`<section class="se-board-conflict" role="alert"><strong>Das Quizbrett wurde in einem anderen Tab verändert.</strong><p>Hier wird nichts überschrieben. Sichere deine Änderungen als eigenes Brett oder öffne bewusst die gespeicherte Version.</p><div class="se-inline"><button type="button" class="se-primary" data-action="rescue-board">Änderungen als Kopie retten</button><button type="button" data-action="reload-board">Gespeicherte Version öffnen</button><button type="button" data-action="export">Backup herunterladen</button></div></section>`:boardSaveError?`<section class="se-board-conflict" role="alert"><strong>Dieses Brett konnte nicht sicher gespeichert werden.</strong><p>${escape(api.saveStatus?.()||'Speicherproblem')} Bitte vor dem Schließen eine Sicherung herunterladen.</p><button type="button" data-action="export">Backup herunterladen</button></section>`:''}
+   ${saveAlert(warning)}
    <div class="se-toolbar bq-editor-toolbar">
      <div class="bq-editor-main">
       <div class="bq-editor-main-info"><span class="bq-editor-step">SCHRITT 1 · QUIZ ERSTELLEN</span><label class="se-field se-title"><span>Quizname</span><input data-se-quiztitle maxlength="100" value="${escape(quiz().title)}"></label></div>
       <div class="bq-editor-primary-actions">
-       <span class="se-save-badge" role="status" aria-live="polite">${savePending?'● Wird gespeichert …':escape(saveLabel())}</span>
+       <span class="se-save-badge${warning?' is-warning':''}" role="status" aria-live="polite">${escape(saveLabel())}</span>
        ${api.isOffline()?'<button type="button" data-action="save-board">Quiz speichern</button>':''}
        ${api.isOffline()&&api.onlineReady()?'<button type="button" class="se-primary bq-editor-host-cta" data-action="host-current-board">Lobby hosten</button>':!api.isOffline()?'<button type="button" class="se-primary" data-action="publish">Live veröffentlichen</button>':''}
       </div>
@@ -563,7 +591,7 @@ export function createStudioEditor(api){
    try{await applyImageFiles([file],{kind:'answer-image'});api.notice?.('Bild aus der Zwischenablage eingefügt.');}catch(error){api.error(error);}
   });
   root.addEventListener('contextmenu',event=>{const libraryNode=event.target.closest('[data-se-library]');if(libraryNode){event.preventDefault();openLibraryMenu(libraryNode,event);return;}const canvas=event.target.closest('.se-scene');if(!canvas)return;event.preventDefault();libraryMenu=null;const node=event.target.closest('[data-se-element]');sel=node?.dataset.seElement||'';const rect=(node||canvas).getBoundingClientRect();menu={x:event.clientX||rect.left+Math.min(40,rect.width/2),y:event.clientY||rect.top+Math.min(40,rect.height/2)};draw();});
-  root.addEventListener('submit',event=>{
+  root.addEventListener('submit',async event=>{
    if(!event.target.matches('[data-se-category-transfer-form]'))return;
    event.preventDefault();
    try{
@@ -574,7 +602,7 @@ export function createStudioEditor(api){
     if(!category||!targetId)throw Error('Kategorie und Zielquiz auswählen.');
     const count=questionsInCategory(visibleQuestions(),category).length;
     if(move&&!confirm('Kategorie „'+category+'“ mit '+count+' Fragen nach der Übertragung aus diesem Quizbrett entfernen?'))return;
-    flushDraft();api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
+    await api.transferCategory({category,sourceRound:editorRound,targetId,targetRound,move});
     transferCategoryName='';draw();
    }catch(err){api.error(err);}
   });
@@ -618,7 +646,7 @@ export function createStudioEditor(api){
    }
 const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!editable&&['Enter',' '].includes(event.key)&&event.target.matches?.('[data-se-element]')){event.preventDefault();sel=event.target.dataset.seElement;draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='d'&&sel){event.preventDefault();onAction('duplicate');return;}if((event.key==='Delete'||event.key==='Backspace')&&!editable&&sel){event.preventDefault();onAction('remove');return;}if(event.key==='Escape'&&!editable&&sel){sel='';draw();return;}if((event.ctrlKey||event.metaKey)&&!editable&&event.key.toLowerCase()==='z'){event.preventDefault();onAction(event.shiftKey?'redo':'undo');return;}if(!sel||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)||editable)return;event.preventDefault();const el=find();if(!el)return;snapshot();const n=event.shiftKey?20:5;if(event.key==='ArrowLeft')el.x=Math.max(0,el.x-n);if(event.key==='ArrowRight')el.x=Math.min(1000-el.w,el.x+n);if(event.key==='ArrowUp')el.y=Math.max(0,el.y-n);if(event.key==='ArrowDown')el.y=Math.min(560-el.h,el.y+n);persist(true);});
  }
- return {html,render:()=>html(),mount,flush:flushDraft,
+ return {html,render:()=>html(),mount,flush:flushDraft,refreshSaveStatus,hasPendingDraft:()=>!!draftTimer,
   focusIssue:id=>{const item=quiz()?.questions?.find(v=>v.id===id);if(!item)return;editorRound=boardRoundOf(item);activeCategory=item.category;auditOpen=true;choose(id,{issue:true});},
-  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';transferCategoryName='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
+  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';transferCategoryName='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
 }

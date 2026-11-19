@@ -447,7 +447,6 @@ export class PeerGame{
   this.data.presence={};await this._openHostPeer(room);this._scheduleTeamEmojiDeadline();this._persist();return room;
  }
  async saveHostQuiz(room,quiz){this._assertHost(room);if(!quiz||!Array.isArray(quiz.questions)||quiz.questions.length>180)throw Error('Ungültiges Host-Quiz.');
-  if(new TextEncoder().encode(JSON.stringify(quiz)).length>8_000_000)throw Error('Host-Quiz überschreitet 8 MB. Medien verkleinern.');
   this.hostQuiz=clone(quiz);
   const savedAt=this.quizSavedAt=Math.max(Date.now(),(this.quizSavedAt||0)+1);
   const localSaved=saveLocalHostQuiz(room,quiz,savedAt);

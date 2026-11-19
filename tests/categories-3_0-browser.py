@@ -1,4 +1,4 @@
-"""BrainQuiz Browser E2E with two same-origin about:blank windows and an in-browser
+"""BrainQuiz Browser E2E with two same-origin fixture windows and an in-browser
 PeerJS transport mock (real UI, question and privacy logic; NOT real ICE/NAT).
 """
 import asyncio,base64,shutil,json
@@ -26,11 +26,21 @@ for mascot in ['characters/rogue.webp','characters/blades.webp','characters/mage
 
 
 async def install(page):
+ fixture_url='http://brainquiz.test/'
+ async def serve_fixture(route):
+  if route.request.url==fixture_url:
+   await route.fulfill(content_type='text/html',body='<!doctype html>')
+  elif route.request.url==fixture_url+'board-workspace.mjs':
+   await route.fulfill(content_type='text/javascript',body=sources['board-workspace.mjs'])
+  else:
+   await route.abort()
+ await page.route(fixture_url+'**',serve_fixture)
+ await page.goto(fixture_url)
  await page.set_content(html)
  await page.evaluate(mockpeer)
  await page.evaluate('''async (src)=>{
   const local=new Map(),session=new Map();
-  const storage=map=>({getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k)});
+  const storage=map=>({get length(){return map.size},key:i=>Array.from(map.keys())[i]??null,getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k)});
   Object.defineProperty(window,'localStorage',{configurable:true,value:storage(local)});
   Object.defineProperty(window,'sessionStorage',{configurable:true,value:storage(session)});
   window.history.replaceState=()=>{};

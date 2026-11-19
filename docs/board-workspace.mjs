@@ -21,6 +21,8 @@ const questionsInCategory=(questions,category)=>(questions||[]).filter(q=>catego
 const roundCategories=(quiz,round=1)=>collectCategories(quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]),roundQuestions(quiz,round));
 const INDEX='bq-board-workspaces-v1',ACTIVE='bq-board-active-v1';
 const key=id=>'bq-board-workspace-'+id;
+const LEGACY_QUIZ='bq-quiz-LOCAL',SESSION='bq-session-LOCAL';
+const sessionKey=id=>SESSION+'-'+id;
 const validId=id=>typeof id==='string'&&/^b[0-9a-f]{32}$/.test(id);
 const parse=(raw,fallback)=>{try{return raw?JSON.parse(raw):fallback;}catch{return fallback;}};
 const clean=(items)=>{
@@ -64,14 +66,21 @@ export function loadBoard(store,id){
  if(!data||!data.quiz||!Array.isArray(data.quiz.questions)||!Number.isSafeInteger(data.revision)||data.revision<1)throw Error('Quizbrett-Daten ungültig. Es wurde nichts überschrieben.');
  return {id,revision:data.revision,quiz:data.quiz};
 }
-export function resumeBoard(store,emptyQuiz,makeId,preferredId=''){
+function resumeId(store,preferredId){
  const list=boardList(store),active=activeBoard(store);
  // A tab's explicit selection wins over changes to the global last-used pointer by other tabs.
- if(preferredId&&list.some(x=>x.id===preferredId))return loadBoard(store,preferredId);
- if(active){if(!list.some(x=>x.id===active))throw Error('Zuletzt aktives Quizbrett nicht auffindbar. Es wurde kein anderes Brett stillschweigend geladen.');return loadBoard(store,active);}
- if(list.length){const saved=loadBoard(store,list[0].id);store.setItem(ACTIVE,saved.id);return saved;}
- // Legacy migration: the old LOCAL draft is COPIED, never removed or overwritten.
- const old=store.getItem('bq-quiz-LOCAL');
+ if(preferredId&&list.some(x=>x.id===preferredId))return preferredId;
+ if(active&&!list.some(x=>x.id===active))throw Error('Zuletzt aktives Quizbrett nicht auffindbar. Es wurde kein anderes Brett stillschweigend geladen.');
+ return active||list[0]?.id||'';
+}
+export function resumeBoard(store,emptyQuiz,makeId,preferredId=''){
+ const id=resumeId(store,preferredId);
+ if(id){
+  const saved=loadBoard(store,id);
+  if(!activeBoard(store)&&id!==preferredId)store.setItem(ACTIVE,id);
+  return saved;
+ }
+ const old=store.getItem(LEGACY_QUIZ);
  let source=emptyQuiz();
  if(old){
   try{source=JSON.parse(old);}catch{throw Error('Alter lokaler Quizentwurf beschädigt. Er wurde nicht überschrieben. Export oder Wiederherstellung prüfen.');}
@@ -79,8 +88,8 @@ export function resumeBoard(store,emptyQuiz,makeId,preferredId=''){
  }
  const created=createBoard(store,source,makeId);
  // Preserve a local legacy game progress snapshot if it exists, without deleting the original.
- const oldSession=store.getItem('bq-session-LOCAL');
- if(oldSession){try{store.setItem('bq-session-LOCAL-'+created.id,oldSession);}catch{/* quiz is safe; game progress remains in old key */}}
+ const oldSession=store.getItem(SESSION);
+ if(oldSession){try{store.setItem(sessionKey(created.id),oldSession);}catch{/* quiz is safe; game progress remains in old key */}}
  return created;
 }
 export function selectBoard(store,id){const result=loadBoard(store,id);store.setItem(ACTIVE,id);return result;}
@@ -161,4 +170,130 @@ export function transferCategoryBetweenBoards(store,{
  }
  return {sourceId,targetId,sourceRevision,targetRevision,sourceQuiz,
   copiedQuestions:copiedQuestions.length,category:destinationName,sourceRound:fromRound,targetRound:toRound,move:!!move};
+}
+
+const LIBRARY='brainquiz-board-library-v1',RECORDS='workspaces',MIGRATED='legacy-copied';
+
+function openWorkspaceDB(){
+ return new Promise((resolve,reject)=>{
+  if(!globalThis.indexedDB){reject(Error('Der Browser stellt den lokalen Quizspeicher (IndexedDB) nicht bereit.'));return;}
+  const request=indexedDB.open(LIBRARY,1);
+  request.onupgradeneeded=()=>request.result.createObjectStore(RECORDS);
+  request.onblocked=()=>reject(Error('Ein anderer Tab blockiert den Quizspeicher.'));
+  request.onerror=()=>reject(request.error||Error('Der Quizspeicher konnte nicht geöffnet werden.'));
+  request.onsuccess=()=>{
+   const db=request.result;
+   db.onversionchange=()=>db.close();
+   resolve(db);
+  };
+ });
+}
+
+// Read only the records an operation needs. Enqueue the writes in the same
+// transaction so revision checks, the directory and a category move are atomic.
+function workspaceTransaction(db,mode,keys,operation,moreKeys){
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction(RECORDS,mode,{durability:mode==='readwrite'?'strict':'default'});
+  const objectStore=tx.objectStore(RECORDS);
+  const values=new Map(),changes=new Map();
+  const store={
+   getItem:name=>values.get(name)??null,
+   setItem:(name,value)=>{values.set(name,value);changes.set(name,value);},
+   removeItem:name=>{values.delete(name);changes.set(name,null);}
+  };
+  let failure,result;
+  tx.oncomplete=()=>resolve({result,store,changed:changes});
+  tx.onabort=()=>reject(failure||tx.error||Error('Die Schreibtransaktion für den Quizspeicher wurde abgebrochen.'));
+  const safely=callback=>{
+   try{callback();}catch(error){failure=error;tx.abort();}
+  };
+  const read=(names,done)=>{
+   const unique=new Set(names);
+   if(!unique.size){done();return;}
+   let pending=unique.size;
+   for(const name of unique){
+    const request=objectStore.get(name);
+    request.onsuccess=()=>{
+     values.set(name,request.result);
+     if(--pending===0)safely(done);
+    };
+   }
+  };
+  safely(()=>read(keys,()=>read(moreKeys?.(store)||[],()=>{
+   result=operation(store);
+   for(const [name,value] of changes){
+    if(value===null)objectStore.delete(name);
+    else objectStore.put(value,name);
+   }
+  })));
+ });
+}
+
+export async function openBoardLibrary({onChange}={}){
+ const db=await openWorkspaceDB();
+ let library;
+ try{
+  await workspaceTransaction(db,'readwrite',[MIGRATED],store=>{
+   if(store.getItem(MIGRATED))return;
+   // Copy the original data verbatim, including orphan records and old game
+   // progress. Keep the original keys as a recovery copy. A failed copy aborts
+   // with the migration marker unset, so opening the library can retry.
+   const legacy=globalThis.localStorage;
+   for(let i=0;i<legacy.length;i++){
+    const name=legacy.key(i);
+    if(name===INDEX||name===ACTIVE||name===LEGACY_QUIZ||name===SESSION||
+       name?.startsWith('bq-board-workspace-')||name?.startsWith(SESSION+'-')){
+     const value=legacy.getItem(name);
+     if(value!==null)store.setItem(name,value);
+    }
+   }
+   store.setItem(MIGRATED,'1');
+  });
+  const channel=onChange&&typeof BroadcastChannel==='function'?new BroadcastChannel(LIBRARY):null;
+  const read=(keys,operation)=>workspaceTransaction(db,'readonly',keys,operation).then(({result})=>result);
+  const edit=async(keys,operation,moreKeys)=>{
+   const {result,store,changed}=await workspaceTransaction(db,'readwrite',[INDEX,...keys],operation,moreKeys);
+   library.boards=boardList(store);
+   const boardKeys=[...changed.keys()].filter(name=>name.startsWith('bq-board-workspace-'));
+   if(boardKeys.length)channel?.postMessage(boardKeys.map(name=>name.slice('bq-board-workspace-'.length)));
+   return result;
+  };
+  library={
+   boards:[],
+   async refresh(){library.boards=await read([INDEX],boardList);return library.boards;},
+   create(quiz,makeId){
+    const id=makeId();
+    return edit([key(id)],store=>createBoard(store,quiz,()=>id));
+   },
+   resume(emptyQuiz,makeId,preferredId=''){
+    const freshId=makeId();
+    return edit([ACTIVE],
+     store=>resumeBoard(store,emptyQuiz,()=>freshId,preferredId),
+     store=>{
+      const id=resumeId(store,preferredId);
+      return id?[key(id)]:[key(freshId),LEGACY_QUIZ,SESSION];
+     });
+   },
+   load:id=>read([INDEX,key(id)],store=>loadBoard(store,id)),
+   select:id=>edit([key(id)],store=>selectBoard(store,id)),
+   persist:(id,revision,quiz)=>edit([key(id)],store=>persistBoard(store,id,revision,quiz)),
+   transferCategory:options=>edit([key(options.sourceId),key(options.targetId)],store=>transferCategoryBetweenBoards(store,options)),
+   loadSession:id=>read([sessionKey(id)],store=>parse(store.getItem(sessionKey(id)),null)),
+   async saveSession(id,session){
+    const snapshot=JSON.stringify(session);
+    await workspaceTransaction(db,'readwrite',[],store=>store.setItem(sessionKey(id),snapshot));
+   },
+   async clearSession(id){
+    await workspaceTransaction(db,'readwrite',[],store=>store.removeItem(sessionKey(id)));
+   },
+   close(){channel?.close();db.close();}
+  };
+  await library.refresh();
+  if(channel)channel.onmessage=event=>onChange(event.data);
+  return library;
+ }catch(error){
+  if(library)library.close();
+  else db.close();
+  throw error;
+ }
 }

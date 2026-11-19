@@ -114,7 +114,7 @@ test('the editor exposes category transfer only for saved local boards',()=>{
  assert.match(editor,/data-se-category-transfer-form/);
  assert.match(editor,/data-se-action="category-transfer-cancel"/);
  assert.match(editor,/api\.isOffline\(\)/);
- assert.match(app,/transferCategoryBetweenBoards\(localStorage/);
+ assert.match(app,/await boardLibrary\.transferCategory\(/);
  assert.match(app,/sourceId:boardId,expectedSourceRevision:boardRevision/);
  assert.match(app,/if\(!isOffline\(\)\|\|!boardId\|\|boardConflict\)/);
 });

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from playwright.async_api import async_playwright, expect
+from board_library_test_support import read_boards, wait_board_saved
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('emoji_http',ROOT/'tests/team-emoji-browser.py')
@@ -78,7 +79,8 @@ async def run(browser,root):
     await host.locator('[data-se-action="category-preset"][data-category="Champions"]').click()
     await question(host,'Drittes Feld',300,'Geheime Antwort drei')
     await host.locator('[data-action="save-board"]').click()
-    saved=await host.evaluate("Object.entries(localStorage).filter(([key])=>key.startsWith('bq-board-workspace-'))")
+    await wait_board_saved(host)
+    saved=await read_boards(host, load_records=True)
     await host.locator('[data-action="editor-probe"]').click()
     await expect(host.locator('.bq-board-scene .tile')).to_have_count(2)
     await choose(host,200)
@@ -97,7 +99,7 @@ async def run(browser,root):
     await expect(tile(host,300)).to_be_visible()
     assert await host.locator('[data-action="present-next"]').count()==0
     await host.locator('.bq-rehearsal-toolbar [data-view="editor"]').click()
-    assert await host.evaluate("Object.entries(localStorage).filter(([key])=>key.startsWith('bq-board-workspace-'))")==saved
+    assert await read_boards(host, load_records=True)==saved
     print('PASS: round authoring, arbitrary board choice, covered rehearsal and retained rehearsal points',flush=True)
 
     await host.locator('[data-action="host-current-board"]').click()

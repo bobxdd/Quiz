@@ -3,7 +3,8 @@
  * Never transmit these checkpoints to guests or put them in Service Worker cache.
  */
 const DB='brainquiz-private-recovery-v1',STORE='checkpoints';
-const validKey=k=>/^(session|quiz)-[A-HJ-NP-Z2-9]{16}$/.test(String(k||''));
+const LAST_HOST='last-host';
+const validKey=k=>k===LAST_HOST||/^(session|quiz)-[A-HJ-NP-Z2-9]{16}$/.test(String(k||''));
 function openDB(){
  if(!globalThis.indexedDB)return Promise.resolve(null);
  return new Promise((resolve,reject)=>{
@@ -30,6 +31,23 @@ async function access(key,mode,value){
 export const saveHostCheckpoint=(key,value)=>access(key,'write',structuredClone(value));
 export const loadHostCheckpoint=key=>access(key,'read');
 export const deleteHostCheckpoint=key=>access(key,'delete');
+
+export async function loadLastHostRoom(){
+ const saved=await access(LAST_HOST,'read').catch(()=>null);
+ if(typeof saved==='string')return saved;
+ try{return localStorage.getItem('bq-last-host')||'';}catch{return '';}
+}
+
+export async function saveLastHostRoom(room){
+ let localSaved=false;
+ try{
+  if(room)localStorage.setItem('bq-last-host',room);
+  else localStorage.removeItem('bq-last-host');
+  localSaved=true;
+ }catch{}
+ const backupSaved=await access(LAST_HOST,'write',room).catch(()=>false);
+ if(!localSaved&&!backupSaved)throw Error('Der letzte Hostraum konnte nicht im Browser gespeichert werden.');
+}
 
 export function saveLocalHostQuiz(room,quiz,savedAt=Date.now()){
  try{
