@@ -142,7 +142,10 @@ async def main():
      assert layout['scrollH']>layout['clientH']+20,(name,'landscape must allow vertical reflow',layout)
      assert layout['panelH']>=150 and layout['answerH']>=30,(name,'landscape clipped question or explanation',layout)
      if name=='host':
-      await page.locator('[data-action="reveal-prev"]').scroll_into_view_if_needed()
+      # Window.resize triggers a complete DOM re-render; a Playwright
+      # scroll_into_view on an attached node can race that replacement.
+      await page.evaluate("""() => document.querySelector('[data-action="reveal-prev"]')
+       ?.scrollIntoView({block:'nearest',behavior:'instant'})""")
       await expect(page.locator('[data-action="reveal-prev"]')).to_be_enabled()
     await host.set_viewport_size({'width':1280,'height':720})
     await host.locator('[data-action="reveal-prev"]').click()
