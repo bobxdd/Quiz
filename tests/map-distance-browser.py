@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_fixture_distances',ROOT/'tests/categories-3_0-browser.py')
 fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 
-async def join_guest(ctx,host,code,name):
+async def join_guest(ctx,host,code,name,team='t1'):
  async with ctx.expect_page() as opened:
   await host.evaluate("window.open('about:blank','_blank')")
  guest=await opened.value
@@ -15,6 +15,7 @@ async def join_guest(ctx,host,code,name):
  await guest.locator('#join-name').fill(name)
  await guest.locator('button[type="submit"]').first.click()
  await guest.locator('.bq-lobby-notice').wait_for(timeout=12000)
+ await host.locator('select[id^="team-"]').first.select_option(team)
  await host.locator('[data-action="approve"]').first.click()
  await guest.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=12000)
  await guest.locator('.bq-lobby').wait_for()
@@ -39,7 +40,7 @@ async def main():
   await host.get_by_role('button',name='Online-Raum erstellen').click()
   await host.locator('.se-studio').wait_for()
   code=await host.evaluate('window.__probe.room()')
-  q={'id':'map-distance','category':'Geographie','title':'Kilometer','type':'map','roundMode':'written','points':200,
+  q={'id':'map-distance','category':'Geographie','title':'Kilometer','type':'map','roundMode':'written','points':200,'seconds':90,
      'prompt':'Wo liegt der Ort?','answer':'','mapTargetSet':True,'mapTargetX':50,'mapTargetY':50,
      'scene':{'template':'map','version':2,'elements':[{'id':'heading','kind':'text','role':'question','text':'Wo liegt der Ort?','x':58,'y':34,'w':884,'h':106,'step':0}]}}
   await host.evaluate('(q)=>window.__probe.setQuiz({title:"Km Test",teams:["Rot","Blau"],questions:[q]})',q)
@@ -48,16 +49,22 @@ async def main():
   await host.locator('.top-nav [data-view="teams"]').click()
   alice=await join_guest(ctx,host,code,'Alice')
   bob=await join_guest(ctx,host,code,'Bob')
-  for guest,name in [(alice,'alice'),(bob,'bob')]:
+  charlie=await join_guest(ctx,host,code,'Charlie','t2')
+  for guest,name in [(alice,'alice'),(bob,'bob'),(charlie,'charlie')]:
    guest.on('pageerror',lambda err,label=name:errors.append(label+': '+str(err)))
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()
   await alice.locator('.bq-map-viewport').wait_for(timeout=12000)
   await bob.locator('.bq-map-viewport').wait_for(timeout=12000)
+  await charlie.locator('.bq-map-viewport').wait_for(timeout=12000)
+  for page in (host,alice,bob,charlie):
+   await expect(page.locator('.bq-round-countdown')).to_be_visible()
+   assert ':' in await page.locator('#clock').inner_text()
   await pin_and_submit(alice,.5,.5)
   await pin_and_submit(bob,.75,.5)
-  await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.keys(bucket).length>=2)",timeout=12000)
+  await pin_and_submit(charlie,.25,.5)
+  await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.keys(bucket).length>=3)",timeout=12000)
   assert 'mapTargetX' not in await alice.evaluate('window.__probe.info().publicState.current')
   for guest in (alice,bob):
    assert await guest.locator('.bq-review-map-distance').count()==0
