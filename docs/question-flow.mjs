@@ -28,6 +28,20 @@ export function remainingBoardQuestions(state,round=boardRound(state)){
 /** Round two starts only after the first board is exhausted. A deliberate
  * host override is a separate action requiring an explicit force flag; stale
  * guest RPCs and the regular Next action cannot skip unanswered questions. */
+/** The user-defined last-six bonus is per current board (not per quiz).
+ * Compute it on the UNPLAYED state before opening the next question:
+ * the seventh-to-last question must still have normal points. */
+export const FINAL_DOUBLE_QUESTIONS=6;
+export function finalSixActive(state,round=boardRound(state)){
+ const left=remainingBoardQuestions(state,round).length;
+ return left>0&&left<=FINAL_DOUBLE_QUESTIONS;
+}
+export function boardQuestionPoints(state,cell){
+ const base=Number(cell?.points);
+ if(!Number.isFinite(base)||base<0)return 0;
+ if(!cell||boardRound(cell)!==boardRound(state)||cell.used||state?.used?.[cell.id])return base;
+ return base*(finalSixActive(state)?2:1);
+}
 export function canAdvanceBoard(state,{force=false}={}){
  return state?.phase==='board'&&boardRound(state)===1&&
   Object.values(state.board||{}).some(cell=>boardRound(cell)===2)&&
@@ -78,7 +92,12 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
   const round=Number(state.round)+1;
   if(!Number.isSafeInteger(round)||round>999999)return null;
-  const current=covered?{id:question.id,category:question.category,type:question.type,points:question.points,roundMode:playerQuestion.roundMode}:playerQuestion;
+  const doublePoints=finalSixActive(state);
+  const effectivePoints=Number(question.points)*(doublePoints?2:1);
+  const current=covered?{id:question.id,category:question.category,type:question.type,points:effectivePoints,roundMode:playerQuestion.roundMode}
+   :{...playerQuestion,points:effectivePoints};
+  current.basePoints=Number(question.points);
+  current.doublePoints=doublePoints;
   return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,
     answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
@@ -99,6 +118,13 @@ export function applyQuestionChanges(state,expectedRound,expectedId,changes,allo
   }
   const returnedToBoard=next.phase==='board'&&!next.current;
   if((!returnedToBoard&&next.current?.id!==expectedId)||next.round!==state.round||next.used?.[expectedId]!==true)return null;
+  // Clues, partial reveals and a final solution replace current with a freshly
+  // sanitized source object. Never lose/recalculate the locked-in bonus then.
+  if(!returnedToBoard){
+   next.current.points=state.current.points;
+   next.current.basePoints=state.current.basePoints??state.board[expectedId].points;
+   next.current.doublePoints=state.current.doublePoints===true;
+  }
   return next;
 }
 export function questionMotion(round,id){
