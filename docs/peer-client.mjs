@@ -936,10 +936,11 @@ export class PeerGame{
   this._scheduleTeamEmojiDeadline();this._changed();
   return clone(next);
  }
- async advanceBoard(room,round){
+ async advanceBoard(room,round,{force=false}={}){
   const d=this._getHostData(room);
   if(d.public.round!==Number(round))throw Error('Das Spielbrett hat sich geändert.');
-  const next=advanceBoardState(d.public);
+  if(force!==true&&force!==false)throw Error('Ungültige Rundenfreigabe.');
+  const next=advanceBoardState(d.public,{force});
   if(!next)throw Error('Runde 2 kann nur von der Übersicht aus gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
