@@ -502,3 +502,37 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 }
 /* Explicit keyboard focus on the independently scrolling answer panel. */
 .bq-question-scene .bq-answer-view:focus{scroll-behavior:auto}
+
+/* In a short phone viewport the guest's verbose buzzer instructions used
+   nearly the entire question area (40px stage observed at 320 x 568).
+   A compact status + buzzer + expandable team chat retains the interactions. */
+.bq-question-scene .bq-buzzer-quickstatus{display:none}
+@media(max-width:540px) and (max-height:650px){
+ body.bq-game-mode:has(.bq-question-scene) .topbar{
+  padding:4px 6px!important;margin-bottom:4px!important
+ }
+ body.bq-game-mode:has(.bq-question-scene) .topbar .brand small{display:none}
+ body.bq-game-mode:has(.bq-question-scene) .topbar .header-primary{
+  min-height:32px;gap:4px
+ }
+ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{
+  min-height:32px;padding:4px 7px
+ }
+ .bq-question-scene .bq-scene-heading{min-height:23px}
+ .bq-question-scene .bq-guest-buzzer{
+  flex:0 0 auto;max-height:104px!important;
+  padding:4px 7px!important;gap:3px!important;overflow-y:auto
+ }
+ .bq-question-scene .bq-guest-buzzer>.panelhead,
+ .bq-question-scene .bq-guest-buzzer>.bq-guest-mode{display:none}
+ .bq-question-scene .bq-guest-buzzer .bq-buzzer-quickstatus{
+  display:block;flex:0 0 auto;font-size:12px;line-height:1.2;
+  color:#d6e7df;font-weight:700;overflow-wrap:anywhere
+ }
+ .bq-question-scene .bq-guest-buzzer .bq-big-buzzer{
+  min-height:44px!important;flex:0 0 auto
+ }
+ .bq-question-scene .bq-guest-buzzer .bq-auxiliary>summary{
+  min-height:30px;padding:4px 8px
+ }
+}
