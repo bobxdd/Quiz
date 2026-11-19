@@ -9,7 +9,7 @@ import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategor
 import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
- let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1;
+ let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1,transferCategoryName='';
  let selectedQuestions=new Set(),bankOpen=false,bankQuery='',previewDevice='desktop',auditOpen=false,savePending=false,mobileTab='canvas',editorPane='question';
  let mapCamera={...DEFAULT_MAP_VIEW},mapQuestionId='';
  const q=()=>api.getQuestion();
@@ -31,10 +31,10 @@ export function createStudioEditor(api){
   const categoryMenu=kind==='category';
   const title=categoryMenu?category:(quiz().questions||[]).find(item=>item.id===id)?.title||'Frage';
   const items=categoryMenu?[
-   ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],
+   ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],['category-transfer-open','In anderes Quizbrett übertragen'],
    ['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']
   ]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
-  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${action==='category-move'?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
+  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${['category-move','category-transfer-open'].includes(action)?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
  }
  const setSaveBadge=(pending)=>{savePending=pending;const el=document.querySelector('.se-save-badge');if(el){el.textContent=pending?'● Wird gespeichert …':saveLabel();el.classList.toggle('is-warning',!pending&&saveLabel().startsWith('⚠'));}if(!pending&&/SPEICHERFEHLER|KONFLIKT/i.test(api.saveStatus?.()||''))draw();};
  const persist=(refresh=false)=>{const item=current();if(item)reconcileQuestion(item);api.save();setSaveBadge(false);if(refresh)draw();};
@@ -185,9 +185,11 @@ export function createStudioEditor(api){
  function categoryCard(name,created,all){
   const count=questionsInCategory(all,name).length;
   const meta=CATEGORY_SUGGESTIONS.find(s=>categoryKey(s.name)===categoryKey(name));
+  const boardInfo=api.boardInfo?.();
+  const canTransfer=api.isOffline()&&(boardInfo?.boards||[]).some(board=>board.id!==boardInfo.id);
   return `<article class="se-category-card ${created?'':'se-category-suggestion'}" ${created?`data-se-library="category" data-category="${escape(name)}"`:''}>
    <button type="button" class="se-category-open" data-se-action="${created?'category-select':'category-preset'}" data-category="${escape(name)}"><strong>${escape(name)}</strong><small>${created?`${count} ${count===1?'Frage':'Fragen'}`:'Vorlage'}</small><span>${escape(meta?.description||'Eigene Quizkategorie')}</span></button>
-   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">${moveCategoryLabel()}</button>`:''}
+   ${created?`<button type="button" class="se-category-add" data-se-action="category-new-question" data-category="${escape(name)}" title="Frage in ${escape(name)} anlegen">+ Frage</button><button type="button" class="se-category-move" data-se-action="category-move" data-category="${escape(name)}">${moveCategoryLabel()}</button>${canTransfer?`<button type="button" class="se-category-transfer" data-se-action="category-transfer-open" data-category="${escape(name)}">In anderes Quiz übertragen</button>`:''}`:''}
   </article>`;
  }
  function overview(all,cats){
@@ -368,12 +370,19 @@ export function createStudioEditor(api){
   libraryMenu=null;draw();
   if(opener)document.querySelector('#se-root '+opener)?.focus({preventScroll:true});
  }
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
  switch(action){
   case 'board-round':{
    const next=Number(button.dataset.boardRound)===2?2:1;
-   flushDraft();editorRound=next;activeCategory='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
+   flushDraft();editorRound=next;activeCategory='';transferCategoryName='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
   }
+  case 'category-transfer-open':{
+   if(!api.isOffline())throw Error('Nur bei lokal gespeicherten Quizbrettern verfügbar.');
+   const name=categories().find(value=>categoryKey(value)===categoryKey(button.dataset.category||libraryMenu?.category));
+   if(!name)throw Error('Kategorie nicht gefunden.');
+   flushDraft();activeCategory='';transferCategoryName=name;libraryMenu=null;draw();return;
+  }
+  case 'category-transfer-cancel':transferCategoryName='';draw();return;
   case 'category-move':{
    const oldNames=categories(),key=categoryKey(button.dataset.category);
    const name=oldNames.find(category=>categoryKey(category)===key);
@@ -584,5 +593,5 @@ const editable=['TEXTAREA','INPUT','SELECT'].includes(event.target.tagName);if(!
  }
  return {html,render:()=>html(),mount,flush:flushDraft,
   focusIssue:id=>{const item=quiz()?.questions?.find(v=>v.id===id);if(!item)return;editorRound=boardRoundOf(item);activeCategory=item.category;auditOpen=true;choose(id,{issue:true});},
-  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
+  reset:()=>{clearTimeout(draftTimer);draftTimer=null;mapCamera={...DEFAULT_MAP_VIEW};mapQuestionId='';clearTimeout(touchTimer);touchTimer=null;touchStart=null;drag=null;trackedInput=null;savePending=false;sel='';reveal=0;preview=false;menu=null;libraryMenu=null;selectedQuestions.clear();bankQuery='';bankOpen=false;activeCategory='';search='';showCategoryForm=false;renamingCategory=false;categoryDraft='';transferCategoryName='';auditOpen=false;mobileTab='canvas';editorPane='question';},getSelected:()=>sel};
 }
