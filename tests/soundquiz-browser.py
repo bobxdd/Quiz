@@ -64,6 +64,7 @@ async def main():
   alice=await join(ctx,host,code,'Alice');bob=await join(ctx,host,code,'Bob')
   for page,name in [(alice,'Alice'),(bob,'Bob')]:
    page.on('pageerror',lambda e,n=name:errors.append(n+' '+str(e)))
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()
