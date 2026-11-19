@@ -30,7 +30,11 @@ async def main():
    await host.locator('.bq-board-scene .tile').wait_for(timeout=12000)
    players=[]
    for name in ['Anna','Ben']:
-    page=await context.new_page()
+    # Open from the host tab: PeerJS mock instances share this opener context.
+    # A separate about:blank context.new_page() would isolate the signaling hub.
+    async with context.expect_page() as opening:
+     await host.evaluate("window.open('about:blank','_blank')")
+    page=await opening.value
     page.on('pageerror',lambda err:errors.append('guest: '+str(err)))
     await fixture.install(page)
     await page.locator('#join-room').fill(room)
