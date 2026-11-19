@@ -195,8 +195,20 @@ export function createStudioEditor(api){
  function overview(all,cats){
   const presets=CATEGORY_SUGGESTIONS.filter(s=>!cats.some(cat=>categoryKey(cat)===categoryKey(s.name)));
   const matching=search.trim()?all.filter(item=>[item.title,item.prompt,item.category].join(' ').toLocaleLowerCase('de').includes(search.toLocaleLowerCase('de'))):[];
+  const info=api.boardInfo?.()||{boards:[],id:''};
+  const targets=(info.boards||[]).filter(board=>board.id!==info.id);
+  const transferPanel=transferCategoryName&&targets.length?`<form class="se-category-transfer-form" data-se-category-transfer-form>
+    <h3>Kategorie „${escape(transferCategoryName)}“ übertragen</h3>
+    <p>Alle Fragen, Medien und Antworten werden übernommen. Das Zielquiz wird im Browser gespeichert.</p>
+    <label>Ziel-Quizbrett<select name="target-board" required>${targets.map(board=>`<option value="${escape(board.id)}">${escape(board.title)} (${escape(board.id.slice(1,7).toUpperCase())})</option>`).join('')}</select></label>
+    <label>Zielrunde<select name="target-round"><option value="1" ${editorRound===1?'selected':''}>Runde 1</option><option value="2" ${editorRound===2?'selected':''}>Runde 2</option></select></label>
+    <label>Aktion<select name="transfer-mode"><option value="copy">Kopieren (Original behalten)</option><option value="move">Verschieben (nach dem Kopieren Quelle entfernen)</option></select></label>
+    <div class="se-inline"><button class="se-primary" type="submit">Kategorie übertragen</button><button type="button" data-se-action="category-transfer-cancel">Abbrechen</button></div>
+    <small>Maximal sechs Kategorien pro Runde und sechs Fragen je Kategorie. Bestehende Quizze werden nicht stillschweigend ersetzt.</small>
+   </form>`:'';
   return `<section class="se-category-overview" aria-label="Kategorieübersicht"><div class="se-overview-head"><div><span class="se-eyebrow">Quizstruktur</span><h2>Kategorien</h2><p>Erstelle zuerst eine Kategorie, dann die Fragen darin.</p></div><button type="button" class="se-primary" data-se-action="category-form">+ Kategorie</button></div>
    ${cats.length?`<div class="se-category-grid">${cats.map(name=>categoryCard(name,true,all)).join('')}</div>`:'<p class="se-overview-empty">Noch keine Kategorie angelegt.</p>'}
+   ${transferPanel}
    ${matching.length?`<section class="se-search-results"><h3>Suchergebnisse (${matching.length})</h3>${matching.slice(0,30).map(item=>`<button type="button" data-se-action="select" data-id="${escape(item.id)}">${escape(item.category)} · ${escape(item.title)}</button>`).join('')}</section>`:''}
    ${presets.length?`<div class="se-overview-presets"><h3>Schnell anlegen</h3><p>Das sind Vorschläge – du kannst auch eigene Namen verwenden.</p><div class="se-category-grid">${presets.map(s=>categoryCard(s.name,false,all)).join('')}</div></div>`:''}
   </section>`;
