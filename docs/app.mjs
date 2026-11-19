@@ -1539,7 +1539,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const warnings=[];
   if(pending)warnings.push(pending+' offene Beitrittsanfrage(n)');
   if(unready.length)warnings.push(unready.length+' noch nicht bereit: '+unready.slice(0,5).join(', '));
-  if(warnings.length&&!confirm('Vor dem Spielstart prüfen:\\n• '+warnings.join('\\n• ')+'\\n\\nTrotzdem bewusst starten?'))return;
+  if(warnings.length&&!confirm('Vor dem Spielstart prüfen:\n• '+warnings.join('\n• ')+'\n\nTrotzdem bewusst starten?'))return;
   await game.setState(room,{started:true});view='live';schedule();notice('Quiz gestartet. Öffne die erste Frage auf dem Quizbrett.');return;
  }
  case 'view':{
@@ -1618,7 +1618,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!canHost()||!activeQuestion())return;
   if(publicState.phase==='question'&&winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
   const changed=publicState.phase!=='reveal';
-  if(changed&&!confirm('Die Frage wird als GESPIELT markiert, auch wenn sie nicht richtig beantwortet wurde.\\n\\nUngespielt zurücklegen geht stattdessen über die separate Schaltfläche. Trotzdem beenden?'))return;
+  if(changed&&!confirm('Die Frage wird als GESPIELT markiert, auch wenn sie nicht richtig beantwortet wurde.\n\nUngespielt zurücklegen geht stattdessen über die separate Schaltfläche. Trotzdem beenden?'))return;
   if(isOffline()){publicState=returnToBoardState(publicState)||publicState;if(!rehearsal)saveOfflineSession();schedule();}
   else await game.returnToBoard(room,publicState.round,activeQuestion().id);
   return;
@@ -1670,7 +1670,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
   const left=remainingBoardQuestions(publicState).length;
-  if(!confirm('Endstand prüfen und Siegerehrung starten?'+(left?'\\n\\nAchtung: '+left+' Fragen der aktuellen Runde sind noch ungespielt.':'')+'\\n\\n'+summary))return;
+  if(!confirm('Endstand prüfen und Siegerehrung starten?'+(left?'\n\nAchtung: '+left+' Fragen der aktuellen Runde sind noch ungespielt.':'')+'\n\n'+summary))return;
   await game.setState(room,{phase:'finished',finaleStep:0,presentation:null,current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null});
   return;
  }
