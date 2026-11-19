@@ -1603,17 +1603,17 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  }
  case 'sfx-mute':sfx.setMuted(!sfx.values().muted);schedule();return;
   case 'sfx-preview':if(await sfx.unlock())sfx.play(button.dataset.sfx);return;
- case 'create-offline':startOffline();return;
- case 'create-new-quiz':createNewLocalQuiz();return;
- case 'save-board':saveCurrentBoard();return;
- case 'back-to-quizzes':backToSavedQuizzes();return;
+ case 'create-offline':await startOffline();return;
+ case 'create-new-quiz':await createNewLocalQuiz();return;
+ case 'save-board':await saveCurrentBoard();return;
+ case 'back-to-quizzes':await backToSavedQuizzes();return;
  case 'host-current-board':await hostSavedQuiz(boardId);return;
  case 'host-saved-board':await hostSavedQuiz(button.dataset.boardId);return;
- case 'open-landing-board':startOffline(button.dataset.boardId);return;
- case 'new-board':newStoredBoard();return;
- case 'open-board':openStoredBoard(button.dataset.boardId);return;
- case 'rescue-board':rescueStoredBoard();return;
- case 'reload-board':reloadStoredBoard();return;
+ case 'open-landing-board':await startOffline(button.dataset.boardId);return;
+ case 'new-board':await newStoredBoard();return;
+ case 'open-board':await openStoredBoard(button.dataset.boardId);return;
+ case 'rescue-board':await rescueStoredBoard();return;
+ case 'reload-board':await reloadStoredBoard();return;
  case 'toggle-quickset':quickSetExpanded=!quickSetExpanded;schedule();return;
  case 'quick-add':case 'quick-replace':{const text=$('quick-categories')?.value||DEFAULT_CATEGORIES.join('\n');const cats=[...new Set(text.split(/\n|,/).map(x=>x.trim()).filter(Boolean))].slice(0,10);if(!cats.length)throw Error('Mindestens eine Kategorie eintragen.');let newItems=quickBoard(cats);if(action==='quick-add'){const present=new Set(quiz.questions.map(q=>q.category.trim().toLocaleLowerCase('de')+'|'+q.points));newItems=newItems.filter(q=>!present.has(q.category.trim().toLocaleLowerCase('de')+'|'+q.points));}if(!newItems.length){notice('Alle Felder dieser Kategorien sind bereits vorhanden.');return;}if(action==='quick-replace'&&quiz.questions.length&&!confirm('Alle bestehenden Fragen durch das neue Raster ersetzen?'))return;if(action==='quick-add'&&quiz.questions.length+newItems.length>180)throw Error('Das Limit von 180 Fragen wäre überschritten.');snapshotLayout();quiz.questions=action==='quick-replace'?newItems:[...quiz.questions,...newItems];quiz.categories=collectCategories(quiz.categories,quiz.questions);selected=newItems[0]?.id||selected;saveLocal();quickSetExpanded=false;schedule();notice(newItems.length+' Fragenfelder angelegt.');return;}
  case 'add-person':{if(!canHost())return;const name=prompt('Spielername (maximal 28 Zeichen):')?.trim().slice(0,28);if(!name)return;if((quiz.manualPlayers||[]).length>=24)throw Error('Maximal 24 manuell angelegte Spieler.');if(!quiz.manualPlayers)quiz.manualPlayers=[];quiz.manualPlayers.push(name);const id='manual_'+quiz.manualPlayers.length;saveLocal();scoreTarget=id;if(isOffline()){publicState.manualPlayers=manualPlayerLabels(quiz);schedule();}else await game.setState(room,{['manualPlayers/'+id]:name});return;}
