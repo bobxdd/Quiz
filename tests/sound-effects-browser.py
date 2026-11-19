@@ -55,6 +55,7 @@ async def main():
   await host.locator('.top-nav [data-view="teams"]').click()
   alice=await join(ctx,host,room,'Alice')
   alice.on('pageerror',lambda e:errors.append('guest: '+str(e)))
+  await host.locator('[data-action="start-game"]').click()
   await host.locator('.top-nav [data-view="live"]').click()
   await host.locator('.bq-board-scene .tile').first.click()
   await host.locator('[data-action="uncover-question"]').click()
