@@ -572,6 +572,13 @@ test('an outstanding buzzer is never bypassed by manual solution or board naviga
   );
   await assert.rejects(host.returnToBoard(room,1,q.id),/Offener Buzzer/);
   await assert.rejects(host.cancelQuestion(room,1,q.id),/offenen Buzzer/);
+  await host.updateCurrent(room,1,q.id,{phase:'paused',deadline:0,pausedRemaining:12000},['question']);
+  await assert.rejects(
+   host.updateCurrent(room,1,q.id,{phase:'reveal',current:publicQuestion(q,true),deadline:0},['paused']),
+   /Zuerst Richtig oder Falsch/
+  );
+  await assert.rejects(host.returnToBoard(room,1,q.id),/Offener Buzzer/);
+  await host.updateCurrent(room,1,q.id,{phase:'question',deadline:0,pausedRemaining:0},['paused']);
   assert.equal(host.data.public.board[q.id].used,true);
   await host.clearBuzzer(room,1);
   const cancelled=await host.cancelQuestion(room,1,q.id);
