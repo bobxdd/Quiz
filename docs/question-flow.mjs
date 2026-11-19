@@ -18,7 +18,7 @@ export function selectingTeam(state){
 export function resetBoardGameState(state,board,roster={}){
  return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
-  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},
+  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
   selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
 }
