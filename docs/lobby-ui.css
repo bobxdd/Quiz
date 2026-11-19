@@ -119,3 +119,28 @@
  .bq-reconnect-actions>.btn{flex:1 1 auto}
  .bq-connection-audit .bq-auxiliary .formgrid{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Gameplay fairness: public rules and reserved chooser are meaningful
+   interaction states, not ephemeral toast notifications. */
+.bq-lobby-rules{
+ margin:12px 0 16px;
+ border:1px solid var(--line,#42556c);
+ border-radius:12px;
+ padding:10px 14px;
+ background:rgba(16,28,45,.42);
+}
+.bq-lobby-rules>summary{cursor:pointer;font-weight:750;line-height:1.5}
+.bq-lobby-rules-body{padding-top:10px;display:grid;gap:8px}
+.bq-lobby-rules-body p{margin:0;line-height:1.5;max-width:80ch}
+.bq-selection-turn>.btn{flex:0 1 auto;min-height:42px}
+.bq-board-scene .tile.bq-tile-reserved{
+ outline:3px solid #e4bd72;
+ outline-offset:-4px;
+ box-shadow:inset 0 0 0 2px rgba(255,226,140,.28);
+}
+.bq-board-scene .tile.bq-tile-reserved .tile-points:after{
+ content:'  ✓';font-size:.55em;vertical-align:middle;
+}
+@media(max-width:540px){
+ .bq-selection-turn>.btn{width:100%;max-width:100%;white-space:normal}
+}
