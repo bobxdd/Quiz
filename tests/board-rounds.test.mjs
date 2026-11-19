@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion,pageBoardColumns} from '../docs/core.mjs';
 import {changeSelectedQuestions} from '../docs/editor-workflows.mjs';
 import {boardLayoutIssues,roundCategories,roundQuestions} from '../docs/category-model.mjs';
-import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair,makeSelectionTurn,selectingTeam,resetBoardGameState} from '../docs/question-flow.mjs';
+import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from '../docs/question-flow.mjs';
 
 const questions=[
  {id:'first',category:'Champions',points:100,prompt:'Erste geheime Frage',answer:'Antwort eins'},
@@ -123,4 +123,36 @@ test('restarting a completed game resets both boards, turn order and every previ
  assert.equal(next.questionPick,null);assert.equal(next.presentation,null);
  assert.equal(next.board.first.used,false);assert.equal(next.board.second.used,false);
  assert.deepEqual(p,before);
+});
+
+test('a no-verdict cancellation restores a question, preserves the chooser and does not reuse old round IDs',()=>{
+ const p=state();p.selectionTurn=makeSelectionTurn(p,{alice:{team:'t1'},bob:{team:'t2'}});
+ const question=quiz().questions[0];
+ const covered=openQuestionState(p,{expectedRound:0,question,playerQuestion:publicQuestion(question),covered:true});
+ const shown={...covered,phase:'question',current:publicQuestion(question)};
+ const cancelled=cancelQuestionState(shown);
+ assert.equal(cancelled.phase,'board');
+ assert.equal(cancelled.current,null);
+ assert.equal(cancelled.used.first,undefined);
+ assert.equal(cancelled.board.first.used,false);
+ assert.equal(cancelled.round,1,'keep round number to invalidate stale guest packets');
+ assert.equal(selectingTeam(cancelled),'t1');
+ assert.equal(openQuestionState(cancelled,{expectedRound:0,question,playerQuestion:publicQuestion(question)}),null);
+ const reopened=openQuestionState(cancelled,{expectedRound:1,question,playerQuestion:publicQuestion(question)});
+ assert.equal(reopened.round,2);
+ assert.deepEqual(shown.used,{first:true},'original remains untouched');
+ for(const phase of ['reveal','review'])assert.equal(cancelQuestionState({...shown,phase}),null);
+});
+
+test('selection override only advances on an empty board without altering score, answers or turn rights in active rounds',()=>{
+ const p=state();p.selectionTurn=makeSelectionTurn(p,{alice:{team:'t1'},bob:{team:'t2'}});
+ const shifted=skipSelectionTurn(p);
+ assert.equal(selectingTeam(p),'t1');
+ assert.equal(selectingTeam(shifted),'t2');
+ assert.deepEqual(shifted.scores,p.scores);
+ assert.deepEqual(shifted.used,p.used);
+ assert.equal(skipSelectionTurn({...p,questionPick:{qid:'first'}}),null);
+ assert.equal(skipSelectionTurn({...p,phase:'question'}),null);
+ assert.equal(skipSelectionTurn({...p,scoreMode:'individual'}),null);
+ assert.equal(skipSelectionTurn({...p,selectionTurn:{order:['t1'],index:0}}),null);
 });
