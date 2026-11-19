@@ -101,10 +101,12 @@ test('team selection rotates after a completed field and across boards, independ
  assert.deepEqual(finished.scores,{t1:600,t2:-50});
 });
 
-test('a reserved team selection cannot be replaced by another field',()=>{
+test('a stale guest selection reservation cannot prevent the host from choosing a different field',()=>{
  const p=state();p.questionPick={qid:'other',round:0,team:'t1'};
  const q=quiz().questions[0];
- assert.equal(openQuestionState(p,{expectedRound:0,question:q,playerQuestion:publicQuestion(q),covered:true}),null);
+ const chosen=openQuestionState(p,{expectedRound:0,question:q,playerQuestion:publicQuestion(q),covered:true});
+ assert.equal(chosen.current.id,q.id);
+ assert.equal(chosen.questionPick,null);
  assert.equal(makeSelectionTurn({...p,scoreMode:'individual'}),null);
 });
 
