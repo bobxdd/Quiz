@@ -48,10 +48,11 @@ function queueBoardFlush(){
 async function confirmBoardSave(){
  clearTimeout(boardFlushTimer);boardFlushTimer=null;
  if(boardStore.kind!=='indexeddb')return true;
- if(boardSaving)return boardSaving;
+ if(boardSaving){const previous=await boardSaving;return previous&&(boardStore.hasPending()?confirmBoardSave():true);}
  boardSaving=(async()=>{
   try{
    await boardStore.flush();
+   if(boardStore.hasPending())return confirmBoardSave();
    if(!boardConflict&&isOffline())saveState='Lokal gesichert';
    return true;
   }catch(err){
@@ -258,7 +259,29 @@ function schedule(){if(renderQueued)return;renderQueued=true;requestAnimationFra
 function btn(label,action,cls='',attrs=''){return `<button type="button" class="btn ${cls}" data-action="${action}" ${attrs}>${label}</button>`;}
 function hasValidRoom(value){return /^[A-HJ-NP-Z2-9]{16}$/.test(value);}
 async function initialize(){if(game)return game;const module=await import('./peer-client.mjs');game=new module.PeerGame();await game.init();return game;}
-function saveLocal(){try{if(isOffline()){if(!boardId)throw Error('Kein Quizbrett geöffnet.');if(boardConflict)throw Error('Ein anderer Tab hat dieses Brett verändert. Bitte Änderungen als Kopie sichern oder gespeicherte Version laden.');boardRevision=persistBoard(localStorage,boardId,boardRevision,normalizedQuiz(quiz));}else{queueHostCloudSave();if(!saveLocalHostQuiz(room,quiz))throw Error('Lokale Sofortsicherung fehlgeschlagen. Zweite Sicherung wird versucht.');}saveState=isOffline()?'Lokal gesichert':'Im Host-Browser gesichert';return true}catch(err){const message=String(err?.message||'Quizbrett konnte nicht gespeichert werden.');if(/anderen Tab|anderer Tab/.test(message))boardConflict=true;saveState=boardConflict?'KONFLIKT – als Kopie sichern!':'SPEICHERFEHLER – Backup exportieren!';notice(message.slice(0,220));return false;}}
+function saveLocal(){
+ try{
+  if(isOffline()){
+   if(!boardId)throw Error('Kein Quizbrett geöffnet.');
+   if(boardConflict)throw Error('Ein anderer Tab hat dieses Brett verändert. Bitte Änderungen als Kopie sichern oder gespeicherte Version laden.');
+   boardRevision=persistBoard(boardStore,boardId,boardRevision,normalizedQuiz(quiz));
+   if(boardStore.kind==='indexeddb'){
+    if(boardStore.hasPending())queueBoardFlush();
+    else saveState='Lokal gesichert';
+   }else saveState='Lokal gesichert';
+  }else{
+   queueHostCloudSave();
+   if(!saveLocalHostQuiz(room,quiz))throw Error('Lokale Sofortsicherung fehlgeschlagen. Zweite Sicherung wird versucht.');
+   saveState='Im Host-Browser gesichert';
+  }
+  return true;
+ }catch(err){
+  const message=String(err?.message||'Quizbrett konnte nicht gespeichert werden.');
+  if(/anderen Tab|anderer Tab/.test(message))boardConflict=true;
+  saveState=boardConflict?'KONFLIKT – als Kopie sichern!':'SPEICHERFEHLER – Backup exportieren!';
+  notice(message.slice(0,220));return false;
+ }
+}
 function loadLocal(){const saved=loadLocalHostQuiz(room);quiz=saved?normalizedQuiz(saved.quiz):emptyQuiz();selected=quiz.questions[0]?.id||'';}
 /* The saved board is the only source of truth for a newly hosted quiz.
  * Never replace the local board with an empty online draft or edit it from the lobby. */
