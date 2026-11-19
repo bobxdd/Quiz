@@ -440,3 +440,65 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 .bq-question-scene:not(:has(.bq-map-viewport)) .bq-question-panel .stage{
  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
 }
+
+/* UX visual regression audit 2026-11: do not discard the explanation just
+   because the answer needs to share a compact screen with the question.
+   Long descriptions have a clear, keyboard-scrollable LOCAL region. */
+.bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  overscroll-behavior:contain;scrollbar-width:thin;
+  overflow-x:hidden;overflow-y:auto;overflow-wrap:anywhere;
+  border:1px solid rgba(195,221,212,.38);
+}
+.bq-question-scene .bq-answer-explanation{
+  display:block!important;font-size:clamp(13px,1.2vw,16px);
+  line-height:1.48;overflow-wrap:anywhere;white-space:normal
+}
+.bq-question-scene .bq-answer-view:focus-visible{
+  outline:3px solid #e7e1b9;outline-offset:-3px
+}
+/* The original 22cqh/135px solution card, combined with display:none,
+   hid all reasoning on phones. Preserve usable text and its scroll thumb. */
+@media(max-width:880px){
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  min-height:min(90px,20cqh);
+  max-height:min(32cqh,200px);
+ }
+ .bq-question-scene .bq-stage-is-answer .bq-answer-image img{
+  max-height:clamp(52px,13cqh,108px)
+ }
+}
+@media(max-width:540px){
+ .bq-question-scene .bq-stage-is-answer>.bq-answer-view{
+  max-height:min(37cqh,200px);
+ }
+ .bq-question-scene .bq-action-bar{
+  max-height:min(33dvh,134px);scrollbar-width:thin
+ }
+ .bq-question-scene .bq-action-bar>.btn,
+ .bq-question-scene .bq-action-bar>.bq-auxiliary>summary{
+  min-height:40px;padding:7px 9px;line-height:1.25
+ }
+ .bq-question-scene .bq-score-footer{
+  min-height:54px;max-height:61px;
+  padding:4px 7px;
+ }
+ .bq-question-scene .bq-score-items{
+  max-height:none;overflow:visible;
+ }
+}
+/* The scoreboard pages are a core game action, not a tiny decorative icon.
+   The previous 23x22px controls were harder to tap on phones. */
+.bq-score-pager button{
+ min-width:30px!important;width:30px!important;
+ min-height:30px!important;height:30px!important;
+ touch-action:manipulation
+}
+.bq-score-pager{gap:4px;align-items:center}
+@media(max-width:470px){
+ .bq-board-scene .bq-score-footer{min-height:55px;max-height:67px}
+ .bq-score-footer .bq-score-heading{min-width:69px}
+ .bq-score-footer .bq-score-items{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 4px}
+ .bq-score-footer .bq-score-item>span{font-size:11px}
+}
+/* Explicit keyboard focus on the independently scrolling answer panel. */
+.bq-question-scene .bq-answer-view:focus{scroll-behavior:auto}
