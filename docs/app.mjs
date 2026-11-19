@@ -1114,7 +1114,7 @@ function beginRehearsal(){
  rehearsal={rounds:new Map(),compact:false,media:null,checking:false,previous:{publicState,questionHistory,buzzers,responses,roster,selected}};
  publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
   board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
-  used:{},playerScores:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
+  used:{},playerScores:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
  roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
  view='present';boardPage=0;previewRevealed=false;schedule();
 }
@@ -1127,7 +1127,7 @@ function endRehearsal(){
 }
 function startRehearsalQuestion(q){
  if(q.type===TEAM_EMOJI){
-  rehearsal.emoji=newTeamEmojiRound(q,publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
+  rehearsal.emoji=newTeamEmojiRound({...q,points:publicState.current.points},publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
   rehearsal.emojiActing='probe_1';emojiDraft=null;
   publicState.teamEmoji=publicTeamEmoji(rehearsal.emoji);
  }else rehearsal.rounds.set(q.id,{state:publicState,buzzers:{},answers:{}});
@@ -1142,10 +1142,9 @@ function rehearsalRound(q){
  return demo;
 }
 function rehearsalTotals(){
- return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>({
-  name:scoreMode(publicState)==='individual'?player.name:publicState.teams[player.team],
-  points:scoreMode(publicState)==='individual'?publicState.playerScores[id]?.total||0:publicState.scores[player.team]||0
- }));
+ if(scoreMode(publicState)==='team')
+  return Object.entries(publicState.teams||{}).map(([id,name])=>({name,points:publicState.scores[id]||0}));
+ return Object.entries(REHEARSAL_PLAYERS).map(([id,player])=>({name:player.name,points:publicState.playerScores[id]?.total||0}));
 }
 function renderRehearsalControls(q){
  const demo=rehearsalRound(q),p=demo.state;
@@ -1170,8 +1169,8 @@ function renderRehearsalControls(q){
   ${audit.errors.length?`<p class="small bad">Quizcheck · ${audit.errors.length} offene Punkte im Editor</p>`:''}
   <div class="row" aria-label="Simulierte Spieleraktionen">${submissions}</div>
   ${winner?`<div class="row"><strong>${e(winner.name)} am Buzzer</strong>
-   ${btn('Richtig · +'+e(q.points),'probe-correct','primary')}
-   ${btn('Falsch · −'+e(q.points/2),'probe-wrong','danger')}</div>`:''}
+   ${btn('Richtig · +'+e(p.current.points),'probe-correct','primary')}
+   ${btn('Falsch · −'+e(p.current.points/2),'probe-wrong','danger')}</div>`:''}
   ${!buzzer&&p.phase==='question'?btn('Antwortübersicht öffnen','probe-review','small',Object.keys(demo.answers).length?'':'disabled'):''}
   <ul class="bq-probe-scores" aria-label="Punktestand der Generalprobe">${points}</ul>
  </section>`;
@@ -1230,9 +1229,15 @@ async function rehearse(action,button){
    demo.state=judged.state;demo.buzzers=judged.buzzers;
    if(result==='correct')Object.assign(demo.state,buildRevealPatch(q));
   }else if(player&&p.answerReview?.entries?.[id]?.revealed){
+   const official=scoreMode(p)==='team'&&p.writtenTeamRepresentatives?.[p.round]?.[player.team];
+   if(official&&official!==id)return;
    const before=p.playerScores[id]?.rounds?.[p.round]?.delta||0;
    p.playerScores[id]=updatePlayerScore(p.playerScores[id],{kind:'judgement',round:p.round,questionId:q.id,points:p.current.points,result,at:Date.now()});
-   if(scoreMode(p)==='team')p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
+   if(scoreMode(p)==='team'){
+    p.writtenTeamRepresentatives??={};p.writtenTeamRepresentatives[p.round]??={};
+    p.writtenTeamRepresentatives[p.round][player.team]=id;
+    p.scores[player.team]+=p.playerScores[id].rounds[p.round].delta-before;
+   }
   }
  }
  publicState=demo.state;
