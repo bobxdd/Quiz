@@ -542,6 +542,13 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 @media(max-height:540px){
  body.bq-game-mode:has(.bq-question-scene){overflow-x:hidden!important;overflow-y:auto!important}
  body.bq-game-mode:has(.bq-question-scene) .shell{height:auto!important;min-height:100dvh!important;overflow:visible!important}
+ /* Ancestor fixed-height/overflow restrictions otherwise clip a tall stage
+    even when the inner panel itself has height:auto. */
+ body.bq-game-mode:has(.bq-question-scene) .workspace,
+ body.bq-game-mode:has(.bq-question-scene) .page-live.bq-session-page{
+  height:auto!important;min-height:0!important;overflow:visible!important;
+  flex:0 0 auto!important;
+ }
  .bq-question-scene{height:auto!important;min-height:calc(100dvh - 90px)!important;overflow:visible!important}
  .bq-question-scene .bq-question-body,
  .bq-question-scene .bq-answer-review-body,
