@@ -43,6 +43,23 @@ export function returnToBoardState(state){
  }
  return !remainingBoardQuestions(next).length&&canAdvanceBoard(next)?advanceBoardState(next):next;
 }
+/** Explicitly cancel an unscored question. Never recycle round numbers:
+ * delayed guest packets must not accidentally apply to the next question. */
+export function cancelQuestionState(state){
+ if(!state?.current||!['ready','question','paused'].includes(state.phase))return null;
+ return returnToBoardState({...state,phase:'ready'});
+}
+/** Voluntary host override for a disconnected / inactive selecting team.
+ * Only moves the choice token, never gives points or advances the question. */
+export function skipSelectionTurn(state){
+ if(state?.phase!=='board'||state.questionPick||state.scoreMode==='individual')return null;
+ const turn=state.selectionTurn;
+ if(!Array.isArray(turn?.order))return null;
+ const order=turn.order.filter(team=>own(state.teams,team));
+ if(order.length<2)return null;
+ const index=Number.isSafeInteger(turn.index)&&turn.index>=0?turn.index:0;
+ return {...state,selectionTurn:{...turn,index:index+1}};
+}
 export function validQuestionPair(state,question){
   const id=question?.id;
   if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id))return false;
