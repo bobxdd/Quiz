@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion,pageBoardColumns} from '../docs/core.mjs';
 import {changeSelectedQuestions} from '../docs/editor-workflows.mjs';
 import {boardLayoutIssues,roundCategories,roundQuestions} from '../docs/category-model.mjs';
-import {openQuestionState,returnToBoardState,advanceBoardState,validQuestionPair,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from '../docs/question-flow.mjs';
+import {openQuestionState,returnToBoardState,canAdvanceBoard,advanceBoardState,validQuestionPair,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from '../docs/question-flow.mjs';
 
 const questions=[
  {id:'first',category:'Champions',points:100,prompt:'Erste geheime Frage',answer:'Antwort eins'},
@@ -155,4 +155,17 @@ test('selection override only advances on an empty board without altering score,
  assert.equal(skipSelectionTurn({...p,phase:'question'}),null);
  assert.equal(skipSelectionTurn({...p,scoreMode:'individual'}),null);
  assert.equal(skipSelectionTurn({...p,selectionTurn:{order:['t1'],index:0}}),null);
+});
+
+test('Second board cannot be reached through the normal action while first board has unplayed questions',()=>{
+ const p=state();p.selectionTurn=makeSelectionTurn(p,{alice:{team:'t1'},bob:{team:'t2'}});
+ assert.equal(canAdvanceBoard(p),false);
+ assert.equal(advanceBoardState(p),null);
+ assert.equal(canAdvanceBoard(p,{force:true}),true,'host explicitly acknowledges an early finish');
+ assert.equal(advanceBoardState(p,{force:true}).boardRound,2);
+ assert.equal(state().boardRound,1,'explicit override must not mutate the input');
+ const q=quiz().questions[0],opened=openQuestionState(p,{expectedRound:0,question:q,playerQuestion:publicQuestion(q)});
+ const next=returnToBoardState({...opened,phase:'reveal'});
+ assert.equal(next.boardRound,2,'normal transition happens immediately after the last first-board field');
+ assert.equal(advanceBoardState(next),null,'round two may not be started twice');
 });
