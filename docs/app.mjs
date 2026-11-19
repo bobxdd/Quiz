@@ -302,7 +302,7 @@ function backToSavedQuizzes(){
 function createNewLocalQuiz(){
  if(role!=='landing'&&!isOffline())throw Error('Ein neues Quiz kann nur außerhalb eines laufenden Spielraums erstellt werden.');
  if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das bisherige Quiz konnte nicht gespeichert werden.');}
- const created=createBoard(localStorage,emptyQuiz(),makeBoardId);
+ const created=createBoard(boardStore,emptyQuiz(),makeBoardId);
  room='LOCAL';role='host';view='editor';
  applyBoardWorkspace(created);loadOfflineBoardState();
  history.replaceState(null,'',location.pathname);schedule();notice('Neues Quiz angelegt. Fragen erstellen und anschließend speichern.');
@@ -318,7 +318,7 @@ async function hostSavedQuiz(id){
   }
   // loadBoard validates the selected stable id, directory and revision. Do not
   // silently host the last edited quiz if the requested saved board is missing.
-  const record=loadBoard(localStorage,id);
+  const record=loadBoard(boardStore,id);
   const source=normalizedQuiz(record.quiz);
   for(const question of source.questions){if(question.scene)reconcileQuestion(question);}
   const audit=quizAudit(source);
@@ -352,11 +352,11 @@ function backupFilename(prefix='BrainQuiz_Host'){
  const location=isOffline()?boardId.slice(1,8):room;
  return prefix+'_'+title+'_'+(location||'LOKAL')+'.brainquiz.json';
 }
-function saveOfflineSession(){if(rehearsal||!isOffline()||!publicState||!boardId)return;try{localStorage.setItem('bq-session-LOCAL-'+boardId,JSON.stringify({used:publicState.used||{},boardRound:boardRoundOf(publicState),scores:publicState.scores||{},playerScores:publicState.playerScores||{},round:publicState.round||0,questionHistory,buzzerBlocked:publicState.buzzerBlocked||{}}));}catch{notice('Spielstand konnte nicht gespeichert werden. Bitte Speicherplatz prüfen.');}}
-function loadOfflineSession(){try{const raw=JSON.parse(localStorage.getItem('bq-session-LOCAL-'+boardId)||'{}');if(!raw||typeof raw!=='object')return {};const valid=new Set(quiz.questions.map(q=>q.id));const used=Object.fromEntries(Object.entries(raw.used||{}).filter(([id,v])=>valid.has(id)&&v===true));return {used,boardRound:boardRoundOf(raw),scores:raw.scores||{},playerScores:raw.playerScores&&typeof raw.playerScores==='object'?raw.playerScores:{},questionHistory:raw.questionHistory&&typeof raw.questionHistory==='object'?raw.questionHistory:{},buzzerBlocked:raw.buzzerBlocked&&typeof raw.buzzerBlocked==='object'?raw.buzzerBlocked:{},round:Math.max(0,Math.min(999999,Number(raw.round)||0))};}catch{return {};}}
-function startOffline(explicitBoardId=''){if(explicitBoardId&&!boardList(localStorage).some(b=>b.id===explicitBoardId))throw Error('Das ausgewählte Quizbrett wurde nicht gefunden. Es wurde kein anderes geöffnet.');let preferred=explicitBoardId;try{if(!preferred)preferred=sessionStorage.getItem('bq-board-current-tab')||'';}catch{}const record=resumeBoard(localStorage,emptyQuiz,makeBoardId,preferred);if(explicitBoardId)selectBoard(localStorage,record.id);room='LOCAL';role='host';view='editor';applyBoardWorkspace(record);loadOfflineBoardState();history.replaceState(null,'',location.pathname);notice('Quizbrett „'+quiz.title+'“ geöffnet.');schedule();}
+function saveOfflineSession(){if(rehearsal||!isOffline()||!publicState||!boardId)return;try{boardStore.setItem('bq-session-LOCAL-'+boardId,JSON.stringify({used:publicState.used||{},boardRound:boardRoundOf(publicState),scores:publicState.scores||{},playerScores:publicState.playerScores||{},round:publicState.round||0,questionHistory,buzzerBlocked:publicState.buzzerBlocked||{}}));}catch{notice('Spielstand konnte nicht gespeichert werden. Bitte Speicherplatz prüfen.');}}
+function loadOfflineSession(){try{const raw=JSON.parse(boardStore.getItem('bq-session-LOCAL-'+boardId)||'{}');if(!raw||typeof raw!=='object')return {};const valid=new Set(quiz.questions.map(q=>q.id));const used=Object.fromEntries(Object.entries(raw.used||{}).filter(([id,v])=>valid.has(id)&&v===true));return {used,boardRound:boardRoundOf(raw),scores:raw.scores||{},playerScores:raw.playerScores&&typeof raw.playerScores==='object'?raw.playerScores:{},questionHistory:raw.questionHistory&&typeof raw.questionHistory==='object'?raw.questionHistory:{},buzzerBlocked:raw.buzzerBlocked&&typeof raw.buzzerBlocked==='object'?raw.buzzerBlocked:{},round:Math.max(0,Math.min(999999,Number(raw.round)||0))};}catch{return {};}}
+function startOffline(explicitBoardId=''){if(explicitBoardId&&!boardList(boardStore).some(b=>b.id===explicitBoardId))throw Error('Das ausgewählte Quizbrett wurde nicht gefunden. Es wurde kein anderes geöffnet.');let preferred=explicitBoardId;try{if(!preferred)preferred=sessionStorage.getItem('bq-board-current-tab')||'';}catch{}const record=resumeBoard(boardStore,emptyQuiz,makeBoardId,preferred);if(explicitBoardId)selectBoard(boardStore,record.id);room='LOCAL';role='host';view='editor';applyBoardWorkspace(record);loadOfflineBoardState();history.replaceState(null,'',location.pathname);notice('Quizbrett „'+quiz.title+'“ geöffnet.');schedule();}
 function isOffline(){return room==='LOCAL';}
-function newStoredBoard(){if(!isOffline())throw Error('Ein neues lokales Brett lässt sich nur im lokalen Editor anlegen.');studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const title=prompt('Name des neuen Quizbretts (maximal 100 Zeichen):','Neues Quizbrett')?.trim().slice(0,100);if(!title)return;const next={...emptyQuiz(),title};const created=createBoard(localStorage,next,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();schedule();notice('Neues Quizbrett „'+title+'“ angelegt. Das vorherige bleibt erhalten.');}
+function newStoredBoard(){if(!isOffline())throw Error('Ein neues lokales Brett lässt sich nur im lokalen Editor anlegen.');studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const title=prompt('Name des neuen Quizbretts (maximal 100 Zeichen):','Neues Quizbrett')?.trim().slice(0,100);if(!title)return;const next={...emptyQuiz(),title};const created=createBoard(boardStore,next,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();schedule();notice('Neues Quizbrett „'+title+'“ angelegt. Das vorherige bleibt erhalten.');}
 function snapshotLayout(){const state=JSON.stringify(quiz);undoStack.push(state);let bytes=undoStack.reduce((n,x)=>n+x.length,0);while(undoStack.length>1&&(undoStack.length>35||bytes>12_000_000)){bytes-=undoStack.shift().length;}redoStack=[];}
 function undoLayout(direction){const src=direction==='undo'?undoStack:redoStack,dst=direction==='undo'?redoStack:undoStack;if(!src.length)return;dst.push(JSON.stringify(quiz));quiz=normalizedQuiz(JSON.parse(src.pop()));if(!quiz.questions.some(q=>q.id===selected))selected=quiz.questions[0]?.id||'';editingBlock='';saveLocal();schedule();}
 function chosenBlock(){return currentQuestion()?.blocks?.find(b=>b.id===editingBlock)||null;}
@@ -699,7 +699,7 @@ function savedQuizzesStart(drafts,workspaceError,hostCode){
 }
 function landing(){
  const hostCode=localStorage.getItem('bq-last-host')||'';
- let drafts=[],workspaceError='';try{drafts=boardList(localStorage);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
+ let drafts=[],workspaceError='';try{drafts=boardList(boardStore);}catch(err){workspaceError=err?.message||'Quizbrett-Verzeichnis konnte nicht gelesen werden.';}
  const invite=hasValidRoom(roomFromLink);
  return `<div class="start-shell"><header class="start-head"><div class="brand"><div class="logo">B</div><div><strong>BrainQuiz Studio</strong><small>Version ${VERSION}</small></div></div></header>
  <main class="start-main"><h1>${invite?'Quiz beitreten':'Quiz erstellen oder beitreten'}</h1>
@@ -1500,12 +1500,12 @@ async function hostResume(){const ms=publicState.pausedRemaining||0;await game.u
 function makeQuestion(){return normalizedQuiz({questions:[{id:uid(),roundMode:'buzzer',category:'Neue Kategorie',title:'Neue Frage',type:'text',points:100,prompt:'',answer:'',explanation:'',cropX:50,cropY:50,zoom:3,icons:['','','','',''],abilityNames:ABILITIES,orderItems:[],seconds:0,hints:['','','','']}] ,teams:quiz.teams,title:quiz.title}).questions[0]}
 const studio=createStudioEditor({
  getQuiz:()=>quiz,getQuestion:()=>currentQuestion(),setSelected:id=>{selected=id},
- boardInfo:()=>({id:boardId,title:quiz.title,isLocal:isOffline(),conflict:boardConflict,boards:isOffline()?boardList(localStorage):[]}),
+ boardInfo:()=>({id:boardId,title:quiz.title,isLocal:isOffline(),conflict:boardConflict,boards:isOffline()?boardList(boardStore):[]}),
  transferCategory:options=>{
   if(!isOffline()||!boardId||boardConflict)throw Error('Kategorien lassen sich nur im lokalen Editor ohne Speicherkonflikt übertragen.');
   studio.flush?.();
   if(!saveLocal())throw Error('Zuerst das Ausgangsquiz sicher speichern.');
-  const result=transferCategoryBetweenBoards(localStorage,{
+  const result=transferCategoryBetweenBoards(boardStore,{
    sourceId:boardId,expectedSourceRevision:boardRevision,targetId:options.targetId,
    category:options.category,sourceRound:options.sourceRound,targetRound:options.targetRound,
    move:options.move,makeQuestionId:uid
@@ -1734,7 +1734,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   return;
  }
  case 'create':await createRoom();return;
- case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(projectorChannel){projectorChannel.postMessage({t:'closed'});projectorChannel.close();projectorChannel=null;projectorRoom='';}if(!active&&quiz.questions.length){try{createBoard(localStorage,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
+ case 'leave-host-room':{if(!canHost()||isOffline())return;const active=isPublished();const msg=waitingInLobby()?'Diese Lobby schließen und alle Teilnehmer trennen? Das gespeicherte Quiz bleibt unter „Meine Quizze“.':active?'Dieses laufende Quiz für alle Teilnehmer beenden und den Raum verlassen? Der Spielstand ist danach nicht mehr fortsetzbar.':'Diese Lobby ohne Quizstart schließen? Alle Teilnehmer werden getrennt; dein Entwurf bleibt als Host-Sicherung erhalten.';if(!confirm(msg))return;const oldRoom=room;let copiedDraft=false;if(projectorChannel){projectorChannel.postMessage({t:'closed'});projectorChannel.close();projectorChannel=null;projectorRoom='';}if(!active&&quiz.questions.length){try{createBoard(boardStore,normalizedQuiz(quiz),makeBoardId);copiedDraft=true;}catch(err){throw Error('Entwurf konnte nicht als lokales Quizbrett gesichert werden. Die Lobby bleibt geöffnet: '+(err?.message||err));}}clearTimeout(cloudTimer);cloudTimer=null;cloudDirty=false;hostCloudReady=false;try{await cloudWriteTail}catch{}await game.deleteRoom(oldRoom);stopGuestListeners();game.clearWatchers();game=null;localStorage.removeItem('bq-last-host');localStorage.removeItem('bq-published-'+oldRoom);room='';role='landing';view='start';publicState=null;members={};roster={};presence={};responses={};buzzers={};messages={};connected=false;history.replaceState(null,'',location.pathname);schedule();notice(active?'Spielraum geschlossen.':copiedDraft?'Lobby geschlossen. Der Entwurf liegt unter deinen lokalen Quizbrettern.':'Lobby geschlossen.');return;}
   case 'resume':{const code=localStorage.getItem('bq-last-host');if(!code)throw Error('Kein vorheriger Hostraum gespeichert.');await enterRoom(code);return;}
  case 'start-game':{
   if(!canHost()||isOffline()||!canArrangeLobby(publicState))throw Error('Spielstart ist nur vor der ersten Frage möglich.');
@@ -1921,7 +1921,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!confirm('Alle Buzzer, Antworten, Spielrunden und Punkte zurücksetzen? Das Quiz im Editor bleibt erhalten.'))return;
   boardPage=0;scorePage=0;questionHistory={};buzzers={};responses={};picks={};
   const next=resetBoardGameState(publicState,buildPublicBoard(quiz),roster);
-  if(isOffline()){localStorage.removeItem('bq-session-LOCAL-'+boardId);publicState=next;schedule();return;}
+  if(isOffline()){boardStore.removeItem('bq-session-LOCAL-'+boardId);publicState=next;schedule();return;}
   await game.clearRoomEvents(room);await game.replacePublic(room,next);return;
  }
  default:return;}}
@@ -1934,7 +1934,7 @@ async function handleUpload(input){const kind=input.dataset.image,file=input.fil
  saveLocal();schedule();notice('Bild verarbeitet und lokal gespeichert.');}
 async function handleBlockUpload(input){const b=chosenBlock(),file=input.files?.[0];if(!b||b.type!=='image'||!file)return;const q=currentQuestion();snapshotLayout();const data=await optimizeImage(file,850,120000);b.image=data;b.alt=b.alt||file.name.replace(/\.[^.]+$/,'').slice(0,120);const total=q.blocks.reduce((sum,x)=>sum+(x.image?.length||0),0);if(total>780000){undoLayout('undo');throw Error('Bildmenge für eine Frage überschreitet 780 KB. Bitte weniger oder kleinere Bilder nutzen.');}saveLocal();schedule();notice('Bild optimiert und im Fragenlayout gespeichert.');}
 async function handleAudioUpload(input){const q=currentQuestion(),file=input.files?.[0];if(!q||!file)return;notice('Audio wird lokal verarbeitet …');q.audio=await optimizeAudio(file,q.audioStart,q.audioDuration);saveLocal();schedule();notice('Audioclip verarbeitet, ohne Original-Metadaten gespeichert.');}
-async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(localStorage,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
+async function handleImport(input){if(isPublished())throw Error('Nach der Veröffentlichung können keine weiteren Fragen importiert werden.');const file=input.files?.[0];if(!file)return;if(file.size>8_000_000)throw Error('Host-Quizdatei zu groß (max. 8 MB).');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.questions))throw Error('Datei enthält keine gültige Quiz-Fragensammlung.');const imported=normalizedQuiz(raw);if(isOffline()){studio.flush?.();if(!saveLocal())throw Error('Das aktuelle Quizbrett konnte nicht gespeichert werden.');const created=createBoard(boardStore,imported,makeBoardId);applyBoardWorkspace(created);loadOfflineBoardState();editorSearch='';view='editor';schedule();notice('Host-Quiz als eigenes Quizbrett importiert. Vorheriges Brett bleibt erhalten.');return;}if(!confirm('Quizbrett „'+quiz.title+'“ im aktuellen Live-Raum durch diese Datei ersetzen? Vorher wird automatisch ein Backup heruntergeladen.'))return;safeDownload(backupFilename('BrainQuiz_Vor_Import'),JSON.stringify(normalizedQuiz(quiz),null,2));snapshotLayout();quiz=imported;selected=quiz.questions[0]?.id||'';editingBlock='';previewOpen=false;previewRevealed=false;editorSearch='';if(!saveLocal())throw Error('Importiert, aber Speichern fehlgeschlagen. Quiz als Datei exportieren.');view='editor';schedule();notice('Host-Quiz importiert. Für Teilnehmer muss es noch live veröffentlicht werden.');}
 function roundTimerMarkup(){
  const p=publicState,q=activeQuestion();
  if(!q||roundMode(q)!=='written'||!['question','paused'].includes(p?.phase)||!(p.deadline||p.pausedRemaining))return '';
@@ -1994,7 +1994,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('online',()=>{if(role==='guest'&&!connected)void game?.retryGuestNow?.().catch(()=>{});});
 window.addEventListener('storage',event=>{
  if(!isOffline()||!boardId||event.key!=='bq-board-workspace-'+boardId)return;
- try{const current=loadBoard(localStorage,boardId);if(current.revision===boardRevision)return;}catch{}
+ try{const current=loadBoard(boardStore,boardId);if(current.revision===boardRevision)return;}catch{}
  boardConflict=true;saveState='KONFLIKT – als Kopie sichern!';schedule();notice('Ein anderer Tab hat dieses Quizbrett geändert. Deine Änderungen werden nicht überschrieben.');
 });
 window.addEventListener('beforeunload',event=>{
