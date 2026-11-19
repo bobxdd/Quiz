@@ -134,6 +134,9 @@ test('P2P session restores only on host browser; cannot resume with another room
 
 test('P2P guest cannot send forbidden room actions, request an inherited fake question, or choose a question during another round',async()=>{
  const {host,guest1,guest2}=await setup(),q=host.hostQuiz.questions[0];
+ // This fixture tests invalid selections *during* a game. Pre-start requests
+ // are separately checked in the dedicated start-gate regression below.
+ await host.setState(room,{started:true});
  await assert.rejects(guest1.requestPick(room,'constructor','Alice'),/nicht mehr verfügbar/);
  await assert.rejects(guest1.requestPick(room,'__proto__','Alice'),/nicht mehr verfügbar/);
  await assert.rejects(guest1._rpc('reveal',{round:0,answer:'SPOILER'}),/nicht erlaubt/);
