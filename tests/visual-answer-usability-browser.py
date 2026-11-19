@@ -121,6 +121,30 @@ async def main():
      for w,h in [(320,568),(390,844),(768,720),(1280,720)]:
       await page.set_viewport_size({'width':w,'height':h})
       await audit(page,f'{name}-answer-{w}x{h}',True)
+    # Real short landscape viewport: a full scene + long answer cannot fit
+    # inside 375 CSS px; scrolling is correct, clipping is not.
+    for page,name in [(host,'host'),(guest,'guest')]:
+     await page.set_viewport_size({'width':812,'height':375})
+     await expect(page.locator('.bq-answer-explanation')).to_be_visible()
+     layout=await page.evaluate("""() => {
+      const d=document.documentElement,body=document.body;
+      const panel=document.querySelector('.bq-question-panel');
+      const pane=document.querySelector('.bq-answer-view');
+      const answer=document.querySelector('.bq-answer-explanation');
+      return {width:innerWidth,scrollW:d.scrollWidth,
+       scrollH:d.scrollHeight,clientH:d.clientHeight,
+       bodyOverflow:getComputedStyle(body).overflowY,
+       panelH:panel?.getBoundingClientRect().height,
+       answerH:answer?.getBoundingClientRect().height,
+       paneH:pane?.getBoundingClientRect().height};
+     }""")
+     assert layout['scrollW']<=layout['width']+8,(name,'landscape horizontal overflow',layout)
+     assert layout['scrollH']>layout['clientH']+20,(name,'landscape must allow vertical reflow',layout)
+     assert layout['panelH']>=150 and layout['answerH']>=30,(name,'landscape clipped question or explanation',layout)
+     if name=='host':
+      await page.locator('[data-action="reveal-prev"]').scroll_into_view_if_needed()
+      await expect(page.locator('[data-action="reveal-prev"]')).to_be_enabled()
+    await host.set_viewport_size({'width':1280,'height':720})
     await host.locator('[data-action="reveal-prev"]').click()
     for page in [host,guest]:
      await expect(page.locator('.choices .choice.correct')).to_have_count(0)
