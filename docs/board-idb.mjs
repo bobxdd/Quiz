@@ -9,8 +9,8 @@
  */
 const DATABASE='brainquiz-local-workspaces-v1',TABLE='entries';
 const INDEX='bq-board-workspaces-v1',ACTIVE='bq-board-active-v1';
-const PREFIX='bq-board-workspace-';
-const managed=key=>key===INDEX||key===ACTIVE||key.startsWith(PREFIX);
+const PREFIX='bq-board-workspace-', SESSION='bq-session-LOCAL-';
+const managed=key=>key===INDEX||key===ACTIVE||key.startsWith(PREFIX)||key.startsWith(SESSION);
 const copyValue=value=>value==null?null:String(value);
 const errText=error=>String(error?.message||error||'Speicherfehler');
 function openDatabase(){
@@ -73,6 +73,7 @@ function legacyEntries(storage){
    let record;try{record=JSON.parse(value);}catch{throw Error('Altes Quizbrett „'+id+'“ beschädigt. Keine Daten wurden überschrieben.');}
    if(!record?.quiz||!Array.isArray(record.quiz.questions)||!Number.isSafeInteger(record.revision))throw Error('Altes Quizbrett „'+id+'“ ungültig. Bitte ein Backup erstellen.');
    legacy.set(PREFIX+id,value);
+   const session=storage.getItem(SESSION+id);if(session)legacy.set(SESSION+id,session);
   }
   legacy.set(INDEX,raw);
  }
@@ -131,6 +132,14 @@ export async function openBoardStorage(storage=localStorage){
     });
     tail=task.catch(()=>{});
     return task;
+   },
+   async reload({discardPending=false}={}){
+    await tail;
+    if(dirty.size&&!discardPending)throw Error('Nicht gespeicherte Änderungen vorhanden. Vorher als Backup exportieren.');
+    const fresh=await readEntries(db);
+    dirty.clear();memory.clear();confirmed.clear();
+    for(const [k,v] of fresh){memory.set(k,v);confirmed.set(k,v);}
+    unresolvedError=null;
    },
    close(){channel?.close();db.close();}
   };
