@@ -66,30 +66,41 @@ async def main():
   await pin_and_submit(charlie,.25,.5)
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.keys(bucket).length>=3)",timeout=12000)
   assert 'mapTargetX' not in await alice.evaluate('window.__probe.info().publicState.current')
-  for guest in (alice,bob):
+  for guest in (alice,bob,charlie):
    assert await guest.locator('.bq-review-map-distance').count()==0
    assert await guest.locator('.bq-map-pin.is-public').count()==0
    assert await guest.locator('.bq-map-pin.is-solution').count()==0
   # Directly reveal, without first publishing any individual answer.
   await host.locator('[data-action="reveal"]').first.click()
-  for guest in (alice,bob):
-   await expect(guest.locator('.bq-review-map-distance')).to_have_count(2,timeout=15000)
-   await expect(guest.locator('.bq-map-pin.is-public')).to_have_count(2,timeout=15000)
+  for guest in (alice,bob,charlie):
+   await expect(guest.locator('.bq-review-map-distance')).to_have_count(3,timeout=15000)
+   await expect(guest.locator('.bq-map-pin.is-public')).to_have_count(3,timeout=15000)
    await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(1,timeout=15000)
    assert 'Luftlinie' in await guest.locator('.review-summary').inner_text()
    assert 'entscheidet weiterhin selbst' in await guest.locator('.review-summary').inner_text()
-  await expect(host.locator('.review-card')).to_have_count(2,timeout=15000)
+  await expect(host.locator('.review-card')).to_have_count(3,timeout=15000)
+  await expect(host.locator('.bq-map-pin-legend')).to_contain_text('Alice')
+  await expect(host.locator('.bq-map-pin-legend')).to_contain_text('Bob')
+  await expect(host.locator('.bq-map-pin-legend')).to_contain_text('Charlie')
+  assert await host.locator('.bq-map-pin.is-public .bq-map-pin-dot').all_inner_texts()==['1','2','3']
+  await host.locator('.bq-review-team-nav [data-team="t1"]').click()
+  await expect(host.locator('.review-card')).to_have_count(2)
+  await host.locator('.bq-review-team-nav [data-team="t2"]').click()
+  await expect(host.locator('.review-card')).to_have_count(1)
+  await expect(host.locator('.review-card')).to_contain_text('Charlie')
+  await host.locator('.bq-review-team-nav [data-team="all"]').click()
+  await expect(host.locator('.review-card')).to_have_count(3)
   cards=await host.evaluate("""() => Array.from(document.querySelectorAll('.review-card')).map(card=>({
-    name:card.querySelector('.review-name')?.textContent,
+    name:card.querySelector('.review-name')?.firstChild?.textContent,
     distance:card.querySelector('.bq-review-map-distance strong')?.textContent
   }))""")
-  assert len(cards)==2,cards
+  assert len(cards)==3,cards
   by_name={card['name']:card['distance'] for card in cards}
   assert by_name['Alice']=='0 km',by_name
   assert by_name['Bob'] and by_name['Bob']!='0 km',by_name
   before=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
   assert not any((v.get('total') or 0)!=0 for v in before.values() if isinstance(v,dict)),before
-  assert await host.locator('.review-card [data-action="judge-review-correct"]').count()==2
+  assert await host.locator('.review-card [data-action="judge-review-correct"]').count()==3
   # Bob is farther away, but the host may choose Bob anyway.
   bobid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Bob')[0]""")
   await host.locator(f'.review-card[data-review-player="{bobid}"] [data-action="judge-review-correct"]').click()
