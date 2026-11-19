@@ -747,7 +747,7 @@ function renderReviewGallery(readOnly=false){
  const visibleEntries=host&&selectedTeam!=='all'?entries.filter(([id])=>roster?.[id]?.team===selectedTeam):entries;
  const teamNav=teamIds.length>1?`<nav class="bq-review-team-nav" aria-label="Antworten nach Teams">
   ${btn('‹ Team','review-team-step','small','data-step="-1"')}
-  ${[['all','Alle'],...teamIds.map(id=>[id,teamName(id)])].map(([id,name])=>`<button type="button" class="btn small ${selectedTeam===id?'primary':''" data-action="review-team" data-team="${e(id)" aria-pressed="${selectedTeam===id?'true':'false'">${e(name)} · ${id==='all'?entries.length:entries.filter(([uid])=>roster?.[uid]?.team===id).length}</button>`).join('')}
+  ${[['all','Alle'],...teamIds.map(id=>[id,teamName(id)])].map(([id,name])=>`<button type="button" class="btn small ${selectedTeam===id?'primary':''}" data-action="review-team" data-team="${e(id)}" aria-pressed="${selectedTeam===id?'true':'false'}">${e(name)} · ${id==='all'?entries.length:entries.filter(([uid])=>roster?.[uid]?.team===id).length}</button>`).join('')}
   ${btn('Team ›','review-team-step','small','data-step="1"')}
  </nav>`:'';
  const mapQuestion=activeQuestion()?.type==='map';
