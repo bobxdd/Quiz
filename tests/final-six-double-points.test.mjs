@@ -71,7 +71,8 @@ test('Every board has its OWN six-question bonus phase; no quiz-global counter',
  use(afterSecond,2,19);
  assert.equal(remainingBoardQuestions(afterSecond,2).length,6);
  assert.equal(finalSixActive(afterSecond),true);
- assert.equal(boardQuestionPoints(afterSecond,remainingBoardQuestions(afterSecond)[0]),200);
+ const lastSixOnSecond=remainingBoardQuestions(afterSecond)[0];
+ assert.equal(boardQuestionPoints(afterSecond,lastSixOnSecond),lastSixOnSecond.points*2);
 });
 
 test('An exactly six-field board starts in its final-six phase; a micro-board below six is unchanged',()=>{
