@@ -14,6 +14,11 @@ export function approval(roster,id,player,team){
 }
 export function participantLabels(roster){return Object.entries(roster||{}).filter(([id,p])=>validPlayerId(id)&&p?.name&&p?.team).slice(0,MAX_PLAYERS).map(([id,p])=>({id,name:String(p.name).slice(0,28),team:p.team}));}
 
+export function participantSnapshot(roster){
+ const valid=Object.entries(roster||{}).filter(([id,player])=>validPlayerId(id)&&player&&typeof player==='object'&&String(player.name||'').trim()).slice(0,MAX_PLAYERS);
+ return Object.fromEntries(valid.map(([id,player])=>[id,{name:String(player.name).trim().slice(0,28)}]));
+}
+
 /** Step 4: stable, accessible and distinct team palette (colors are IDs, never guest CSS). */
 export const MAX_TEAMS=5;
 export const TEAM_PALETTE=Object.freeze(['#85bde4','#e3a09e','#a7c989','#c2a4e5','#e4bd72','#74c8be']);

@@ -1,14 +1,10 @@
 /* BrainQuiz 2.0 — review orchestration. Public state must NEVER contain an
    unrevealed submission; private answers remain under /responses/<round>/<uid>.
    Pure functions shared by browser runtime and regression tests. */
-import {MAX_PLAYERS} from './lobby-model.mjs';
-import {roundMode} from './round-rules.mjs';
+import {participantSnapshot,validPlayerId} from './lobby-model.mjs';
+export {participantSnapshot};
 const safeText=(v,max)=>String(v??'').slice(0,max);
-const allowedId=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{2,128}$/.test(id)&&!['__proto__','prototype','constructor'].includes(id);
-export function participantSnapshot(roster){
- const valid=Object.entries(roster||{}).filter(([id,r])=>allowedId(id)&&r&&typeof r==='object'&&String(r.name||'').trim()).slice(0,MAX_PLAYERS);
- return Object.fromEntries(valid.map(([id,r])=>[id,{name:safeText(String(r.name).trim(),28)}]));
-}
+const allowedId=id=>typeof id==='string'&&validPlayerId(id);
 export function answerProgress(expected,responses){
  const ids=Object.keys(expected||{}).filter(allowedId);
  const count=ids.filter(id=>typeof responses?.[id]?.text==='string'&&responses[id].text.trim().length>0).length;
@@ -17,7 +13,7 @@ export function answerProgress(expected,responses){
 /** Timed submissions stay editable until the deadline. Without a timer,
  * written answers open review when complete and map pins close by host action. */
 export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
- if(state?.phase!=='question'||roundMode(state.current)!=='written')return false;
+ if(state?.phase!=='question'||state.current?.roundMode!=='written')return false;
  const expected=state.answerParticipants||{};
  const progress=answerProgress(expected,responses);
  if(!progress.total)return false;
