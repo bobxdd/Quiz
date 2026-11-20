@@ -665,6 +665,15 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
  }
  .bq-question-body:has(>.bq-answer-dock)>.bq-question-panel{align-self:stretch}
 }
+@media(max-height:540px) and (min-width:560px){
+ .bq-question-scene .bq-question-body:has(>.bq-answer-dock):has(.bq-order-stage){
+  display:grid;grid-template-columns:minmax(0,1.45fr) minmax(200px,1fr);
+  grid-template-rows:minmax(0,1fr);align-items:start;
+ }
+ .bq-question-body:has(.bq-order-stage)>.bq-question-panel{align-self:stretch}
+ .bq-question-body:has(.bq-order-stage) .bq-answer-entry{grid-template-columns:minmax(0,1fr)}
+ .bq-question-body:has(.bq-order-stage) .bq-answer-entry>.btn{max-width:none}
+}
 body.bq-game-mode.bq-answer-keyboard .shell{
  position:fixed;inset:var(--bq-keyboard-top) 0 auto;height:var(--bq-keyboard-height);
 }

@@ -613,7 +613,23 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-emoji-progress li, .bq-emoji-results li { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .85rem; padding: .6rem .75rem; border: 1px solid #425653; border-radius: .55rem; overflow-wrap: anywhere; }
 .bq-emoji-result-icons { font-size: 1.35rem; }
 .bq-team-emoji #team-emoji-guess-form { max-width: 32rem; }
-.bq-team-emoji .bq-answer-view { margin: 0; }
+.bq-team-emoji .bq-answer-view {flex:none;margin:0;padding:10px 14px;min-height:0;width:100%;max-width:none}
+.bq-team-emoji .bq-answer-view-top{margin:0 0 5px;padding-bottom:4px}
+.bq-team-emoji .bq-answer-view-content{min-height:0;gap:8px}
+.bq-team-emoji .bq-answer-view .bq-answer-view-content.has-image:has(>.bq-answer-primary){
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(0,min(32%,130px));
+}
+.bq-team-emoji .bq-answer-view-content.has-image:has(>.bq-answer-primary)>.bq-answer-image{grid-column:2;grid-row:1}
+.bq-team-emoji .bq-answer-view-content.has-image>.bq-answer-primary{grid-column:1;grid-row:1}
+.bq-team-emoji .bq-answer-image img{max-height:clamp(40px,10dvh,90px)}
+@media(max-height:440px){
+ .bq-team-emoji>.bq-answer-view{
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;padding:7px 10px;
+ }
+ .bq-team-emoji .bq-answer-view-top{flex-direction:column;align-items:flex-start;gap:2px;margin:0;padding:0;border:0}
+ .bq-team-emoji .bq-answer-view .answer.bq-answer-primary{padding:0!important}
+ .bq-emoji-results .bq-drawing-art{width:min(100%,38dvh)}
+}
 .bq-question-scene .bq-question-panel .bq-order-stage{justify-content:flex-start}
 .bq-order-stage h2{font-size:clamp(17px,2.2vw,25px);overflow-wrap:anywhere}
 .bq-order-stage,.bq-order-list li{min-width:0}

@@ -169,7 +169,7 @@ function guestReceiptMarkup(){
  const diagnostic=game?.diagnostics?.();
  const inlineReceipt=guestReceipt?.tone==='good'&&(
   guestReceipt.label==='Teamwahl'&&hasLiveQuestion()||
-  publicState?.teamEmoji&&['Rollenwahl','Emoji-Hinweis','Rateversuch'].includes(guestReceipt.label)
+  ['Rollenwahl','Emoji-Hinweis','Rateversuch'].includes(guestReceipt.label)
  );
  const status=connected?(inlineReceipt?'':guestReceipt?.text||''):diagnostic?.error||'Verbindung unterbrochen. Wiederverbindung läuft …';
  if(!status&&!retry)return '';
