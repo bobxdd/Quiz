@@ -21,13 +21,12 @@ async def join_guest(ctx,host,code,name,team='t1'):
  await guest.locator('.bq-lobby').wait_for()
  return guest
 
-async def pin_and_submit(page,x,y):
+async def place_pin(page,x,y):
  await page.locator('.bq-map-viewport').wait_for(timeout=12000)
  rect=await page.locator('.bq-map-viewport').bounding_box()
  await page.mouse.click(rect['x']+rect['width']*x,rect['y']+rect['height']*y)
  await expect(page.locator('.bq-map-pin.is-self')).to_have_count(1,timeout=12000)
- await page.locator('[data-action="submit-answer"]').click()
- await page.locator('[data-action="submit-answer"]').get_by_text('Pin aktualisieren').wait_for(timeout=12000)
+ await expect(page.locator('.bq-map-result')).to_contain_text('Pin gespeichert',timeout=12000)
 
 async def main():
  async with async_playwright() as p:
@@ -61,9 +60,9 @@ async def main():
   for page in (host,alice,bob,charlie):
    await expect(page.locator('.bq-round-countdown')).to_be_visible()
    assert ':' in await page.locator('#clock').inner_text()
-  await pin_and_submit(alice,.5,.5)
-  await pin_and_submit(bob,.75,.5)
-  await pin_and_submit(charlie,.25,.5)
+  await place_pin(alice,.5,.5)
+  await place_pin(bob,.75,.5)
+  await place_pin(charlie,.25,.5)
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.keys(bucket).length>=3)",timeout=12000)
   assert 'mapTargetX' not in await alice.evaluate('window.__probe.info().publicState.current')
   for guest in (alice,bob,charlie):
@@ -104,15 +103,15 @@ async def main():
   # Bob is farther away, but the host may choose Bob anyway.
   bobid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Bob')[0]""")
   await host.locator(f'.review-card[data-review-player="{bobid}"] [data-action="judge-review-correct"]').click()
-  await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===200""",arg=bobid,timeout=12000)
+  await host.wait_for_function("""(id) => window.__probe.info().publicState.playerScores?.[id]?.total===400""",arg=bobid,timeout=12000)
   after=await host.evaluate("""() => window.__probe.info().publicState.playerScores || {}""")
-  assert after[bobid]['total']==200,after
+  assert after[bobid]['total']==400,after
   aliceid=await host.evaluate("""() => Object.entries(window.__probe.info().publicState.answerReview.entries).find(([,v])=>v.name==='Alice')[0]""")
   await expect(host.locator(f'.review-card[data-review-player="{aliceid}"] [data-action="mark-review-wrong"]')).to_be_visible()
   await host.locator(f'.review-card[data-review-player="{aliceid}"] [data-action="mark-review-wrong"]').click()
   await host.wait_for_function("""(id) => window.__probe.info().publicState.answerReview.entries[id].verdict==='wrong'""",arg=aliceid)
-  assert await host.evaluate("window.__probe.info().publicState.scores.t1")==200
-  assert sum(v.get('total',0) for v in after.values() if isinstance(v,dict))==200,after
+  assert await host.evaluate("window.__probe.info().publicState.scores.t1")==400
+  assert sum(v.get('total',0) for v in after.values() if isinstance(v,dict))==400,after
   assert not errors,errors
   print('PASS: numbered map pins, three guests in two teams, visible countdown, team navigation and non-scoring teammate verdict',flush=True)
   await browser.close()

@@ -112,19 +112,17 @@ async def main():
     bound:document.querySelector('.bq-map-viewport')?.dataset.mapBound,clickable:document.querySelector('.bq-map-viewport')?.dataset.mapChoice})""")
   print('MAP DIAG after click',after,flush=True)
   await guest.locator('.bq-map-pin.is-self').wait_for(timeout=5000)
-  await expect(guest.locator('[data-action="submit-answer"]')).to_be_enabled()
-  await guest.locator('[data-action="submit-answer"]').click()
-  await guest.locator('[data-action="submit-answer"]').get_by_text('Pin aktualisieren').wait_for(timeout=12000)
+  await expect(guest.locator('.bq-map-result')).to_contain_text('Pin gespeichert',timeout=12000)
+  await expect(host.locator('.bq-map-pin-log')).to_contain_text('1 Pin eingegangen')
   assert (await guest.evaluate('window.__probe.info().publicState.phase'))=='question'
   await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(0)
   # Repositioning is allowed even after first submission while the round stays open.
   rect=await guest.locator('.bq-map-viewport').bounding_box()
   await guest.mouse.click(rect['x']+rect['width']*.39,rect['y']+rect['height']*.55)
-  await guest.locator('[data-action="submit-answer"]').click()
-  await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses||{}).some(bucket=>Object.values(bucket).some(rec=>String(rec.text||'').includes('39')))",timeout=10000)
-  answer=await host.evaluate("""() => Object.values(window.__probe.getGame().data.responses||{})""")
-  assert any('39' in str(rec) for bucket in answer for rec in bucket.values()),answer
-  print('PASS: guest can move and re-send their private pin until map round closes')
+  await host.wait_for_function("""() => Object.values(window.__probe.getGame().data.responses['1']||{}).some(rec=>{
+   const x=Number(rec.text.split(':')[1]?.split(',')[0]); return Math.abs(x-39)<1;
+  })""",timeout=10000)
+  print('PASS: guest can move their private pin and the new coordinates arrive immediately')
   await host.locator('[data-action="start-review"]').first.click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   await guest.locator('.review-card.is-missing').first.wait_for(timeout=12000)

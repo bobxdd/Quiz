@@ -24,7 +24,7 @@ export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
  if(!progress.total)return false;
  const deadline=Number(state.deadline)||0;
  const expired=deadline>0&&time>=deadline;
- return state.current?.type==='map'?expired:expired||progress.complete;
+ return deadline>0?expired:state.current?.type!=='map'&&progress.complete;
 }
 export function makeAnswerReview(expected,responses,round){
  const entries={};

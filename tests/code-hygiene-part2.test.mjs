@@ -12,10 +12,10 @@ test('Part 2 hygiene: old map HTML and selectors are removed, all new map hooks 
  assert.match(controller,/mountMapViewport\(/);
  assert.match(controller,/pointercancel/);
 });
-test('Part 2 hygiene: resubmitting an existing map pin is permitted by the form path only for maps',()=>{
+test('Part 2 hygiene: map placements save automatically and written answers can be revised',()=>{
  const app=read('app.mjs');
- assert.match(app,/ev\.target\.id==='answer-form'&&!canHost\(\)&&\(!myResponse\|\|activeQuestion\(\)\?\.type==='map'\)/);
- assert.match(app,/myResponse&&activeQuestion\(\)\?\.type!=='map'/);
+ assert.match(app,/ev\.target\.id==='answer-form'&&!canHost\(\).*doAction\('submit-answer'/);
+ assert.match(app,/canPick:canMapPick,onPick:placeMapPin/);
 });
 test('Part 2 hygiene: review privacy and missing response distinctions remain wired in UI',()=>{
  const app=read('app.mjs');

@@ -85,7 +85,7 @@ async def exercise(browser,root):
         await expect(alina.locator('[data-action="buzz"]')).to_be_enabled()
         for page in [ben,bea]:
             await expect(page.locator('[data-action="buzz"]')).to_be_disabled()
-        assert (await host.evaluate('window.__turnTest.state().scores.t2'))==-100
+        assert (await host.evaluate('window.__turnTest.state().scores.t2'))==-200
         await alina.locator('[data-action="buzz"]').click()
         await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Alina')
         assert (await host.evaluate('window.__turnTest.state().scores.t1'))==0
@@ -103,8 +103,8 @@ async def exercise(browser,root):
         for page in [host,*players]:
             await expect(page.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 2')
             await expect(page.locator('.bq-selection-turn')).to_contain_text('Host wählt')
-            await expect(page.locator('.bq-score-footer')).to_contain_text('300')
-            await expect(page.locator('.bq-score-footer')).to_contain_text('-100')
+            await expect(page.locator('.bq-score-footer')).to_contain_text('600')
+            await expect(page.locator('.bq-score-footer')).to_contain_text('-200')
         await host.reload()
         await expect(host.locator('.bq-selection-turn')).to_contain_text('Host wählt',timeout=20000)
         await host.locator('.top-nav [data-view="setup"]').click()
@@ -124,7 +124,7 @@ async def exercise(browser,root):
         await ben.locator('[data-action="buzz"]').click()
         await host.locator('[data-action="buzz-correct"]').click()
         await expect(anna.locator('.bq-answer-view')).to_contain_text('Antwort zwei')
-        assert (await host.evaluate('window.__turnTest.state().scores.t2'))==200
+        assert (await host.evaluate('window.__turnTest.state().scores.t2'))==400
         assert not errors,errors
         print('PASS: host-only selection, guest pick RPC rejected, unready-start consent, locked verdict, cancel question, shared buzzers, -50% penalty, board transition and reset',flush=True)
     finally:

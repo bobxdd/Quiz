@@ -13,8 +13,9 @@ export function encodePoint(point){const p=normalizePoint(point);if(!p)throw Err
 export function decodePoint(text){const match=/^@map:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(String(text||''));return match?normalizePoint({x:Number(match[1]),y:Number(match[2])}):null;}
 export function worldLatLon(point){const p=normalizePoint(point);return p?{lat:90-1.8*p.y,lon:3.6*p.x-180}:null;}
 export const DEFAULT_MAP_VIEW=Object.freeze({zoom:1,x:50,y:50});
+export const MAX_MAP_ZOOM=32;
 export function normalizeMapView(raw=DEFAULT_MAP_VIEW){
- const zoom=clamp(finite(raw?.zoom)?Number(raw.zoom):1,1,16);
+ const zoom=clamp(finite(raw?.zoom)?Number(raw.zoom):1,1,MAX_MAP_ZOOM);
  const edge=50/zoom;
  return {zoom:Math.round(zoom*10000)/10000,x:clamp(finite(raw?.x)?Number(raw.x):50,edge,100-edge),y:clamp(finite(raw?.y)?Number(raw.y):50,edge,100-edge)};
 }
@@ -32,7 +33,7 @@ export function mapZoomAt(view,newZoom,screenPercent={x:50,y:50}){
  const v=normalizeMapView(view);
  const focus=mapWorldPosition(screenPercent,v);
  if(!focus)return v;
- const z=clamp(Number(newZoom)||v.zoom,1,16);
+ const z=clamp(Number(newZoom)||v.zoom,1,MAX_MAP_ZOOM);
  return normalizeMapView({zoom:z,x:focus.x-(screenPercent.x-50)/z,y:focus.y-(screenPercent.y-50)/z});
 }
 export function mapPanBy(view,dxPercent,dyPercent){
@@ -60,6 +61,13 @@ export function mapDistanceKm(from,to){
 export function formatMapDistanceKm(km){
  if(typeof km!=='number'||!Number.isFinite(km)||km<0)return '';
  return new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(km)+' km';
+}
+export function formatMapCoordinates(point){
+ const position=worldLatLon(point);
+ if(!position)return '';
+ const decimal=new Intl.NumberFormat('de-DE',{minimumFractionDigits:2,maximumFractionDigits:3});
+ const label=(n,negative,positive)=>decimal.format(Math.abs(n))+'° '+(n<0?negative:positive);
+ return label(position.lat,'S','N')+' · '+label(position.lon,'W','O');
 }
 /** Only published, valid map pins can contribute to public distance rows.
  * Distances are informational: winner and scoring stay entirely with the host.

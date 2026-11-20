@@ -15,7 +15,7 @@ export function lobbyRulesHTML(lobby){
  <p><strong>Buzzerfragen:</strong> Das erste vom Host empfangene gültige Signal erhält das Antwortrecht. Der Host bestätigt jede Antwort ausdrücklich. Richtig: voller Fragewert. Falsch: halber Fragewert als Abzug; ${individual?'die betroffene Person':'das betroffene Team'} ist für diese Frage gesperrt, andere dürfen weiter buzzern.</p>
  <p><strong>Schreibfragen:</strong> Alle dürfen zunächst verdeckt antworten. Der Host deckt die Antworten auf. ${individual?'Jede Person wird einzeln bewertet.':'In der Teamwertung wählt der Host genau eine offizielle Antwort pro Team und Frage; weitere Teamantworten werden gezeigt, geben aber keine zusätzlichen Punkte.'} Eine offizielle falsche Wertung kostet die Hälfte der Fragepunkte.</p>
  <p><strong>Fragenwechsel:</strong> Der Host wählt die nächste Frage. Lösung und Punkte sind erst nach der Hostentscheidung verbindlich. Der Host kann offensichtliche Wertungsfehler berichtigen.</p>
- <p><strong>Letzte sechs Fragen pro Brett:</strong> Sobald auf einem Brett nur noch sechs ungespielte Fragen übrig sind, werden deren Punkte verdoppelt (×2). Bei einer falschen Buzzerantwort beträgt der Abzug weiterhin die Hälfte des dann gültigen, doppelten Fragewerts. Ein neues Brett startet wieder mit normalen Punkten. Auf sehr kleinen Brettern mit weniger als sechs Fragen gibt es keine eigene Endspurtphase.</p>
+ <p><strong>Letzte sechs Fragen pro Brett:</strong> Bei höchstens sechs offenen Feldern zählen alle verbleibenden Fragen doppelt. Nach Runde 1 geht es mit demselben Punktestand auf Runde 2 weiter. Dort zählt die Zahl der noch offenen Felder dieses Bretts.</p>
  ${!individual?'<p><strong>Gemeinsame Team-Punkte:</strong> Ein Team besitzt genau einen Gesamtpunktestand. Bei Schreibfragen darf pro Team und Frage nur eine Antwort offiziell gewertet werden – unabhängig von der Teamgröße.</p>':''}
  <p class="small muted">Joker und Sonderbonusfragen sind in diesen Standardregeln nicht aktiviert. Sonderregeln sollten vor Spielbeginn gemeinsam vereinbart werden.</p>
  </div></details>`;
@@ -28,18 +28,19 @@ export function lobbyGuestHTML(lobby,member){
  const ready=member?.ready===true;
  const hasTeam=member?.status==='approved'?!!selected:!!(requested&&(requested.kind==='create'||selected));
  const pending=member?.status==='pending';
+ const late=pending&&!phaseOpen&&lobby?.canJoin===true;
  const complete=lobby?.approved||0,totalReady=lobby?.ready||0;
  return `<section class="bq-lobby" aria-label="Team-Lobby">
   <div class="bq-lobby-head">
    <div><span class="bq-lobby-eyebrow">SPIELRAUM · TEAMWAHL</span><h2>Team-Lobby</h2><p>${e(lobby?.title||'BrainQuiz')}</p></div>
    <div class="bq-lobby-counter" role="status" aria-live="polite"><strong>${totalReady} / ${complete}</strong><span>bereit</span></div>
   </div>
-  ${pending?'<p class="bq-lobby-notice" role="status">Freigabe ausstehend · Du kannst dein Team bereits auswählen. Der Host bestätigt deine Aufnahme.</p>':''}
+  ${pending?`<p class="bq-lobby-notice" role="status">${late?'Das Quiz läuft. Wähle ein Team und warte auf den Host. Nach der Freigabe spielst du ab der nächsten verfügbaren Frage mit.':lobby?.canJoin===false?'Das Quiz ist beendet.':'Freigabe ausstehend · Du kannst dein Team bereits auswählen. Der Host bestätigt deine Aufnahme.'}</p>`:''}
   ${lobbyRulesHTML(lobby)}
-  <div class="bq-lobby-join-guide"><strong>1. Wähle dein Team</strong><span>Du kannst auch ein eigenes erstellen.</span></div>
+  <div class="bq-lobby-join-guide"><strong>Wähle dein Team</strong>${phaseOpen?'<span>Du kannst auch ein eigenes erstellen.</span>':''}</div>
   <div class="bq-lobby-team-grid">${teams.map(([id,name])=>{
    const members=players.filter(x=>x.team===id);
-   const chosen=id===selected,canSelect=phaseOpen;
+   const chosen=id===selected,canSelect=phaseOpen||late;
    return `<article class="bq-lobby-team ${chosen?'is-selected':''}" style="--bq-team-color:${teamColor(id)}">
      <div class="bq-lobby-team-name">${teamLabel(id,name)}<small>${members.length} ${members.length===1?'Mitglied':'Mitglieder'}</small></div>
      <div class="bq-lobby-member-list">${members.length?members.map(p=>`<span class="bq-lobby-member ${p.ready?'is-ready':''}"><i class="bq-lobby-online ${p.online?'online':''}" aria-hidden="true"></i>${e(p.name)}<small>${p.ready?'✓ Bereit':'Noch nicht bereit'}</small></span>`).join(''):'<span class="bq-lobby-empty">Noch frei</span>'}</div>
@@ -55,14 +56,14 @@ export function lobbyGuestHTML(lobby,member){
   ${!phaseOpen?'<p class="small muted">Die Runde hat begonnen. Teamwechsel sind jetzt gesperrt.</p>':''}
  </section>`;
 }
-export function hostLobbySummary(lobby){
+export function hostLobbySummary(lobby,canRename=true){
  const teams=safeTeams(lobby?.teams),players=Array.isArray(lobby?.players)?lobby.players:[];
  return `<section class="glass panel bq-host-lobby-summary" aria-label="Team-Bereitschaft">
   <div class="panelhead"><div class="bq-host-lobby-title"><h2>Team-Lobby</h2><p class="small muted">Quiz: <strong>${e(lobby?.title||'BrainQuiz')}</strong></p></div><span class="bq-lobby-headcount" role="status" aria-live="polite"><strong>${Number(lobby?.ready)||0} / ${Number(lobby?.approved)||0}</strong> bereit</span></div>
   ${lobbyRulesHTML(lobby)}
   <div class="bq-host-team-grid">${teams.map(([id,name])=>{
     const group=players.filter(p=>p.team===id),ready=group.filter(p=>p.ready).length;
-    return `<div class="bq-host-team-row" style="--bq-team-color:${teamColor(id)}"><strong>${teamLabel(id,name)}</strong><span>${ready}/${group.length} bereit</span><small>${group.map(p=>e(p.name)+(p.ready?' ✓':'')).join(', ')||'Noch keine Mitglieder'}</small></div>`;
+    return `<div class="bq-host-team-row" style="--bq-team-color:${teamColor(id)}"><strong>${teamLabel(id,name)}</strong><span>${ready}/${group.length} bereit</span><small>${group.map(p=>e(p.name)+(p.ready?' ✓':'')).join(', ')||'Noch keine Mitglieder'}</small>${canRename?`<button type="button" class="btn small" data-action="rename-team" data-team="${id}" aria-label="${e(name)} umbenennen">Umbenennen</button>`:''}</div>`;
   }).join('')}</div>
   ${lobby?.open&&teams.length<MAX_TEAMS?`<details class="bq-host-team-create" data-bq-persist="hostteamcreate"><summary>+ Team erstellen</summary><form id="host-team-create-form" class="bq-lobby-create"><label for="bq-host-team-name"><strong>Neues Team benennen</strong><span>Die Farbe wird automatisch vergeben. Bis zu ${MAX_TEAMS} Teams.</span></label><div class="bq-lobby-create-row"><input type="text" id="bq-host-team-name" name="teamname" required minlength="2" maxlength="28" autocomplete="off" placeholder="Teamname"><button class="btn primary" type="submit">Team anlegen</button></div></form></details>`:''}
   <p class="small muted">Bis zu 10 Teilnehmer · maximal ${MAX_TEAMS} neue Teams · Der Host bestätigt die Aufnahme. Bereit ist ein Signal, keine automatische Startfreigabe.</p>

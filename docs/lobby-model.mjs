@@ -21,16 +21,27 @@ export const teamColor=id=>validTeamId(id)?TEAM_PALETTE[Number(id.slice(1))-1]:'
 // An existing sixth team stays readable in older quizboards. New rooms can create at most five.
 export const validTeamId=id=>/^t[1-6]$/.test(String(id||''));
 export const canArrangeLobby=state=>state?.started!==true&&state?.phase==='board'&&Number(state?.round||0)===0&&!Object.entries(state?.used||{}).some(([id,v])=>id!=='_empty'&&v===true);
+export const canAdmitPlayer=state=>!!state&&state.phase!=='finished';
+export const waitsForNextQuestion=(state,member)=>member?.status==='approved'&&state?.phase!=='board'&&Number(member.playFromRound||0)>Number(state?.round||0);
 export function cleanTeamName(value){
  if(typeof value!=='string')throw Error('Teamname fehlt.');
  const result=value.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').replace(/\s+/g,' ').trim();
  if(result.length<2||result.length>28)throw Error('Teamname muss 2 bis 28 Zeichen lang sein.');
  return result;
 }
+function availableTeamName(teams,name,except=''){
+ const cleaned=cleanTeamName(name);
+ if(Object.entries(teams).some(([id,value])=>id!==except&&String(value||'').trim().toLocaleLowerCase('de')===cleaned.toLocaleLowerCase('de')))
+  throw Error('Diesen Teamnamen gibt es bereits.');
+ return cleaned;
+}
+export function renameLobbyTeam(teams,id,name){
+ if(!validTeamId(id)||!Object.hasOwn(teams||{},id))throw Error('Dieses Team existiert nicht.');
+ return {...teams,[id]:availableTeamName(teams,name,id)};
+}
 export function addLobbyTeam(current,name){
  const teams=current&&typeof current==='object'&&!Array.isArray(current)?current:{};
- const cleaned=cleanTeamName(name);
- if(Object.values(teams).some(v=>String(v||'').trim().toLocaleLowerCase('de')===cleaned.toLocaleLowerCase('de')))throw Error('Diesen Teamnamen gibt es bereits.');
+ const cleaned=availableTeamName(teams,name);
  const count=Object.keys(teams).filter(validTeamId).length;
  const free=count<MAX_TEAMS?Array.from({length:MAX_TEAMS},(_,i)=>'t'+(i+1)).find(id=>!Object.hasOwn(teams,id)):null;
  if(!free)throw Error(`Maximal ${MAX_TEAMS} Teams möglich.`);
@@ -47,5 +58,5 @@ export function lobbySnapshot(data){
   scoreMode:pub.scoreMode==='individual'?'individual':'team',manualBuzzer:pub.settings?.manualBuzzer===true,
   ready:players.filter(p=>p.ready).length,online:players.filter(p=>p.online).length,
   approved:players.length,pending:Object.values(members).filter(m=>m?.status==='pending').length,
-  open:canArrangeLobby(pub)};
+  open:canArrangeLobby(pub),canJoin:canAdmitPlayer(pub)};
 }

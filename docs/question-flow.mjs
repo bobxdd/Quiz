@@ -18,7 +18,7 @@ export function selectingTeam(state){
 export function resetBoardGameState(state,board,roster={}){
  return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
-  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
+  buzzerBlocked:{},buzzerBlockedTeams:{},buzzerReleased:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
   selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
 }
@@ -33,9 +33,6 @@ export function remainingBoardQuestions(state,round=boardRound(state)){
  * the seventh-to-last question must still have normal points. */
 export const FINAL_DOUBLE_QUESTIONS=6;
 export function finalSixActive(state,round=boardRound(state)){
- const cells=Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round);
- // A micro-board with fewer than six fields has no distinct final-six phase.
- if(cells.length<FINAL_DOUBLE_QUESTIONS)return false;
  const left=remainingBoardQuestions(state,round).length;
  return left>0&&left<=FINAL_DOUBLE_QUESTIONS;
 }
@@ -102,7 +99,7 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
   current.basePoints=Number(question.points);
   current.doublePoints=doublePoints;
   return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,
-    answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,
+    answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,buzzerAnnouncement:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
 export function applyQuestionChanges(state,expectedRound,expectedId,changes,allowedPhases=['question','paused','review']){

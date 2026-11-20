@@ -5,16 +5,20 @@ const fullscreen=document.getElementById('projector-fullscreen');
 const query=new URLSearchParams(location.search);
 const room=(query.get('room')||'').toUpperCase();
 const key=location.hash.slice(1);
-let deadline=0,lastMarkup='';
+let deadline=0,pausedRemaining=null,lastMarkup='',hostClock=null;
 
 function tick(){
- if(!deadline){clock.hidden=true;return;}
+ const now=hostClock?hostClock.time+performance.now()-hostClock.received:Date.now();
+ for(const announcement of root.querySelectorAll('[data-buzz-until]')){
+  announcement.hidden=Number(announcement.dataset.buzzUntil)<=now;
+ }
+ if(!deadline&&pausedRemaining===null){clock.hidden=true;return;}
  clock.hidden=false;
- const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));
+ const seconds=Math.max(0,Math.ceil((pausedRemaining??(deadline-now))/1000));
  clock.textContent=Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
 }
 function showStatus(text){
- deadline=0;lastMarkup='';tick();
+ deadline=0;pausedRemaining=null;hostClock=null;lastMarkup='';tick();
  const section=document.createElement('section');
  section.className='bq-projector-wait';
  const heading=document.createElement('h1');
@@ -25,7 +29,10 @@ function showStatus(text){
 }
 function showFrame(payload){
  if(typeof payload?.html!=='string'||payload.html.length>3_000_000)return;
- deadline=Number(payload.deadline)||0;tick();
+ if(Number.isFinite(payload.hostTime))hostClock={time:payload.hostTime,received:performance.now()};
+ deadline=Number(payload.deadline)||0;
+ pausedRemaining=Number.isFinite(payload.pausedRemaining)?payload.pausedRemaining:null;
+ tick();
  if(payload.html===lastMarkup)return;
  lastMarkup=payload.html;
  const template=document.createElement('template');
@@ -38,6 +45,7 @@ function showFrame(payload){
  }
  status.textContent='';
  root.replaceChildren(template.content);
+ tick();
 }
 
 if(!document.fullscreenEnabled)fullscreen.hidden=true;

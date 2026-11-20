@@ -95,7 +95,7 @@ async def run(browser,root):
     await host.locator('[data-action="reveal"]').click()
     await host.locator('[data-action="back"]').click()
     await expect(host.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 2')
-    await expect(host.locator('.bq-score-footer')).to_contain_text('200')
+    await expect(host.locator('.bq-score-footer')).to_contain_text('400')
     await expect(tile(host,300)).to_be_visible()
     assert await host.locator('[data-action="present-next"]').count()==0
     await host.locator('.bq-rehearsal-toolbar [data-view="editor"]').click()
@@ -127,7 +127,7 @@ async def run(browser,root):
         await expect(guest.locator('.bq-board-scene')).to_be_visible()
     for page in [host,guest]:
         await expect(page.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 2')
-        await expect(page.locator('.bq-score-footer')).to_contain_text('300')
+        await expect(page.locator('.bq-score-footer')).to_contain_text('600')
         await expect(page.locator('.bq-board-scene .tile')).to_have_count(1)
     await choose(host,300)
     await host.reload()

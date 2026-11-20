@@ -71,9 +71,9 @@ async def native_room(browser,root):
   return {total:state.scores[winner.team],round:state.round,players:Object.keys(roster).length,
    locked:!!state.buzzerBlocked['1'][winner.uid]};
  }""",[room,winner])
- assert resumed=={'total':-50,'round':1,'players':10,'locked':True},resumed
+ assert resumed=={'total':-100,'round':1,'players':10,'locked':True},resumed
  await asyncio.gather(*(page.wait_for_function(
-  "winner=>live.connected && live.guestData.public?.scores?.[winner.team]===-50 && live.guestData.public?.buzzerBlocked?.['1']?.[winner.uid]",
+  "winner=>live.connected && live.guestData.public?.scores?.[winner.team]===-100 && live.guestData.public?.buzzerBlocked?.['1']?.[winner.uid]",
   arg=winner
  ) for page,_ in clients))
  assert [await page.evaluate("live.uid") for page,_ in clients]==players
@@ -113,7 +113,7 @@ async def rehearse_locally(browser,root):
  await page.locator('[data-action="uncover-question"]').click()
  await page.locator('[data-action="probe-buzz"]').first.click()
  await page.locator('[data-action="probe-wrong"]').click()
- await expect(page.locator('.bq-probe-scores')).to_contain_text('-50')
+ await expect(page.locator('.bq-probe-scores')).to_contain_text('-100')
  await page.locator('[data-action="probe-buzz"]').last.click()
  await page.locator('[data-action="probe-correct"]').click()
  await expect(page.locator('.presenter-stage')).to_contain_text('Anivia aus der Generalprobe')

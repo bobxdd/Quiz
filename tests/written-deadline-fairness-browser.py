@@ -68,7 +68,7 @@ async def main():
    await host.locator('.review-card.is-hidden').first.click()
    await expect(host.locator('.review-card.is-revealed')).to_have_count(1)
    await host.locator('.review-card.is-revealed [data-action="judge-review-correct"]').click()
-   assert await host.evaluate("window.__probe.info().publicState.scores.t1")==200
+   assert await host.evaluate("window.__probe.info().publicState.scores.t1")==400
    assert not errors,errors
    print('PASS: timed written question closes with an absent response; private answer remains hidden, host reveals and scores once',flush=True)
   finally:

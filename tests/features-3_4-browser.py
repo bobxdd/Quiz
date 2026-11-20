@@ -75,7 +75,7 @@ async def main():
    # dynamically reflowed viewports. Click near the middle of the map.
    await p.locator('.bq-map-viewport').click(position={'x':box['width']*.42,'y':box['height']*.47})
    await p.locator('.bq-map-pin.is-self').wait_for(timeout=10000)
-   await p.locator('[data-action="submit-answer"]').click()
+   await p.locator('.bq-map-result').filter(has_text='Pin gespeichert').wait_for(timeout=12000)
   await host.locator('[data-action="start-review"]').first.click()
   await a.locator('.review-grid .review-card').first.wait_for(timeout=12000)
   assert await a.locator('.review-grid').get_by_text('@map:').count()==0
@@ -105,8 +105,8 @@ async def main():
   await c.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-correct"]').first.click()
   data=await host.evaluate('window.__probe.info().publicState')
-  assert data['scores']['t1']==-100,data
-  assert data['scores']['t2']==200,data
+  assert data['scores']['t1']==-200,data
+  assert data['scores']['t2']==400,data
   print('PASS: -50% team lock, others re-buzz, winner +points',flush=True)
   assert not errors,errors
   await browser.close()

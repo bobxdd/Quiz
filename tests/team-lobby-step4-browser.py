@@ -173,15 +173,15 @@ async def main():
   assert 'gesperrt' in denial,denial
   assert (await host.evaluate("window.__probe.info().publicState.current.id"))=='q-lobby'
   print('PASS: game begins and blocks team swaps without altering current question',flush=True)
-  # Late arrivals must not see actionable team controls or an actionable host approval.
+  # New arrivals may choose an existing team, with play starting at the next question.
   late=await spawn(ctx,host,code,'Late Join',errors)
-  await expect(late.locator('[data-action="lobby-join"]')).to_have_count(0)
-  assert await late.locator('[data-action="lobby-ready"]').is_disabled()
+  await late.locator('[data-action="lobby-join"][data-team="t2"]').click()
   await host.locator('.top-nav [data-view="teams"]').click()
   await host.locator('[data-action="approve"]').first.wait_for()
-  await expect(host.locator('[data-action="approve"]').first).to_be_disabled()
-  assert 'Spiel läuft' in await host.locator('[data-action="approve"]').first.inner_text()
-  print('PASS: late joiners are shown locked lobby, host cannot click invalid admission',flush=True)
+  await host.locator('[data-action="approve"]').first.click()
+  await expect(late.get_by_text('Du spielst ab der nächsten Frage mit.',exact=False)).to_be_visible()
+  assert await late.evaluate("window.__probe.info().publicState.current == null")
+  print('PASS: host-approved late guest joins existing team and waits for the next question',flush=True)
   assert not errors,errors
   await browser.close()
 

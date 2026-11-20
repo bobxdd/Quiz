@@ -114,7 +114,7 @@ async def submit_guess(player, hint, guess):
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
     await player.get_by_label('Euer Rateversuch').fill(guess)
     await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
-    await expect(player.get_by_text('Euer Team hat geantwortet.', exact=False)).to_be_visible()
+    await expect(player.get_by_text('Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.')).to_be_visible()
 
 
 async def run(browser, root):
@@ -167,14 +167,16 @@ async def run(browser, root):
     await expect(bob.locator('.bq-emoji-palette')).to_have_count(0)
     await expect(deniz.locator('.bq-emoji-palette')).to_have_count(0)
 
-    await asyncio.gather(submit_guess(bob, '🦊 ❄️', 'KAISA'), submit_guess(deniz, '🔥', 'Amumu'))
+    await asyncio.gather(submit_guess(bob, '🦊 ❄️', 'Jinx'), submit_guess(deniz, '🔥', 'Amumu'))
+    await bob.get_by_label('Euer Rateversuch').fill('KAISA')
+    await bob.get_by_role('button',name='Teamantwort aktualisieren').click()
     await expect(alice.get_by_text('Amumu', exact=True)).to_have_count(0)
     for page in [host, *players, viewer]:
         await expect(page.get_by_role('heading', name='Alle Team-Ergebnisse')).to_be_visible(timeout=15000)
         await expect(page.locator('.bq-team-emoji')).to_contain_text(TARGET)
-        await expect(page.locator('.bq-emoji-results li').nth(0)).to_contain_text('Richtig · +100 Punkte')
+        await expect(page.locator('.bq-emoji-results li').nth(0)).to_contain_text('Richtig · +200 Punkte')
         await expect(page.locator('.bq-emoji-results li').nth(1)).to_contain_text('Falsch · 0 Punkte')
-    print('PASS: authoring, same hidden target, timed private clues, one guess per team and joint result', flush=True)
+    print('PASS: authoring, same hidden target, timed private clues, changeable guess and joint result', flush=True)
 
     await host.locator('[data-action="emoji-close"]').click()
     await tile(host, 'Fähigkeiten').click()

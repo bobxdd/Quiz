@@ -3,14 +3,14 @@
  * the connected host browser keeps the authoritative room in memory.
  * No Firebase, cloud database, or public hosting of private quiz solutions.
  */
-import {canBuzz,roundMode,applyBuzzerJudgement} from './round-rules.mjs';
+import {canBuzz,canPlaceMapPin,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
-import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore} from './core.mjs';
-import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,canArrangeLobby,lobbySnapshot} from './lobby-model.mjs';
+import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,questionSeconds} from './core.mjs';
+import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
-import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz} from './backup-store.mjs';
-import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
+import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz,isGuestResumeCode,rememberGuestResume} from './backup-store.mjs';
+import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,finishTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 
 const HOST_PREFIX='brainquiz27-';
 const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
@@ -228,8 +228,12 @@ export function watchProjector(room,token,onFrame,onStatus){
  void start();
  return stop;
 }
-function guestIdentity(room){
+function guestIdentity(room,restoreCode=''){
  const key='bq-p2p-guest-'+room;let item=null;
+ if(isGuestResumeCode(restoreCode)){
+  const [uid,secret]=restoreCode.split('.');
+  return {uid,secret};
+ }
  try{item=JSON.parse(sessionStorage.getItem(key)||'null')}catch{}
  if(!item||!safeUid(item.uid)||!TOKEN_RE.test(item.secret||'')){
   item={uid:'p_'+randomHex(12),secret:randomHex(24)};
@@ -242,7 +246,32 @@ function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:q
 export class PeerGame{
  constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.unverifiedConnections=new Set();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';this.connectionPhase='idle';this.iceState='unknown';this.iceErrorCode=0;this.retryPromise=null;this.connectAttempt=null;}
  async init(){return this;}
- serverNow(){return Date.now()+this.offset+(this.emojiClockOffset||0);}
+ serverNow(){
+  const sample=this.mode==='guest'&&this.clockSample;
+  return sample?sample.hostTime+(performance.now()-sample.received):Date.now();
+ }
+ refreshClock(burst=3){
+  clearTimeout(this.clockTimer);
+  if(this.mode!=='guest'||!this.connected||!this.conn?.open)return;
+  const seq=this.clockSequence=(this.clockSequence||0)+1;
+  this.clockProbe={seq,sent:performance.now()};
+  try{this.conn.send({t:'clock-ping',seq});}catch{}
+  this.clockTimer=setTimeout(()=>this.refreshClock(burst>1?burst-1:3),burst>1?300:12000);
+  this.clockTimer.unref?.();
+ }
+ _readClockSample(message){
+  const probe=this.clockProbe;
+  if(!probe||message.seq!==probe.seq||!Number.isFinite(message.received)||!Number.isFinite(message.sent))return;
+  const received=performance.now();
+  const transit=Math.max(0,received-probe.sent-Math.max(0,message.sent-message.received));
+  if(transit>2000)return;
+  // Estimate the host time at receipt from the round trip and retain the
+  // least delayed recent sample. The local wall clock never gates a vote.
+  const samples=(this.clockSamples||[]).filter(sample=>received-sample.received<25000);
+  samples.push({received,hostTime:message.sent+transit/2,transit});
+  this.clockSamples=samples.slice(-8);
+  this.clockSample=this.clockSamples.reduce((best,sample)=>sample.transit<=best.transit?sample:best);
+ }
  diagnostics(){
   return {mode:this.mode,connected:!!this.connected,error:String(this.netError||'').slice(0,160),
     phase:this.connectionPhase||'idle',iceState:this.iceState||'unknown',
@@ -457,9 +486,10 @@ export class PeerGame{
   return loadBestHostQuiz(room);}
  _assertHost(room){if(this.mode!=='host'||this.room!==room||!this.data)throw Error('Nur der Host darf diese Aktion ausführen.');}
  _ensureGuest(room){if(this.mode!=='guest'||this.room!==room||!this.conn?.open||!this.connected)throw Error('Verbindung zum Host unterbrochen.');}
- async connect(room,name=''){if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');if(this.mode!=='idle')this.shutdown();this.mode='guest';this.room=room;
+ async connect(room,name='',restoreCode=''){if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');if(restoreCode&&!isGuestResumeCode(restoreCode))throw Error('Ungültiger Wiedereinstiegslink.');if(this.mode!=='idle')this.shutdown();this.mode='guest';this.room=room;
   this.quitting=false;this.guestReconnectAttempts=0;
-  const ident=guestIdentity(room);this.uid=ident.uid;this.secret=ident.secret;this.guestName=safeText(name,28)||this.guestName||'Spieler';
+  const ident=guestIdentity(room,restoreCode);this.uid=ident.uid;this.secret=ident.secret;this.guestName=safeText(name,28)||this.guestName||'Spieler';
+  this.restoringGuest=!!restoreCode;this.rememberedGuest='';
   let last;
   for(let attempt=0;attempt<2;attempt++){
    if(attempt){this._health('retrying',last?.message||'Wiederholter Verbindungsversuch …');
@@ -502,7 +532,7 @@ export class PeerGame{
     this._health('ice');this._watchIce(conn);
     conn.on('open',()=>{
      if(this.peer!==peer||this.conn!==conn||this.quitting)return;
-     try{this._health('handshake');conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room});}
+      try{this._health('handshake');conn.send({t:'hello',uid:this.uid,secret:this.secret,name:this.guestName,room:this.room,restore:this.restoringGuest});}
      catch{finish(networkFailure('Verbindung zum Host konnte nicht bestätigt werden.','rtc'));}
     });
     conn.on('data',input=>{
@@ -513,6 +543,11 @@ export class PeerGame{
       if(accepted)return;
       if(!this._applySnapshot(msg.state)){finish(networkFailure('Spielstand konnte nicht vollständig empfangen werden.','rtc'));return;}
       accepted=true;this.connected=true;this.netError='';this.connectionPhase='connected';this.guestReconnectAttempts=0;
+       this.clockSamples=[];this.refreshClock();
+       if(this.restoringGuest){
+        try{sessionStorage.setItem('bq-p2p-guest-'+this.room,JSON.stringify({uid:this.uid,secret:this.secret}));}catch{}
+        this.restoringGuest=false;
+       }
       this._ackSnapshot(msg.version);finish();this._emit();
       for(const pending of this.pending.values())this._sendRequest(pending);
      }
@@ -534,6 +569,7 @@ export class PeerGame{
  }
  _guestLost(){
   if(this.quitting||this.mode!=='guest'||this.reconnectTimer)return;
+  clearTimeout(this.clockTimer);this.clockProbe=null;
   this.connected=false;this.netError=this.iceState==='failed'
    ?connectionAdvice({iceState:this.iceState,relay:hasTurnRelay()})
    :'Hostverbindung unterbrochen. Wiederverbindung läuft …';
@@ -574,8 +610,12 @@ export class PeerGame{
    }
    delete q._wireAudioKey;
   }else if(q?.type!=='audio')this.cachedQuizAudio=null;
-  this.emojiClockOffset=Number.isFinite(payload.emojiClock)?payload.emojiClock-Date.now():0;
-  this.guestData={
+  const hostTime=payload.hostTime??payload.emojiClock;
+  if(!this.clockSample&&Number.isFinite(hostTime))this.clockSample={hostTime,received:performance.now()};
+   if(payload.member?.status==='approved'&&this.rememberedGuest!==this.uid){
+    this.rememberedGuest=this.uid;rememberGuestResume(this.room,this.uid+'.'+this.secret,payload.member.name);
+   }
+   this.guestData={
   public:payload.public||null,lobby:payload.lobby||null,roster:payload.roster||{},presence:payload.presence||{},buzzers:payload.buzzers||{},
   members:payload.member?{[this.uid]:payload.member}:{},responses:payload.ownResponse?{[String(payload.public?.round||0)]:{[this.uid]:payload.ownResponse}}:{},
   messages:payload.messages||{},teamEmoji:payload.teamEmoji||null
@@ -585,6 +625,7 @@ export class PeerGame{
   try{this.conn.send({t:'snapshot-ack',version});}catch{}
  }
  _receiveFromHost(msg){if(!msg||typeof msg!=='object')return;
+  if(msg.t==='clock-pong'){this._readClockSample(msg);return;}
   if(msg.t==='snapshot'){
    if(this._applySnapshot(msg.state)){this._ackSnapshot(msg.version);this._emit();}
    else this._guestLost();
@@ -595,6 +636,7 @@ export class PeerGame{
    msg.ok?p.resolve(msg.result):p.reject(Error(msg.error||'Aktion nicht erlaubt.'));
   }
   if(msg.t==='shutdown'){
+   clearTimeout(this.clockTimer);
    this.netError='Der Host hat den Raum geschlossen.';this.quitting=true;this.connected=false;
    for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error(this.netError));}
    this.pending.clear();this._emit();
@@ -605,7 +647,17 @@ export class PeerGame{
   const msgs=approved&&member.team?{[member.team]:this.data.messages?.[member.team]||{}}:{};
   const privateEmoji=approved?teamEmojiForPlayer(this.data.teamEmoji,member.team,ctx.uid):null;
   const emojiClock=publicState?.teamEmoji&&publicState.deadline?Date.now():null;
-  return {member:clone(member),lobby:lobbySnapshot(this.data),public:clone(publicState),roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs),teamEmoji:clone(privateEmoji),emojiClock};
+   const display=clone(publicState);
+   const waiting=waitsForNextQuestion(publicState,member);
+   if(waiting){
+    display.current=null;display.answerParticipants=null;display.answerReview=null;display.teamEmoji=null;
+    display.preRevealDisplay=null;display.buzzerAnnouncement=null;display.audioPlayback=null;
+   }else if(buzzerCoverActive(publicState,this.data.buzzers)){
+    const {id,category,type,points,roundMode,basePoints,doublePoints}=publicState.current;
+    display.current={id,category,type,points,roundMode,basePoints,doublePoints};
+    display.audioPlayback=null;
+   }
+   return {member:clone(member),lobby:lobbySnapshot(this.data),public:display,roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved&&!waiting?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs),teamEmoji:waiting?null:clone(privateEmoji),emojiClock,hostTime:Date.now()};
  }
  async _sendHostMessage(ctx,message){
   if(!ctx.conn?.open)return;
@@ -666,7 +718,7 @@ export class PeerGame{
   return data.projectorToken;
  }
  publishProjector(room,frame){
-  if(!this.hasProjector(room)||this.projectorFrame?.html===frame.html&&this.projectorFrame?.deadline===frame.deadline)return;
+  if(!this.hasProjector(room)||this.projectorFrame?.html===frame.html&&this.projectorFrame?.deadline===frame.deadline&&this.projectorFrame?.pausedRemaining===frame.pausedRemaining)return;
   this.projectorFrame=frame;
   for(const ctx of this.projectorConnections)this._sendDisplay(ctx);
  }
@@ -677,7 +729,7 @@ export class PeerGame{
    try{
     while(ctx.conn.open&&this.projectorFrame&&ctx.sentDisplay!==this.projectorFrame){
      const frame=this.projectorFrame;
-     await this._sendHostMessage(ctx,frame);
+     await this._sendHostMessage(ctx,{...frame,hostTime:Date.now()});
      ctx.sentDisplay=frame;
     }
    }catch{}finally{ctx.sendingDisplay=false;}
@@ -709,6 +761,7 @@ export class PeerGame{
   if(!ctx.ready){
    if(msg.t!=='hello'||msg.room!==this.room||!safeUid(msg.uid)||!TOKEN_RE.test(msg.secret||'')){deny('Ungültiger Beitritt.');return}
    const prev=this.memberSecrets[msg.uid],member=this.data.members[msg.uid];
+    if(msg.restore===true&&(!prev||member?.status!=='approved')){deny('Für diesen Wiedereinstieg gibt es keine aktive Freigabe.');return;}
    if(prev&&prev!==msg.secret){deny('Spieleridentität stimmt nicht überein.');return}
    if(!prev){if(Object.keys(this.data.members).filter(id=>this.data.members[id]?.status==='pending').length>=MAX_WAITING){deny('Warteraum ist voll.');return}
     this.memberSecrets[msg.uid]=msg.secret;
@@ -721,6 +774,14 @@ export class PeerGame{
    this._changed();return;
   }
   if(this.guestConnections.get(ctx.uid)!==ctx||!this.data)return;
+   if(msg.t==='clock-ping'){
+    const received=Date.now();
+    if(Number.isSafeInteger(msg.seq)&&msg.seq>0&&received-(ctx.lastClockPing||0)>=100){
+     ctx.lastClockPing=received;
+     try{ctx.conn.send({t:'clock-pong',seq:msg.seq,received,sent:Date.now()});}catch{}
+    }
+    return;
+   }
   if(msg.t==='snapshot-ack'&&Number.isSafeInteger(msg.version)&&msg.version>(ctx.ackVersion||0)&&msg.version<=ctx.snapshotVersion){
    ctx.ackVersion=msg.version;ctx.lastAckAt=Date.now();this._emit('.info/diagnostics');return;
   }
@@ -752,7 +813,8 @@ export class PeerGame{
   // access to the quiz, to another player's private team chat, or to host actions.
   if(['lobby-join','lobby-create','lobby-ready'].includes(action)){
    if(!member||!['pending','approved'].includes(member.status))throw Error('Diese Person darf die Lobby nicht verändern.');
-   if(!canArrangeLobby(pub))throw Error('Die Teamaufstellung ist nach Spielbeginn gesperrt.');
+   const lateTeamChoice=member.status==='pending'&&action==='lobby-join'&&canAdmitPlayer(pub);
+   if(!canArrangeLobby(pub)&&!lateTeamChoice)throw Error('Die Teamaufstellung ist nach Spielbeginn gesperrt.');
    if(now-(ctx.lastLobbyChange||0)<160&&!(action==='lobby-ready'&&['lobby-join','lobby-create'].includes(ctx.lastLobbyAction)))throw Error('Bitte vor der nächsten Änderung kurz warten.');
    if(action==='lobby-join'){
     const id=payload.team;
@@ -782,6 +844,8 @@ export class PeerGame{
    return true;
   }
   if(member?.status!=='approved'||this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Hostfreigabe erforderlich.');
+   if(waitsForNextQuestion(pub,member)&&['buzz','answer',TEAM_EMOJI].includes(action))
+    throw Error('Deine Teilnahme beginnt mit der nächsten Frage.');
   switch(action){
    case TEAM_EMOJI:{
     const emoji=this.data.teamEmoji;
@@ -795,9 +859,25 @@ export class PeerGame{
     if(round!==String(payload.round))throw Error('Die Buzzer-Runde ist nicht mehr offen.');
     if(this.data.buzzers[round])return false;
     if(!canBuzz(pub,this.data.buzzers,ctx.uid,member.team,now))throw Error('Buzzer ist noch nicht freigegeben oder du bist für diese Runde gesperrt.');
-    this.data.buzzers[round]={uid:ctx.uid,team:member.team,name:member.name,at:now};return true;
+    const accepted={uid:ctx.uid,team:member.team,name:member.name,at:now};
+    this.data.buzzers[round]=accepted;
+    pub.buzzerAnnouncement={...accepted,round:pub.round};
+    return true;
    }
-   case 'answer':{if(pub?.phase!=='question'||String(payload.round)!==round||(pub.deadline&&now>pub.deadline))throw Error('Frage ist nicht offen.');const written=roundMode(pub.current)==='written',map=pub.current?.type==='map';if(!written&&!map)throw Error('Diese Frage wird mündlich beantwortet.');if(written&&!pub.answerParticipants?.[ctx.uid])throw Error('Nicht für diese Schreib-Runde freigegeben.');const b=this.data.buzzers[round];if(map&&!written&&(!b||b.uid!==ctx.uid))throw Error('Nur die Person am Buzzer darf den Kartenpunkt setzen.');const text=safeText(payload.text,800);if(!text)throw Error('Antwort darf nicht leer sein.');if(map&&!decodePoint(text))throw Error('Kartenpunkt liegt außerhalb der Weltkarte.');this.data.responses[round]??={};if(this.data.responses[round][ctx.uid]&&!map)throw Error('Antwort bereits abgegeben.');const original=this.data.responses[round][ctx.uid];this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now};return true}
+   case 'answer':{
+    if(pub?.phase!=='question'||String(payload.round)!==round||(pub.deadline&&now>=pub.deadline))throw Error('Frage ist nicht offen.');
+    const written=roundMode(pub.current)==='written',map=pub.current?.type==='map';
+    if(!written&&!map)throw Error('Diese Frage wird mündlich beantwortet.');
+    if(written&&!pub.answerParticipants?.[ctx.uid])throw Error('Nicht für diese Schreib-Runde freigegeben.');
+    if(map&&!canPlaceMapPin(pub,this.data.buzzers,ctx.uid,member.team,now))throw Error('Du kannst deinen Pin setzen, solange die Karte offen ist.');
+    const text=safeText(payload.text,800);
+    if(!text)throw Error('Antwort darf nicht leer sein.');
+    if(map&&!decodePoint(text))throw Error('Kartenpunkt liegt außerhalb der Weltkarte.');
+    this.data.responses[round]??={};
+    const original=this.data.responses[round][ctx.uid];
+    this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now};
+    return true;
+   }
    case 'message':{if(pub?.current?.type===TEAM_EMOJI&&pub.phase==='question')throw Error('Während der Emoji-Teamrunde ist der Teamchat geschlossen.');if(!pub?.settings?.chatOpen||(pub.settings.lockOnBuzz&&pub.phase==='question'&&this.data.buzzers[round]))throw Error('Teamchat geschlossen.');const text=safeText(payload.text,500);if(!text||now-ctx.lastChat<1000)throw Error('Nachrichtenrate begrenzt.');ctx.lastChat=now;this.data.messages[member.team]??={};const messages=this.data.messages[member.team];messages['m_'+randomHex(9)]={uid:ctx.uid,name:member.name,text,at:now};const keys=Object.keys(messages);for(const key of keys.slice(0,-80))delete messages[key];return true}
    default:throw Error('Aktion nicht erlaubt.');
   }
@@ -839,12 +919,19 @@ export class PeerGame{
   this._changed();
   return {id:added.id,name:added.teams[added.id],color:added.color};
  }
+ async hostRenameTeam(room,id,name){
+  const d=this._getHostData(room);
+  d.public.teams=renameLobbyTeam(d.public.teams,id,name);
+  this._changed();
+  return d.public.teams[id];
+ }
  async hostAssign(room,uid,player,team){
   const d=this._getHostData(room),member=d.members?.[uid];
   if(!member||member.status==='removed')throw Error('Diese Beitrittsanfrage existiert nicht.');
-  if(member.status==='pending'&&!canArrangeLobby(d.public))throw Error('Neue Teamaufnahmen sind nach Spielbeginn gesperrt.');
+  if(member.status==='pending'&&!canAdmitPlayer(d.public))throw Error('Das Quiz ist beendet.');
+  const late=member.status==='pending'&&!canArrangeLobby(d.public);
   let destination=team,addition=null;
-  if(member.status==='pending'&&member.teamRequest?.kind==='create'&&!team){
+  if(member.status==='pending'&&!late&&member.teamRequest?.kind==='create'&&!team){
    addition=addLobbyTeam(d.public.teams,member.teamRequest.name);
    destination=addition.id;
   }else if(!destination&&member.teamRequest?.kind==='join')destination=member.teamRequest.id;
@@ -852,6 +939,7 @@ export class PeerGame{
   const next=approval(d.roster,uid,member,destination);if(!next.accepted)throw Error(next.reason);
   if(addition){d.public.teams=addition.teams;d.public.scores[addition.id]=0;}
   d.roster=next.roster;
+  if(late&&d.public.current&&d.public.phase!=='ready')member.playFromRound=d.public.round+1;
   d.members[uid]={...member,team:destination,status:'approved',teamRequest:null,createdTeam:member.createdTeam===true||!!addition,ready:member.ready===true};
   this._changed();
  }
@@ -882,23 +970,46 @@ export class PeerGame{
    d.pendingQuestion={round:next.round,id:question.id,
     current:{...clone(playerQuestion),points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints},
     participants:clone(participants),
-    duration:deadline?Math.max(0,deadline-Date.now()):0};
+     duration:deadline?(questionSeconds(question.seconds)*1000||Math.max(0,deadline-Date.now())):0};
   }
   else if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
   else{delete d.teamEmoji;delete next.teamEmoji;}
   this._scheduleTeamEmojiDeadline();
   this._changed();return clone(next);
  }
- async uncoverQuestion(room,round,id){
+ questionPreview(room,round,id){
+  const d=this._getHostData(room),pending=d.pendingQuestion;
+  return d.public.phase==='ready'&&pending?.round===Number(round)&&pending.id===id?pending.current:null;
+ }
+ async releaseBuzzers(room,round,uid=''){
+  const d=this._getHostData(room),p=d.public,key=String(round);
+  if(key!==String(p.round)||!['question','paused'].includes(p.phase)||roundMode(p.current)!=='buzzer'||p.buzzerResolved?.[key])
+   throw Error('Die Buzzerfrage ist nicht mehr aktiv.');
+  if(uid){
+   if(!Object.hasOwn(d.roster,uid))throw Error('Person ist nicht im Spiel.');
+   (p.buzzerReleased??={})[key]??={};
+   p.buzzerReleased[key][uid]=true;
+   if(p.buzzerBlocked?.[key])delete p.buzzerBlocked[key][uid];
+  }else{
+   if(p.buzzerBlocked)delete p.buzzerBlocked[key];
+   if(p.buzzerBlockedTeams)delete p.buzzerBlockedTeams[key];
+   if(p.buzzerReleased)delete p.buzzerReleased[key];
+   p.buzzerArmed=true;
+  }
+  (p.settings??={}).buzzerEnabled=true;
+  this._changed();
+ }
+ async uncoverQuestion(room,round,id,seconds,participants){
   const d=this._getHostData(room),pending=d.pendingQuestion;
   if(d.public.phase!=='ready'||d.public.round!==Number(round)||d.public.current?.id!==id||pending?.round!==Number(round)||pending.id!==id)throw Error('Die ausgewählte Frage hat sich geändert.');
   const question=this.hostQuiz?.questions.find(item=>item.id===id);
   if(!question)throw Error('Die Originalfrage fehlt im Host-Quiz.');
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   if(emoji)emoji.points=d.public.current.points;
-  d.public={...d.public,phase:'question',current:clone(pending.current),
-   answerParticipants:emoji?null:pending.participants,
-   deadline:!emoji&&pending.duration?Date.now()+pending.duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
+   const duration=seconds===undefined?pending.duration:questionSeconds(seconds)*1000;
+   d.public={...d.public,phase:'question',current:clone(pending.current),
+    answerParticipants:emoji?null:participants??pending.participants,
+    deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
   if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
   delete d.pendingQuestion;
   this._changed();return clone(d.public);
@@ -966,10 +1077,11 @@ export class PeerGame{
    if(!this._advanceTeamEmoji(id,phase))this._scheduleTeamEmojiDeadline();
   },Math.max(0,deadline-Date.now()));
  }
- _advanceTeamEmoji(id,phase){
+ _advanceTeamEmoji(id,phase,forceFinish=false){
   const d=this.data,round=d?.teamEmoji;
   if(this.mode!=='host'||!round||round.id!==id||round.phase!==phase||d.public.phase!=='question')return false;
-  if(!advanceTeamEmoji(round,Date.now()))return false;
+  if(forceFinish)finishTeamEmoji(round);
+  else if(!advanceTeamEmoji(round,Date.now()))return false;
   if(round.phase==='reveal'){
    const p=d.public;
    for(const result of round.results){
@@ -992,6 +1104,22 @@ export class PeerGame{
  async startTeamEmoji(room,id){
   this._assertHost(room);
   return this._advanceTeamEmoji(id,'roles');
+ }
+ async reviewTeamEmoji(room,id,phase){
+  this._assertHost(room);
+  if(phase==='reveal'||!this._advanceTeamEmoji(id,phase,true))throw Error('Diese Emoji-Teamrunde ist nicht mehr offen.');
+ }
+ async judgeTeamEmoji(room,id,team,verdict){
+  const d=this._getHostData(room),round=d.teamEmoji,p=d.public;
+  const row=round?.results?.find(result=>result.id===team);
+  if(round?.id!==id||round.phase!=='reveal'||!row||!['correct','wrong'].includes(verdict))throw Error('Dieses Teamergebnis fehlt.');
+  const before=clone(p),points=verdict==='correct'?round.points:0;
+  p.scores[team]=(Number(p.scores[team])||0)+points-row.points;
+  row.status=verdict;row.points=points;
+  this._auditScore(d,before,{kind:TEAM_EMOJI,team,round:p.round,questionId:p.current.id});
+  const entry=d.questionHistory?.[String(p.round)];
+  if(entry)entry.emojiResults=round.results.map(result=>({...result,name:p.teams[result.id]}));
+  this._syncTeamEmoji();this._changed();
  }
  async closeTeamEmoji(room,id,phase){
   const d=this._getHostData(room),emoji=d.teamEmoji,p=d.public;
@@ -1027,8 +1155,9 @@ export class PeerGame{
   this._auditScore(d,before,{kind:'manual-team',team,round:d.public.round});this._changed()}
  async judgeWritten(room,round,uid,result){
   const d=this._getHostData(room),p=d.public,key=String(round);
+   const entry=p?.answerReview?.entries?.[uid];
   if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||
-     !p?.answerReview?.entries?.[uid]?.revealed||!d.roster?.[uid]||!['correct','wrong'].includes(result))
+      !entry||(entry.submitted&&!entry.revealed)||!d.roster?.[uid]||!['correct','wrong'].includes(result))
    throw Error('Diese schriftliche Antwort ist nicht bewertbar.');
   const teamMode=p.scoreMode!=='individual',team=teamMode?d.roster[uid].team:'';
   if(teamMode){
@@ -1056,9 +1185,15 @@ export class PeerGame{
    questionId:nextPublic.current.id,verdict:result});
   this._changed();return clone(nextScore);
  }
- async judgeBuzzer(room,round,uid,result,revealPatch=null){
-  const d=this._getHostData(room),before=clone(this._getHostData(room).public);
-  const next=applyBuzzerJudgement(d.public,d.buzzers,{round,uid,result});
+ async judgeBuzzer(room,round,uid,result,revealPatch=null,{oral=false}={}){
+   const d=this._getHostData(room),before=clone(d.public),key=String(round);
+   let judgedBuzzers=d.buzzers;
+   if(oral){
+    const person=d.roster?.[uid];
+    if(d.buzzers[key]||!person||!Object.hasOwn(d.public.teams||{},person.team))throw Error('Wähle eine Person für die mündliche Wertung.');
+    judgedBuzzers={...d.buzzers,[key]:{uid,team:person.team,name:person.name,at:Date.now(),oral:true}};
+   }
+   const next=applyBuzzerJudgement(d.public,judgedBuzzers,{round,uid,result});
   let finalState=next.state;
   if(result==='correct'){
    // Publish the score, winning buzzer, question answer and closing phase as ONE
@@ -1069,7 +1204,7 @@ export class PeerGame{
       !Object.hasOwn(revealPatch.current,'answer')){
     throw Error('Für die richtige Buzzer-Bewertung fehlt die vollständige Lösungsfreigabe.');
    }
-   finalState=applyQuestionChanges(next.state,round,d.public.current.id,revealPatch,['question']);
+    finalState=applyQuestionChanges(next.state,round,d.public.current.id,revealPatch,['question','paused']);
    if(!finalState)throw Error('Lösung und Punkte konnten nicht gemeinsam übernommen werden.');
   }
   d.public=finalState;d.buzzers=next.buzzers;
@@ -1112,7 +1247,8 @@ export class PeerGame{
  }
  shutdown(){
   this.quitting=true;
-  for(const timer of [this.reconnectTimer,this.hostReconnectTimer,this.snapshotTimer,this.teamEmojiTimer])clearTimeout(timer);
+  for(const timer of [this.reconnectTimer,this.hostReconnectTimer,this.snapshotTimer,this.teamEmojiTimer,this.clockTimer])clearTimeout(timer);
+  this.clockSample=this.clockProbe=null;this.clockSamples=[];
   this.reconnectTimer=this.hostReconnectTimer=this.snapshotTimer=this.teamEmojiTimer=null;
   for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Verbindung geschlossen.'));}
   for(const ctx of this.unverifiedConnections){clearTimeout(ctx.helloTimer);try{ctx.conn.close()}catch{}}

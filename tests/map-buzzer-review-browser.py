@@ -43,30 +43,32 @@ async def main():
   await guest.wait_for_function("() => window.__probe.info().publicState?.current?.id==='map-buzzer'",timeout=12000)
   assert 'mapTargetX' not in await guest.evaluate('window.__probe.info().publicState.current')
   assert await guest.locator('.bq-quiz-verdict').count()==0
-  await guest.locator('[data-action="buzz"]').click()
-  await expect(host.locator('[data-action="buzz-correct"]')).to_be_visible(timeout=12000)
-  # The guest must receive the winning-buzzer snapshot before its map can accept clicks.
-  await guest.wait_for_function("() => Object.values(window.__probe.getGame().guestData.buzzers||{}).some(v=>v?.uid===window.__probe.getGame().uid)",timeout=12000)
-  await expect(guest.locator('[data-action="submit-map"]')).to_be_visible(timeout=12000)
-  rect=await guest.locator('.bq-map-viewport').bounding_box()
+  atlas=guest.locator('.bq-map-viewport[data-map-choice="true"]')
+  await expect(atlas).to_be_visible(timeout=12000)
+  rect=await atlas.bounding_box()
   assert rect
   await guest.mouse.click(rect['x']+rect['width']*.5,rect['y']+rect['height']*.5)
   await expect(guest.locator('.bq-map-pin.is-self')).to_have_count(1,timeout=12000)
-  await guest.locator('[data-action="submit-map"]').click()
+  await expect(guest.locator('.bq-map-result')).to_contain_text('Pin gespeichert')
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{}).some(v=>!!v.text)",timeout=12000)
+  await guest.locator('[data-action="buzz"]').click()
+  await expect(host.locator('[data-action="buzz-correct"]')).to_be_visible(timeout=12000)
+  await expect(guest.locator('.bq-buzzer-cover')).to_be_visible(timeout=12000)
+  await expect(guest.locator('.bq-map-viewport')).to_have_count(0)
+  await expect(guest.get_by_text('Wo liegt das Ziel?',exact=True)).to_have_count(0)
   assert await guest.locator('.bq-map-pin.is-solution').count()==0
   await host.locator('[data-action="buzz-correct"]').click()
   for page in (host,guest):
    await page.wait_for_function("() => window.__probe.info().publicState?.phase==='reveal'",timeout=12000)
    await expect(page.locator('.bq-review-winner')).to_be_visible()
    await expect(page.locator('.bq-review-winner')).to_contain_text('Alice')
-   await expect(page.locator('.bq-review-winner')).to_contain_text('+300 Punkte')
+   await expect(page.locator('.bq-review-winner')).to_contain_text('+600 Punkte')
    await expect(page.locator('.bq-review-map-distance')).to_have_count(1,timeout=15000)
    await expect(page.locator('.review-summary')).to_contain_text('Buzzerentscheidung und Punktevergabe sind abgeschlossen')
    await expect(page.locator('.bq-map-pin.is-solution')).to_have_count(1)
    assert await page.locator('[data-action="judge-review-correct"]').count()==0
   await expect(host.locator('[data-action="back"]')).to_have_text('Weiter zum Quizbrett')
-  assert await host.evaluate("window.__probe.info().publicState.scores.t1")==300
+  assert await host.evaluate("window.__probe.info().publicState.scores.t1")==600
   await host.locator('[data-action="back"]').click()
   await expect(guest.locator('.bq-board-scene')).to_be_visible(timeout=12000)
   assert not errors,errors

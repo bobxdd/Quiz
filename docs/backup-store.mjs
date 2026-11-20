@@ -32,6 +32,20 @@ export const saveHostCheckpoint=(key,value)=>access(key,'write',structuredClone(
 export const loadHostCheckpoint=key=>access(key,'read');
 export const deleteHostCheckpoint=key=>access(key,'delete');
 
+export const isGuestResumeCode=value=>typeof value==='string'&&/^p_[a-f0-9]{24}\.[a-f0-9]{48}$/.test(value);
+const guestResumeKey=room=>'bq-player-resume-'+room;
+export function loadGuestResume(room){
+ if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room||''))return null;
+ try{
+  const item=JSON.parse(localStorage.getItem(guestResumeKey(room))||'null');
+  return isGuestResumeCode(item?.code)&&typeof item.name==='string'?item:null;
+ }catch{return null;}
+}
+export function rememberGuestResume(room,code,name){
+ if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room||'')||!isGuestResumeCode(code))return;
+ try{localStorage.setItem(guestResumeKey(room),JSON.stringify({code,name:String(name||'Spieler').slice(0,28)}));}catch{}
+}
+
 export async function loadLastHostRoom(){
  const saved=await access(LAST_HOST,'read').catch(()=>null);
  if(typeof saved==='string')return saved;

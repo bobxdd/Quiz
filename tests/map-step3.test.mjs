@@ -47,10 +47,10 @@ test('zoom is anchored beneath pointer; map point does not drift',()=>{
  assert.ok(Number.isFinite(shiftedPoint.x)&&Number.isFinite(shiftedPoint.y));
  assert.equal(mapWorldPosition(shiftedPoint,shifted)?.x,p.x);
 });
-test('zoom clamps to 1–16 and never exposes empty map edges',()=>{
+test('zoom clamps to 1–32 and never exposes empty map edges',()=>{
  for(const raw of [{zoom:-20,x:-90,y:500},{zoom:100,x:500,y:-5},{zoom:NaN,x:NaN,y:NaN}]){
   const v=normalizeMapView(raw),c=mapViewCss(v);
-  assert.ok(v.zoom>=1&&v.zoom<=16);
+  assert.ok(v.zoom>=1&&v.zoom<=32);
   assert.ok(v.x>=50/v.zoom&&v.x<=100-50/v.zoom);
   assert.ok(v.y>=50/v.zoom&&v.y<=100-50/v.zoom);
   assert.ok(c.left<=0.00001&&c.top<=0.00001);

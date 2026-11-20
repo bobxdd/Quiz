@@ -70,7 +70,7 @@ async def main():
    page.on('pageerror',lambda ex,n=name:errors.append(n+': '+str(ex)))
   await host.locator('.top-nav [data-view="live"]').click()
 
-  # First answer is wrong: hide solution, deduct -50, unlock Bob's buzzer.
+  # First answer is wrong: hide the question until the verdict, then unlock Bob's buzzer.
   await host.locator('[data-action="open"][data-qid="normal-text"]').click()
   await host.locator('[data-action="uncover-question"]').click()
   await expect(alice.locator('.bq-big-buzzer')).to_be_visible(timeout=12000)
@@ -78,8 +78,15 @@ async def main():
    assert (await page.evaluate("window.__probe.info().publicState.current.answer")) is None
   await alice.locator('[data-action="buzz"]').click()
   await host.locator('[data-action="buzz-wrong"]').wait_for(timeout=12000)
+  for page in (alice,bob):
+   await expect(page.locator('.bq-buzzer-cover')).to_be_visible()
+   await expect(page.locator('.bq-buzzer-announcement')).to_contain_text('Alice')
+   masked=await page.evaluate("window.__probe.info().publicState.current")
+   assert 'prompt' not in masked and 'scene' not in masked,masked
+  assert await host.evaluate("!!window.__probe.info().publicState.current.prompt")
   await host.locator('[data-action="buzz-wrong"]').click()
   await expect(bob.locator('[data-action="buzz"]')).to_be_enabled(timeout=12000)
+  await expect(bob.locator('.bq-buzzer-cover')).to_have_count(0)
   assert await bob.evaluate("window.__probe.info().publicState.phase")=='question'
   assert (await bob.evaluate("window.__probe.info().publicState.current.answer")) is None
   await expect(bob.locator('.bq-quiz-verdict.is-wrong')).to_contain_text('Andere Spieler')
@@ -101,10 +108,10 @@ async def main():
   await expect(host.locator('[data-action="back"]')).to_have_text('Weiter zum Quizbrett')
   assert 'Anivia ist der Kryophönix.' in await alice.locator('.stage').inner_text()
   score=await host.evaluate("window.__probe.info().publicState.scores")
-  assert score['t1']==-50 and score['t2']==100,score
+  assert score['t1']==-100 and score['t2']==200,score
   await host.evaluate('window.__probe.getGame()._changed()')
   await host.wait_for_timeout(200)
-  assert await host.evaluate("window.__probe.info().publicState.scores.t2")==100,'Repeated state must not double count'
+  assert await host.evaluate("window.__probe.info().publicState.scores.t2")==200,'Repeated state must not double count'
   await host.locator('[data-action="back"]').click()
   await expect(host.locator('.bq-board-scene')).to_be_visible()
 
@@ -119,7 +126,7 @@ async def main():
    await check_revealed(page,'Caitlyn')
    assert await page.locator('.choices .choice.correct').count()==1
   score=await host.evaluate("window.__probe.info().publicState.scores")
-  assert score['t1']==150 and score['t2']==100,score
+  assert score['t1']==300 and score['t2']==200,score
   await host.locator('[data-action="back"]').click()
 
   # The existing host-controlled soundquiz also gets automatic answer reveal.

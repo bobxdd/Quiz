@@ -40,7 +40,7 @@ test('team question imports with private settings and never opens a buzzer',()=>
  assert.equal(canBuzz({phase:'question',current:publicCopy}, {},'b','t1'),false);
 });
 
-test('separate timer phases, private team clues and one answer per team',()=>{
+test('separate timer phases, private team clues and one final answer per team',()=>{
  const round=newTeamEmojiRound(question,state,roster,'1');
  const view=(team,person)=>teamEmojiForPlayer(round,team,person);
  const act=(team,person,kind,value,time=1000)=>playTeamEmoji(round,team,person,kind,value,time);
@@ -72,8 +72,10 @@ test('separate timer phases, private team clues and one answer per team',()=>{
  assert.deepEqual(view('t2','d').clues,['👩‍🚀']);
  assert.equal(view('t1','b').target,undefined);
  assert.throws(()=>act('t1','a','guess','KAISA',9001),/Rolle/);
- act('t1','b','guess','KAISA',9001);
- assert.throws(()=>act('t1','b','guess','Andere Antwort',9002),/bereits/);
+ act('t1','b','guess','Andere Antwort',9001);
+ act('t1','b','guess','KAISA',9002);
+ assert.equal(view('t1','b').guess,'KAISA');
+ assert.throws(()=>act('t1','b','guess','Zu spät',14000),/abgelaufen/);
  act('t2','d','guess','Tochter der Leere',9001);
  assert.equal(publicTeamEmoji(round).results,undefined);
  advanceTeamEmoji(round,14000);

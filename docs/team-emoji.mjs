@@ -108,7 +108,6 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
   }
   team.clues = value.slice();
  }else if(action === 'guess' && round.phase === 'guess' && team.active && team.roles[uid] === 'guess' && team.clues.length) {
-  if(team.guess) throw Error('Dein Team hat bereits eine Antwort abgegeben.');
   const guess = typeof value === 'string' ? value.trim() : '';
   if(guess.length > 100 || !normalizeGuess(guess)) throw Error('Gib einen Champion oder Begriff mit maximal 100 Zeichen ein.');
   team.guess = guess;
@@ -128,15 +127,18 @@ export function advanceTeamEmoji(round, now) {
   round.phase = 'guess';
   round.deadline = now + round.guessSeconds * 1000;
  }else if(round.phase === 'guess' && now >= round.deadline) {
-  round.phase = 'reveal';
-  round.deadline = 0;
-  round.results = Object.entries(round.teams).map(([id, team]) => {
-   const correct = !!team.guess && round.accepted.includes(normalizeGuess(team.guess));
-   const status = !team.active ? 'no-roles' : !team.clues.length ? 'no-clues' : !team.guess ? 'no-guess' : correct ? 'correct' : 'wrong';
-   return {id, status, clues:team.clues.map(index => round.palette[index]), guess:team.guess, points:correct ? round.points : 0};
-  });
+  finishTeamEmoji(round);
  }else return false;
  return true;
+}
+export function finishTeamEmoji(round){
+ round.phase='reveal';
+ round.deadline=0;
+ round.results=Object.entries(round.teams).map(([id,team])=>{
+  const correct=!!team.guess&&round.accepted.includes(normalizeGuess(team.guess));
+  const status=!team.active?'no-roles':!team.clues.length?'no-clues':!team.guess?'no-guess':correct?'correct':'wrong';
+  return {id,status,clues:team.clues.map(index=>round.palette[index]),guess:team.guess,points:correct?round.points:0};
+ });
 }
 
 export function publicTeamEmoji(round) {
@@ -159,7 +161,7 @@ export function teamEmojiForPlayer(round, teamId, uid) {
   return {...own, target:round.target, palette:round.palette, selected:team.clues};
  }
  if(round.phase === 'guess' && team.active && role === 'guess') {
-  return {...own, clues:team.clues.map(index => round.palette[index])};
+  return {...own, clues:team.clues.map(index => round.palette[index]),guess:team.guess};
  }
  return own;
 }

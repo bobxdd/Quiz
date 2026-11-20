@@ -75,13 +75,13 @@ test('Every board has its OWN six-question bonus phase; no quiz-global counter',
  assert.equal(boardQuestionPoints(afterSecond,lastSixOnSecond),lastSixOnSecond.points*2);
 });
 
-test('An exactly six-field board starts in its final-six phase; a micro-board below six is unchanged',()=>{
+test('Boards up to six fields start in their double-points phase',()=>{
  const six=makeBoards(6);
  assert.equal(finalSixActive(six),true);
  assert.equal(boardQuestionPoints(six,remainingBoardQuestions(six)[0]),200);
  const tiny=makeBoards(5);
- assert.equal(finalSixActive(tiny),false);
- assert.equal(boardQuestionPoints(tiny,remainingBoardQuestions(tiny)[0]),100);
+ assert.equal(finalSixActive(tiny),true);
+ assert.equal(boardQuestionPoints(tiny,remainingBoardQuestions(tiny)[0]),200);
 });
 
 test('Double points are also valid for the editor maximum; the wrong-answer penalty is half the DOUBLE amount',()=>{

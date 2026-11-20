@@ -29,10 +29,10 @@ test('published map markers identify players by a number, name, team and accessi
  assert.match(malicious,/&lt;img/);
 });
 
-test('timed written rounds show a host and guest countdown based on shared deadline',()=>{
+test('timed rounds show a host and guest countdown based on shared deadline',()=>{
  const app=source('app.mjs'),css=source('session-ui.css');
  assert.match(app,/function roundTimerMarkup\(\)/);
- assert.match(app,/roundMode\(q\)!=='written'/);
+ assert.match(app,/\['question','paused'\]\.includes\(p\?\.phase\)/);
  assert.match(app,/roundTimerMarkup\(\)\}<\/div>/);
  assert.match(app,/id="clock" role="timer" aria-live="off"/);
  assert.match(app,/p\.phase==='paused'\?Number\(p\.pausedRemaining\)/);

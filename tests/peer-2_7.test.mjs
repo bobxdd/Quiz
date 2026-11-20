@@ -211,18 +211,20 @@ test('QA part 2: map replies are private and editable only in the exact current 
  host.shutdown();guest1.shutdown();guest2.shutdown();
 });
 
-test('QA part 2: textual responses are single-submit, and failed cross-user actions do not change state',async()=>{
+test('QA part 2: textual responses can be revised up to the deadline, and failed cross-user actions do not change state',async()=>{
  const {host,guest1,guest2}=await setup(),question=structuredClone(host.hostQuiz.questions[0]);
  question.roundMode='written';question.type='text';
  const expected={[guest1.uid]:{name:'Alice'},[guest2.uid]:{name:'Bob'}};
  await host.openQuestion(room,0,question,publicQuestion(question,false),expected,0);
  await guest1.answer(room,1,'t2','Answer 1');
- await assert.rejects(guest1.answer(room,1,'t1','Changed answer'),/bereits abgegeben/);
+ await guest1.answer(room,1,'t1','Changed answer');
  await assert.rejects(guest1._rpc('answer',{round:1,text:''}),/leer sein/);
  await assert.rejects(guest2._rpc('answer',{round:3,text:'Future answer'}),/nicht offen/);
  await assert.rejects(guest2._rpc('score',{team:'t2',delta:999}),/nicht erlaubt/);
  assert.deepEqual(Object.keys(host.data.responses['1']),[guest1.uid]);
- assert.equal(host.data.responses['1'][guest1.uid].text,'Answer 1');
+ await host.setState(room,{deadline:Date.now()});
+ await assert.rejects(guest1.answer(room,1,'t1','Too late'),/nicht offen/);
+ assert.equal(host.data.responses['1'][guest1.uid].text,'Changed answer');
  assert.equal(host.data.public.scores.t2,0);
  host.shutdown();guest1.shutdown();guest2.shutdown();
 });
@@ -353,16 +355,16 @@ test('Correct buzzer judgement reveals the complete answer and score in one host
   assert.equal(host.data.public.scores.t1,before);
   const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};
   const out=await host.judgeBuzzer(room,1,guest1.uid,'correct',patch);
-  assert.equal(out.delta,100);
+  assert.equal(out.delta,200);
   assert.equal(host.data.public.phase,'reveal');
   assert.equal(host.data.public.current.answer,q.answer);
-  assert.equal(host.data.public.scores.t1,before+100);
+  assert.equal(host.data.public.scores.t1,before+200);
   assert.equal(host.data.public.buzzerResolved['1'].uid,guest1.uid);
   await sleep(95);
   for(const guest of [guest1,guest2]){
    assert.equal(guest.guestData.public.current.answer,q.answer,'guest must see answer after correct host judgement');
    assert.equal(guest.guestData.public.phase,'reveal','phase and solution must arrive together');
-   assert.equal(guest.guestData.public.scores.t1,before+100);
+   assert.equal(guest.guestData.public.scores.t1,before+200);
   }
   assert.equal(await guest2.buzzer(room,1,'t2','Bob'),false,'Other guests cannot buzz once answer was revealed');
   await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'correct',patch),/Buzzer nicht mehr aktuell|Buzzer wurde/);
@@ -381,7 +383,7 @@ test('A wrong buzzer decision never exposes the answer and another team can try'
   await sleep(60);
   assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
   const wrong=await host.judgeBuzzer(room,1,guest1.uid,'wrong');
-  assert.equal(wrong.delta,-50);
+  assert.equal(wrong.delta,-100);
   assert.equal(host.data.public.phase,'question');
   assert.equal(host.data.public.current.answer,undefined);
   await sleep(70);
@@ -390,8 +392,8 @@ test('A wrong buzzer decision never exposes the answer and another team can try'
   const patch={current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0};
   await host.judgeBuzzer(room,1,guest2.uid,'correct',patch);
   assert.equal(host.data.public.current.answer,q.answer);
-  assert.equal(host.data.public.scores.t1,-50);
-  assert.equal(host.data.public.scores.t2,100);
+  assert.equal(host.data.public.scores.t1,-100);
+  assert.equal(host.data.public.scores.t2,200);
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
 });
 
@@ -459,14 +461,14 @@ test('host alone opens questions while all guests can buzz and only host can jud
   assert.equal(host.data.public.scores.t2,0);
   await assert.rejects(guest2._rpc('judgeBuzzer',{result:'correct'}),/nicht erlaubt/);
   await host.judgeBuzzer(room,1,guest2.uid,'wrong');await sleep(65);
-  assert.equal(host.data.public.scores.t2,-50);
+  assert.equal(host.data.public.scores.t2,-100);
   await assert.rejects(guest2.buzzer(room,1,'t2','Bob'),/gesperrt/);
   assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
   assert.equal(host.data.public.scores.t1,0);
   await host.judgeBuzzer(room,1,guest1.uid,'correct',{current:publicQuestion(q,true),phase:'reveal',deadline:0,pausedRemaining:0});
   await host.returnToBoard(room,1,q.id);await sleep(75);
-  assert.equal(host.data.public.scores.t1,100);
-  assert.equal(host.data.public.scores.t2,-50);
+  assert.equal(host.data.public.scores.t1,200);
+  assert.equal(host.data.public.scores.t2,-100);
   await assert.rejects(guest1._rpc('pick',{qid:next.id,round:1}),/Nur der Host/);
   await assert.rejects(guest2.requestPick(room,next.id),/Nur der Host/);
   assert.equal(host.data.public.questionPick??null,null);
@@ -600,12 +602,12 @@ test('wrong verdict creates a non-refundable scored event, even if the buzzer ha
   await host.uncoverQuestion(room,1,q.id);await sleep(80);
   assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
   await host.judgeBuzzer(room,1,guest1.uid,'wrong');
-  assert.equal(host.data.public.scores.t1,-50);
+  assert.equal(host.data.public.scores.t1,-100);
   await assert.rejects(host.cancelQuestion(room,1,q.id),/Antworten oder Punktwertungen/);
   assert.equal(host.data.public.board[q.id].used,true);
   const revealed=await host.updateCurrent(room,1,q.id,{phase:'reveal',current:publicQuestion(q,true),deadline:0,pausedRemaining:0},['question']);
   assert.equal(revealed.phase,'reveal');
-  assert.equal(host.data.public.scores.t1,-50);
+  assert.equal(host.data.public.scores.t1,-100);
   await host.returnToBoard(room,1,q.id);
   assert.equal(selectingTeam(host.data.public),'t2');
  }finally{host.shutdown();guest1.shutdown();guest2.shutdown();}
@@ -643,23 +645,23 @@ test('A three-player two-team written round awards exactly ONE official answer p
   }]));
   await host.updateCurrent(room,1,question.id,{phase:'review',answerReview:{round:1,entries}},['question']);
   const one=await host.judgeWritten(room,1,guest1.uid,'correct');
-  assert.equal(one.total,100);
-  assert.equal(host.data.public.scores.t1,100);
+  assert.equal(one.total,200);
+  assert.equal(host.data.public.scores.t1,200);
   assert.equal(host.data.public.writtenTeamRepresentatives['1'].t1,guest1.uid);
   await assert.rejects(host.judgeWritten(room,1,guest3.uid,'correct'),/andere Antwort offiziell gewertet/);
-  assert.equal(host.data.public.scores.t1,100,'three-member teams must not accumulate extra question values');
+  assert.equal(host.data.public.scores.t1,200,'three-member teams must not accumulate extra question values');
   assert.equal(host.data.public.playerScores?.[guest3.uid],undefined,'rejected judgement is atomic');
   const firstEvent=host.hostScoreAudit(room).at(-1);
   await host.hostUndoScore(room,firstEvent.id);
   assert.equal(host.data.public.scores.t1,0);
   assert.equal(host.data.public.writtenTeamRepresentatives['1']?.t1,undefined,'undo allows host to choose a different official team answer');
   await host.judgeWritten(room,1,guest3.uid,'wrong');
-  assert.equal(host.data.public.scores.t1,-50);
+  assert.equal(host.data.public.scores.t1,-100);
   await host.judgeWritten(room,1,guest2.uid,'correct');
-  assert.equal(host.data.public.scores.t2,100,'other team has its own one-score opportunity');
+  assert.equal(host.data.public.scores.t2,200,'other team has its own one-score opportunity');
   await host.judgeWritten(room,1,guest2.uid,'wrong');
-  assert.equal(host.data.public.scores.t2,-50,'official response can be corrected without stacking scores');
-  assert.equal(host.data.public.scores.t1,-50);
+  assert.equal(host.data.public.scores.t2,-100,'official response can be corrected without stacking scores');
+  assert.equal(host.data.public.scores.t1,-100);
  }finally{guest3.shutdown();guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
 
