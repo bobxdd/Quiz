@@ -60,6 +60,9 @@ body.bq-game-mode{overflow:hidden;min-height:100dvh}
 .bq-host-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .bq-host-detail>.scoring-panel{grid-column:1/-1}
 .bq-auxiliary .bq-host-detail .glass.panel{padding:12px}
+.bq-inline-controls{margin-top:.4rem}
+.bq-inline-controls>summary{cursor:pointer;padding:.35rem 0;color:#d9e8e6}
+.bq-inline-controls>.row{gap:6px;padding:.3rem 0}
 .bq-answer-review-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:10px}
 .bq-answers-panel{display:flex;flex-direction:column;min-height:0;padding:12px!important;overflow:hidden}
 .bq-answers-panel>h3{font-size:14px;margin:0 0 6px}

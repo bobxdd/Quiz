@@ -1078,7 +1078,7 @@ function buzzerReleaseControls(){
  if(isOffline()||roundMode(activeQuestion())!=='buzzer'||!['question','paused'].includes(p.phase)||p.buzzerResolved?.[roundKey()])return '';
  const release=Object.entries(roster).filter(([id,person])=>buzzerLocked(p,id,person.team)||
    (p.buzzerArmed===false&&p.buzzerReleased?.[roundKey()]?.[id]!==true));
- return `<details class="bq-auxiliary" data-bq-persist="buzzer-release">
+ return `<details class="bq-inline-controls" data-bq-persist="buzzer-release">
   <summary>Buzzer einzeln oder für alle freigeben</summary>
   <div class="row">${btn('Buzzer für alle freigeben','unlock-buzz-all','small')}
   ${release.map(([id,person])=>btn(e(person.name)+' freigeben','unlock-buzz-player','small',`data-person="${e(id)}"`)).join('')}</div>
@@ -1088,7 +1088,7 @@ function oralBuzzerControls(){
  const people=Object.entries(roster||{});
  if(isOffline()||winner()||!people.length||!['question','paused'].includes(publicState.phase)||
     roundMode(activeQuestion())!=='buzzer'||publicState.buzzerResolved?.[roundKey()])return '';
- return `<details class="bq-auxiliary" data-bq-persist="oral-grading"><summary>Antwort ohne Buzzer bewerten</summary>
+ return `<details class="bq-inline-controls" data-bq-persist="oral-grading"><summary>Antwort ohne Buzzer bewerten</summary>
   <div class="row"><label class="field">Person<select id="oral-person">${people.map(([id,p])=>`<option value="${e(id)}" ${scoreTarget===id?'selected':''}>${e(p.name)} · ${e(teamName(p.team))}</option>`).join('')}</select></label>
   ${btn('✓ Richtig','oral-correct','primary')}${btn('✕ Falsch','oral-wrong','danger')}</div></details>`;
 }
