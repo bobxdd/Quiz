@@ -112,6 +112,8 @@ async def save_clue(player, labels):
 async def submit_guess(player, hint, guess):
     await expect(player.locator('.bq-emoji-hint')).to_have_text(hint,timeout=15000)
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
+    await expect(player.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=1)
+    await expect(player.get_by_role('button', name='Antwort fürs Team abgeben')).to_be_in_viewport(ratio=1)
     await player.get_by_label('Eure Antwort').fill(guess)
     await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
     await expect(player.get_by_text('Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.')).to_be_visible()

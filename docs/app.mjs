@@ -183,7 +183,7 @@ function connectionReport(){
 function preserveForm(draw){
  const focused=document.activeElement,id=focused?.id,value=focused?.value,selection=(()=>{try{return [focused.selectionStart,focused.selectionEnd]}catch{return null}})();
  const previousScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
- const focusMap=focused?.matches('[data-map-viewport]');
+ const focusSurface=['[data-map-viewport]','.bq-answer-question'].find(selector=>focused?.matches(selector));
  const actionSelector=focused?.matches('#app button[data-action]')?
   'button'+[...focused.attributes].filter(attr=>attr.name.startsWith('data-'))
    .map(({name,value})=>`[${name}="${CSS.escape(value)}"]`).join(''):'';
@@ -199,10 +199,26 @@ function preserveForm(draw){
   next.focus({preventScroll:true});try{if(selection&&selection[0]!==null)next.setSelectionRange(selection[0],selection[1])}catch{}
  }else if(previousScene===nextScene&&actionSelector){
   document.querySelector('#app '+actionSelector+':enabled')?.focus({preventScroll:true});
- }else if(previousScene===nextScene&&focusMap){
-  document.querySelector('#app [data-map-viewport]')?.focus({preventScroll:true});
+ }else if(previousScene===nextScene&&focusSurface){
+  document.querySelector('#app '+focusSurface)?.focus({preventScroll:true});
  }
  for(const item of saved){if(!item.selector)continue;const el=document.querySelector(item.selector);if(el){el.scrollTop=item.nearBottom?el.scrollHeight: item.top;el.scrollLeft=item.left;}}
+ syncAnswerViewport();
+}
+function syncAnswerViewport(){
+ const body=document.body,viewport=window.visualViewport;
+ const editing=document.activeElement?.matches('.bq-answer-entry :is(input,textarea)');
+ if(!editing&&!body.classList.contains('bq-answer-keyboard'))return;
+ const keyboard=role==='guest'&&viewport?.scale===1&&window.innerHeight-viewport.height>100&&
+  !!document.querySelector('.bq-question-scene .bq-answer-entry');
+ body.classList.toggle('bq-answer-keyboard',keyboard);
+ if(keyboard){
+  body.style.setProperty('--bq-keyboard-height',viewport.height+'px');
+  body.style.setProperty('--bq-keyboard-top',viewport.offsetTop+'px');
+ }else{
+  body.style.removeProperty('--bq-keyboard-height');
+  body.style.removeProperty('--bq-keyboard-top');
+ }
 }
 // The display gets an explicit public-only frame, never a host or guest page.
 const PROJECTOR_SLIDES={
@@ -1205,10 +1221,10 @@ function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null
  if(own.role!=='guess')return '<p>Dein Team rät jetzt anhand deines Hinweises.</p>';
  if(!own.clues?.length)return '<p>Für euer Team wurde kein Hinweis gespeichert.</p>';
  return `<p class="bq-emoji-hint" aria-label="Emoji-Hinweis">${e(own.clues.join(' '))}</p>
-  <form id="team-emoji-guess-form" class="stack">
+  <form id="team-emoji-guess-form" class="bq-answer-entry">
    <label class="field">Eure Antwort<input id="team-emoji-guess" required maxlength="100" autocomplete="off" spellcheck="false" value="${e(own.guess||'')}" ${disabled}></label>
    <button type="submit" class="btn primary" ${disabled}>${own.answered?'Teamantwort aktualisieren':'Antwort fürs Team abgeben'}</button>
-   ${own.answered?'<p role="status">Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.</p>':''}
+   ${own.answered?'<p class="small good bq-answer-saved" role="status">Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.</p>':''}
   </form>`;
 }
 
@@ -1282,16 +1298,17 @@ function renderResponses(){const list=Object.values(responses?.[roundKey()]||{})
 function guestWritingControls(q,canWrite){
  const mode='<div class="bq-guest-mode"><h3>✍️ Alle antworten</h3><p>Deine Antwort bleibt bis zur Host-Freigabe verborgen.</p></div>';
  if(q.type==='map')return mode+mapAnswerStatus();
+ const order=q.type==='order';
  const text=guestAnswerDraft??myResponse?.text??'';
  const disabled=canWrite?'':'disabled';
- const input=q.type==='order'
+ const input=order
   ?`<p class="span2">Reihenfolge · ${pickedOrder.map(i=>String.fromCharCode(65+i)).join(' → ')||'Noch nichts gewählt'}</p>
      ${btn('Auswahl zurücksetzen','reset-order','small',disabled)}`
   :q.type==='estimate'
-   ?`<label class="field span2">Schätzung (${e(q.estimateUnit||'Zahl')})<input id="answer-number" type="number" step="any" inputmode="decimal" value="${e(text)}" ${disabled}></label>`
-   :`<label class="field span2">Deine geheime Antwort<textarea id="answer-text" rows="3" maxlength="800" placeholder="Antwort eingeben" ${disabled}>${e(text)}</textarea></label>`;
- const status=myResponse?`<p class="small good" role="status">Gespeichert: ${e(myResponse.text)}. Du kannst die Antwort bis zum Ende der Antwortzeit aktualisieren.</p>`:'';
- return mode+`<form id="answer-form" class="formgrid">${input}
+   ?`<label class="field">Schätzung (${e(q.estimateUnit||'Zahl')})<input id="answer-number" type="number" step="any" inputmode="decimal" value="${e(text)}" ${disabled}></label>`
+   :`<label class="field">Deine geheime Antwort<textarea id="answer-text" rows="2" maxlength="800" placeholder="Antwort eingeben" ${disabled}>${e(text)}</textarea></label>`;
+ const status=myResponse?`<p class="small good bq-answer-saved" role="status">Gespeichert: ${e(myResponse.text)}. Du kannst die Antwort bis zum Ende der Antwortzeit aktualisieren.</p>`:'';
+ return `${order?mode:''}<form id="answer-form" class="${order?'formgrid':'bq-answer-entry'}">${input}
   ${btn(myResponse?'Antwort aktualisieren':'Antwort speichern','submit-answer','primary bq-big-control',connected&&canWrite?'':'disabled')}</form>${status}`;
 }
 function renderGuestLive(){
@@ -1301,6 +1318,8 @@ function renderGuestLive(){
  if(!hasLiveQuestion())return boardScene(false);
  if(reviewIsCurrent(publicState))return renderReviewView();
  const q=activeQuestion(),open=isOpen(),b=winner(),written=roundMode(q)==='written',timeUp=!!publicState.deadline&&publicState.deadline<now(),lockedOut=isBuzzLocked(game?.uid);
+ const revealed=publicState.phase==='reveal';
+ const answerDock=written&&!revealed&&!['map','order'].includes(q.type);
  const allowedBuzz=connected&&canBuzz(publicState,buzzers,game?.uid,member?.team,now());
  const waitingForBuzz=publicState.settings?.buzzerEnabled===false||(publicState.buzzerArmed===false&&publicState.buzzerReleased?.[roundKey()]?.[game?.uid]!==true);
  const canWrite=guestCanAnswer();
@@ -1313,7 +1332,17 @@ function renderGuestLive(){
    ?`<div class="bq-quiz-verdict is-wrong" role="status"><strong>✕ Leider falsch · ${e(lastJudgement.delta)} Punkte</strong><span>Andere Spieler können jetzt buzzern. Die Lösung bleibt verborgen.</span></div>`
    :'';
  const buzzUI=`${resultNotice}<div class="bq-buzzer-quickstatus" role="status">${b?e(b.name)+' antwortet gerade':waitingForBuzz?'Warte auf Freigabe durch den Host':lockedOut?'Buzzer für diese Runde gesperrt':'Wer zuerst buzzert, darf antworten'}</div><div class="bq-guest-mode"><h3>🎙️ Buzzerfrage</h3><p>${resolved&&publicState.phase==='reveal'?'Diese Runde ist beendet.':b?`<b>${e(b.name)} (${e(teamName(b.team))})</b> darf jetzt antworten.`:'Sobald du bereit bist, auf den Buzzer drücken. Das erste gültige Signal gewinnt – unabhängig davon, wer die Frage ausgewählt hat.'}</p><p class="small muted">Antworte mündlich. Der Host bewertet direkt im Quiz.</p></div><button type="button" class="btn primary bq-big-buzzer" data-action="buzz" ${allowedBuzz?'':'disabled'}>${resolved?'Richtig beantwortet · Runde beendet':!open?'Runde beendet':lockedOut?'Für diese Runde gesperrt':b?'Buzzer belegt':waitingForBuzz?'Warte auf Buzzer-Freigabe':timeUp?'Zeit abgelaufen':'◉ JETZT BUZZERN (B)'}</button>${lockedOut?'<p class="small bad">Du bzw. dein Team seid nach einer falschen Antwort bis zur Host-Freigabe gesperrt.</p>':''}`;
- return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${open?'good':''}">${open?'Offen':publicState.phase==='paused'?'Pausiert':'Warten'}</span>${roundTimerMarkup()}</div><div class="bq-question-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${covered?coveredBuzzerStage():renderStage()}</div></section>${publicState.phase==='reveal'?`<div class="bq-guest-reveal-status">${resultNotice}</div>`:`<section class="glass panel bq-guest-compose ${written?'bq-guest-written':'bq-guest-buzzer'}"><div class="panelhead"><h3>${q.type==='map'?'Kartenrunde':written?'Schriftliche Runde':'Dein Buzzer'}</h3></div>${written?writtenUI:buzzUI}<details class="bq-auxiliary" data-bq-persist="teamchat"><summary>Privater Teamchat</summary>${renderChat()}</details></section>`}</div>${sessionFooter()}</section>`;
+ const compose=revealed?`<div class="bq-guest-reveal-status">${resultNotice}</div>`:
+  `<section class="glass panel bq-guest-compose ${written?'bq-guest-written':'bq-guest-buzzer'}${answerDock?' bq-answer-dock':''}">
+    ${answerDock?'':`<div class="panelhead"><h3>${q.type==='map'?'Kartenrunde':written?'Schriftliche Runde':'Dein Buzzer'}</h3></div>`}
+    ${written?writtenUI:buzzUI}
+    <details class="bq-auxiliary" data-bq-persist="teamchat"><summary>Privater Teamchat</summary>${renderChat()}</details>
+  </section>`;
+ return `<section class="bq-session-scene bq-question-scene" data-scene="question">
+   <div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${open?'good':''}">${open?'Offen':publicState.phase==='paused'?'Pausiert':'Warten'}</span>${roundTimerMarkup()}</div>
+   <div class="bq-question-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content${answerDock?' bq-answer-question':''}" ${answerDock?'role="region" aria-label="Frage" tabindex="0"':''}>${covered?coveredBuzzerStage():renderStage()}</div></section>${compose}</div>
+   ${sessionFooter()}
+ </section>`;
 }
 function renderTeams(){
  if(!publicState)return '<div class="empty">Lade Lobby …</div>';
@@ -2336,3 +2365,6 @@ if(hasValidRoom(roomFromLink))void (async()=>{
 if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
 window.addEventListener('resize',()=>{if(isGameView())schedule();},{passive:true});
+window.visualViewport?.addEventListener('resize',syncAnswerViewport);
+window.visualViewport?.addEventListener('scroll',syncAnswerViewport,{passive:true});
+document.addEventListener('focusin',syncAnswerViewport);

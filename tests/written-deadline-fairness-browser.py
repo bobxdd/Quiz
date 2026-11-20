@@ -24,7 +24,7 @@ async def main():
    await host.locator('.se-studio').wait_for(timeout=12000)
    room=await host.evaluate('window.__probe.room()')
    question={'id':'timer-written','category':'Champions','title':'Schreibfrage','type':'text',
-    'roundMode':'written','points':200,'seconds':0,'prompt':'Welcher Champion?','answer':'Jinx'}
+    'roundMode':'written','points':200,'seconds':0,'prompt':'Welcher Champion? '+'Ein weiterer Hinweis für die lange Frage. '*32,'answer':'Jinx'}
    await host.evaluate('(q)=>window.__probe.setQuiz({title:"Fairness Test",teams:["Blau","Rot"],questions:[q]})',question)
    await host.locator('[data-action="publish"]').click()
    await host.locator('.bq-board-scene .tile').wait_for(timeout=12000)
@@ -51,6 +51,41 @@ async def main():
    await host.locator('[data-action="uncover-question"]').click()
    await expect(anna.locator('#answer-text')).to_be_visible(timeout=12000)
    await expect(ben.locator('#answer-text')).to_be_visible(timeout=12000)
+   field=anna.locator('#answer-text')
+   save=anna.locator('#answer-form [data-action="submit-answer"]')
+   prompt=anna.locator('.bq-answer-question h2')
+   for width,height in [(320,568),(390,844),(812,375),(1280,850)]:
+    await anna.set_viewport_size({'width':width,'height':height})
+    await expect(prompt).to_be_in_viewport()
+    await expect(field).to_be_in_viewport(ratio=1)
+    await expect(save).to_be_in_viewport(ratio=1)
+   await anna.set_viewport_size({'width':320,'height':568})
+   scroller=anna.locator('.bq-answer-question')
+   await anna.wait_for_function("""() => {
+    const view=document.querySelector('.bq-answer-question');
+    return view && view.scrollHeight>view.clientHeight;
+   }""")
+   assert await scroller.evaluate('(el)=>{el.scrollTop=el.scrollHeight;return el.scrollTop>0}')
+   await expect(field).to_be_in_viewport(ratio=1)
+   await expect(save).to_be_in_viewport(ratio=1)
+   await scroller.evaluate('(el)=>{el.scrollTop=0}')
+   await anna.set_viewport_size({'width':390,'height':844})
+   await field.focus()
+   await anna.evaluate("""() => {
+    Object.defineProperties(visualViewport,{
+     height:{value:280,configurable:true},offsetTop:{value:30,configurable:true}
+    });
+    visualViewport.dispatchEvent(new Event('resize'));
+   }""")
+   await anna.wait_for_function("document.body.classList.contains('bq-answer-keyboard')")
+   for target in (field,save,scroller):
+    bounds=await target.bounding_box()
+    assert bounds and bounds['y']>=30 and bounds['y']+bounds['height']<=310,bounds
+   await anna.evaluate("""() => {
+    delete visualViewport.height;
+    delete visualViewport.offsetTop;
+    visualViewport.dispatchEvent(new Event('resize'));
+   }""")
    await anna.locator('#answer-text').fill('Jinx')
    await anna.locator('#answer-form [data-action="submit-answer"]').click()
    await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{}).length===1",timeout=8000)
