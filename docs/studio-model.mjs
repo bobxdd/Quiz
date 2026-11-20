@@ -32,9 +32,18 @@ export function templateScene(name='text',q={}){
  const template=Object.hasOwn(TEMPLATE_NAMES,name)?name:'text';
  const prompt=template==='team-draw'?'Welchen Champion zeichnet dein Team?':template==='team-emoji'?'Welchen Champion oder Begriff beschreibt dein Team?':q.prompt||'Frage eingeben';
  const elements=[question(prompt)];
+ let sortCorrect='ABCDEFG'.split('');
  const options=(q.options||[]).filter(Boolean);
  if(template==='multiple')elements.push(...'ABCD'.split('').map((letter,i)=>element('choice',{letter,x:80+(i%2)*430,y:200+Math.floor(i/2)*138,w:400,h:111,text:options[i]||`Antwort ${letter}`,font:25,bg:'#363e43'})));
- if(template==='order')elements.push(...'ABCDEFG'.split('').map((letter,i)=>element('order',{letter,x:70+(i%2)*450,y:155+Math.floor(i/2)*80,w:416,h:70,text:q.orderDisplayItems?.[i]||q.orderItems?.[i]||`Eintrag ${letter}`,font:21,bg:'#363e43'})));
+ if(template==='order'){
+  const solution=Array.isArray(q.orderItems)?q.orderItems.slice(0,10):[];
+  const display=Array.isArray(q.orderDisplayItems)&&q.orderDisplayItems.length===solution.length&&
+   solution.every(value=>q.orderDisplayItems.includes(value))?q.orderDisplayItems:solution;
+  const letters='ABCDEFGHIJ'.slice(0,display.length>=2?display.length:7).split('');
+  sortCorrect=display.length>=2?solution.map(value=>letters[display.indexOf(value)]):letters;
+  elements.push(...letters.map((letter,i)=>element('order',{letter,x:70+(i%2)*450,y:151+Math.floor(i/2)*77,w:416,h:65,
+   text:display[i]||`Eintrag ${letter}`,font:21,bg:'#363e43'})));
+ }
  if(template==='hints')elements.push(...[1,2,3,4].map((n,i)=>element('text',{x:90+(i%2)*420,y:180+Math.floor(i/2)*143,w:395,h:112,text:`Hinweis ${n}`,step:n,bg:'#363e43'}))); 
  if(template==='image')elements.push(element('image',{x:140,y:164,w:720,h:340,alt:'Bild hinzufügen'}));
  if(template==='imposter'){
@@ -48,7 +57,7 @@ export function templateScene(name='text',q={}){
  if(template==='emoji')elements.push(element('text',{role:'clue',x:130,y:195,w:740,h:165,font:65,text:q.clue||'🦊 🔥 ✨',align:'center',bg:'#363e43'}));
  if(template==='estimate')elements.push(element('text',{x:180,y:230,w:640,h:120,font:28,text:'Wert schätzen',align:'center'}));
  if(template==='audio')elements.push(element('text',{x:180,y:230,w:640,h:120,font:28,text:'Audioquiz',align:'center'}));
- return normalizeScene({template,elements,sortCorrect:'ABCDEFG'.split('')});
+ return normalizeScene({template,elements,sortCorrect});
 }
 export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='splash'?'image':q.type,q);return q.scene;}
 export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!scene)return q;q.scene=scene;
@@ -60,7 +69,7 @@ export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!sce
   q.options='ABCD'.split('').map(letter=>choices.find(el=>el.letter===letter)?.text||'');
   q.correct=Math.max(0,Math.min(3,num(q.correct,0,3,0)));q.answer=q.options[q.correct]||'';
  }else if(scene.template==='order'){
-  q.type='order';const entries=scene.elements.filter(x=>x.kind==='order').slice(0,10);
+  q.type='order';q.roundMode='written';const entries=scene.elements.filter(x=>x.kind==='order').slice(0,10);
   const byLetter=new Map(entries.map(el=>[el.letter,el.text]));q.orderDisplayItems=entries.slice().sort((a,b)=>a.letter.localeCompare(b.letter)).map(el=>el.text);
   const order=scene.sortCorrect.filter(letter=>byLetter.has(letter));q.orderItems=order.map(letter=>byLetter.get(letter));
  }else if(scene.template==='imposter'){q.type='imposter';const images=scene.elements.filter(el=>el.kind==='image').slice(0,8);q.icons=images.map(el=>el.src||'');q.abilityNames=images.map((el,i)=>el.alt||['Passiv','Q','W','E','R'][i]||`Bild ${i+1}`);}else if(scene.template==='quote'||scene.template==='emoji'){q.type=scene.template;const clue=scene.elements.find(x=>x.kind==='text'&&x.role==='clue')||scene.elements.find(x=>x.kind==='text'&&x.role!=='question');q.clue=clue?.text||'';}else if(scene.template==='estimate'){q.type='estimate';}else if(scene.template==='audio'){q.type='audio';}else if(scene.template==='map'){q.type='map';q.roundMode='written';}else if(scene.template==='image'){q.type='text';}else q.type='text';
@@ -105,7 +114,7 @@ export function validateScene(q){const scene=normalizeScene(q?.scene);if(!scene)
  if(!scene.elements.length)return 'Mindestens ein Element hinzufügen.';
  if(scene.elements.reduce((sum,el)=>sum+(el.src?.length||0),0)>1200000)return 'Bitte weniger oder kleinere Bilder verwenden (maximal 1,2 MB je Frage).';
  if(scene.template==='multiple'){const choices=scene.elements.filter(el=>el.kind==='choice');if(choices.length!==4||choices.some(el=>!el.text.trim()))return 'Vier ausgefüllte Antworten (A bis D) erforderlich.';}
- if(scene.template==='order'){const rows=scene.elements.filter(el=>el.kind==='order');const ids=rows.map(el=>el.letter);if(rows.length<3||rows.length>10||new Set(ids).size!==ids.length||rows.some(el=>!el.text.trim())||scene.sortCorrect.length!==rows.length||new Set(scene.sortCorrect).size!==rows.length||scene.sortCorrect.some(k=>!ids.includes(k)))return 'Sortieroptionen und Musterreihenfolge stimmen nicht überein.';}
+ if(scene.template==='order'){const rows=scene.elements.filter(el=>el.kind==='order');const ids=rows.map(el=>el.letter);if(rows.length<2||rows.length>10||new Set(ids).size!==ids.length||rows.some(el=>!el.text.trim())||scene.sortCorrect.length!==rows.length||new Set(scene.sortCorrect).size!==rows.length||scene.sortCorrect.some(k=>!ids.includes(k)))return 'Sortieroptionen und Musterreihenfolge stimmen nicht überein.';}
  if(scene.elements.some(el=>el.kind==='image'&&!el.src&&scene.template==='image'))return 'Bild noch nicht ausgewählt.';
  return '';
 }

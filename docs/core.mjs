@@ -9,7 +9,7 @@ export const MAX_QUESTION_SECONDS=900;
 export const questionSeconds=value=>Math.max(0,Math.min(MAX_QUESTION_SECONDS,Math.trunc(Number(value))||0));
 export function questionRoundMode(question,type=question?.type){
  if(isTeamChallenge(type))return type;
- return type==='map'||question?.roundMode==='written'?'written':'buzzer';
+ return ['map','order'].includes(type)||question?.roundMode==='written'?'written':'buzzer';
 }
 export function normalizeAnswerTolerance(value,type){
  if(value==null||String(value).trim()==='')return null;
@@ -43,6 +43,7 @@ export function normalizedQuiz(source){
 export function buildPublicBoard(quiz,used={}){return Object.fromEntries(quiz.questions.map(q=>[q.id,{id:q.id,boardRound:boardRoundOf(q),category:q.category,type:q.type,points:q.points,used:!!used[q.id]}]));}
 export function buildTeams(quiz){return Object.fromEntries(quiz.teams.map((name,i)=>['t'+(i+1),name]));}
 export function buildScores(quiz){return Object.fromEntries(quiz.teams.map((_,i)=>['t'+(i+1),0]));}
+const sortingPrompt=q=>String(q.prompt||q.scene?.elements?.find(el=>el.kind==='text'&&el.role==='question')?.text||'').trim();
 // Never copy/extend the original object: it contains secret answers and full imagery.
 // A private question is never embedded in the public room. The `visual` argument
 // must be a freshly rendered crop (splash) or a newly shuffled list (order).
@@ -64,7 +65,16 @@ export function publicQuestion(q,reveal=false,visual='',releasedHints=0,sceneSte
   pub.icons=(q.icons||[]).slice(0,8).map((icon,i)=>!reveal&&images[i]?.step>sceneStep?'':icon);
   pub.abilityNames=(q.abilityNames||[]).slice(0,8);
  }
- if(q.type==='order'){pub.displayItems=Array.isArray(visual)?visual.slice(0,10).map((x,i)=>q.scene&&!reveal&&!q.scene.elements.some(el=>el.kind==='order'&&el.letter==='ABCDEFGHIJ'[i]&&el.step<=sceneStep)?'':x):[];}
+ if(q.type==='order'){
+  const slots=q.scene?.elements.filter(el=>el.kind==='order').slice().sort((a,b)=>a.letter.localeCompare(b.letter))||[];
+  pub.prompt=sortingPrompt(q);
+  pub.displayItems=Array.isArray(visual)?visual.slice(0,10).map((item,i)=>
+   !reveal&&slots[i]?.step>sceneStep?'':item):[];
+  if(pub.scene&&!reveal){
+   pub.scene.elements=pub.scene.elements.map(el=>el.kind==='order'?
+    {...el,text:pub.displayItems[slots.findIndex(slot=>slot.letter===el.letter)]||'',alt:'',src:''}:el);
+  }
+ }
  if(q.type==='quote'||q.type==='emoji')pub.clue=q.scene&&!reveal?'':q.clue||'';
  if(q.type==='estimate')pub.estimateUnit=q.estimateUnit||'';
  if(q.type==='audio')pub.audio=q.audio||'';
@@ -83,6 +93,22 @@ export function publicQuestion(q,reveal=false,visual='',releasedHints=0,sceneSte
 // Fisher–Yates using a cryptographically secure random source in browsers.
 export function shuffledItems(items,random=(n)=>{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);return bytes[0]%n;}){
  const copy=items.slice();for(let i=copy.length-1;i>0;i--){const j=random(i+1);[copy[i],copy[j]]=[copy[j],copy[i]];}return copy;
+}
+export function shuffledOrderItems(items,random){
+ const copy=shuffledItems(items,random);
+ if(copy.length>1&&copy.every((item,i)=>item===items[i]))copy.push(copy.shift());
+ return copy;
+}
+export const orderReady = question => Array.isArray(question?.displayItems)&&question.displayItems.length>=2&&question.displayItems.every(Boolean);
+export function orderResponseIndices(text,count){
+ const parts=String(text??'').split('→').map(part=>part.trim());
+ if(count<2||count>10||parts.length!==count||parts.some(part=>!/^[A-J]$/.test(part)))return null;
+ const positions=parts.map(part=>part.charCodeAt(0)-65);
+ return new Set(positions).size===count&&positions.every(i=>i<count)?positions:null;
+}
+export function orderResponseText(items,text){
+ const indices=orderResponseIndices(text,items?.length||0);
+ return indices?indices.map(i=>items[i]).join(' → '):String(text??'');
 }
 export function splashStageZoom(base,step){const z=Math.max(1,Math.min(9,Number(base)||3));return step<=0?z:step===1?Math.max(1.4,z*.64):Math.max(1.15,z*.38);}
 export function rankEstimates(list,target){const wanted=Number(target);return (Array.isArray(list)?list:[]).map(r=>({...r,value:Number(String(r.text||'').replace(',','.'))})).filter(r=>String(r.text||'').trim()!==''&&Number.isFinite(r.value)).map(r=>({...r,difference:Math.abs(r.value-wanted)})).sort((a,b)=>a.difference-b.difference||Number(a.at||0)-Number(b.at||0));}
@@ -129,6 +155,7 @@ export async function optimizeAudio(file,start=0,duration=8){
 }
 export function safeDownload(name,text){const blob=new Blob([text],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}
 export function validateQuestion(q,scoreMode='team'){
+ if(q.type==='order'&&['','Frage eingeben'].includes(sortingPrompt(q)))return 'Bitte einen Sortierauftrag für die Frage eingeben.';
  if(isTeamChallenge(q.type))return validateTeamEmoji(q,scoreMode);
  if(!q.prompt?.trim()&&!normalizeBlocks(q.blocks).some(b=>['heading','text','callout'].includes(b.type)&&b.text.trim()&&!b.revealOnly))return 'Fragetext oder sichtbarer Textblock fehlt';
  const blockError=q.scene?validateScene(q):validateBlocks(q.blocks);if(blockError)return blockError;
@@ -140,7 +167,7 @@ export function validateQuestion(q,scoreMode='team'){
  if(q.type==='imposter'&&(!Array.isArray(q.icons)||q.icons.length<2||q.icons.length>8||q.icons.some(i=>!i)))return 'Zwei bis acht Bilder erforderlich';
  if(q.type==='imposter'&&(!Number.isInteger(q.imposterIndex)||q.imposterIndex<0||q.imposterIndex>=q.icons.length))return 'Den Slot mit dem fremden Bild auswählen';
  if(q.type==='imposter'&&!isImageData(q.correctIcon))return 'Originalbild zum Austauschen fehlt';
- if(q.type==='order'&&(!Array.isArray(q.orderItems)||q.orderItems.length<3||q.orderItems.some(s=>!s.trim())))return 'Mindestens drei vollständige Sortiereinträge erforderlich';
+ if(q.type==='order'&&(!Array.isArray(q.orderItems)||q.orderItems.length<2||q.orderItems.some(s=>!s.trim())))return 'Mindestens zwei vollständige Sortiereinträge erforderlich';
  if(q.type==='order'&&new Set(q.orderItems.map(x=>x.trim().toLowerCase())).size!==q.orderItems.length)return 'Sortiereinträge müssen eindeutig sein';
  if(q.type==='estimate'&&!Number.isFinite(Number(q.estimateTarget)))return 'Gültigen Schätzwert angeben';
  if((q.type==='quote'||q.type==='emoji')&&!q.clue?.trim())return 'Zitat beziehungsweise Emojis fehlen';

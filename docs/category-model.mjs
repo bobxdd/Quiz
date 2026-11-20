@@ -4,6 +4,7 @@ export const CATEGORY_SUGGESTIONS = Object.freeze([
   {name:'Champions',description:'Champions erkennen und zuordnen',template:'text'},
   {name:'Emoji-Teamrunde',description:'Champions im Team mit Emojis erklären und erraten',template:'team-emoji'},
   {name:'Champion zeichnen',description:'Eine Person zeichnet den geheimen Champion, das Team rät',template:'team-draw'},
+  {name:'Sortieren',description:'Gemischte Einträge nach einem Sortierauftrag ordnen und abgeben',template:'order'},
   {name:'Lorefragen',description:'Runeterra, Geschichten und Hintergründe',template:'text'},
   {name:'Schätzen',description:'Zahlen und Werte schätzen',template:'estimate'},
   {name:'Splash-Art',description:'Bild- und Detailfragen',template:'image'},

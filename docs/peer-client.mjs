@@ -5,7 +5,7 @@
  */
 import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
-import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,questionSeconds} from './core.mjs';
+import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
@@ -882,6 +882,7 @@ export class PeerGame{
     const text=safeText(payload.text,800);
     if(!text)throw Error('Antwort darf nicht leer sein.');
     if(map&&!decodePoint(text))throw Error('Kartenpunkt liegt außerhalb der Weltkarte.');
+    if(pub.current.type==='order'&&(!orderReady(pub.current)||!orderResponseIndices(text,pub.current.displayItems.length)))throw Error('Ordne alle Einträge genau einmal an.');
     this.data.responses[round]??={};
     const original=this.data.responses[round][ctx.uid];
     this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now};

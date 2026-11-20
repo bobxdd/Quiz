@@ -12,6 +12,8 @@ from playwright.async_api import async_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "Kai'Sa"
+SORT_ITEMS = ['Ahri', 'Braum', 'Ekko', 'Garen', 'Jinx', 'Lux', 'Rell', 'Zed']
+SORT_RULE = 'Sortiere die Champions alphabetisch. A zuerst.'
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -66,6 +68,17 @@ async def edit_questions(host):
     await expect(host.locator('.se-answer-live-preview .bq-answer-image img')).to_be_visible()
     await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
     await host.locator('.se-team-emoji [data-se-action="category-overview"]').click()
+    await host.locator('[data-se-action="category-preset"][data-category="Sortieren"]').click()
+    await host.locator('[data-se-action="new"][data-template="order"]').click()
+    await host.get_by_label('Sortierauftrag').fill(SORT_RULE)
+    await host.get_by_label('Sortierauftrag').blur()
+    await host.locator('[data-se-action="sort-add"]').click()
+    await expect(host.locator('[data-se-action="sort-add"]')).to_be_disabled()
+    for position, item in enumerate(SORT_ITEMS, 1):
+        field = host.get_by_label(f'Sortiereintrag {position}', exact=True)
+        await field.fill(item)
+        await field.blur()
+    await host.locator('.se-question-pane .se-back').click()
     await host.locator('[data-se-action="category-preset"][data-category="Fähigkeiten"]').click()
     await host.locator('[data-se-action="new"][data-template="imposter"]').click()
     slots = host.locator('.se-question-pane .se-kind-image')
@@ -215,9 +228,45 @@ async def play_drawing(host, players, viewer):
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Keine Antwort')
     await host.locator('[data-action="emoji-score-correct"][data-team="t2"]').click()
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Richtig')
-    await expect(viewer.locator('.bq-drawing-art')).to_have_count(2)
+    await expect(viewer.locator('img.bq-drawing-art')).to_have_count(2)
+    await viewer.wait_for_function("""() => {
+        const drawings = [...document.querySelectorAll('img.bq-drawing-art')];
+        return drawings.length === 2 && drawings.every(image => image.complete && image.naturalWidth > 0);
+    }""")
     await host.locator('[data-action="emoji-close"]').click()
     print('PASS: new drawing roles, private reference, mouse and touch strokes, undo, team-only clues and manual scoring', flush=True)
+
+
+async def play_sorting(host, participant, other):
+    await tile(host, 'Sortieren').click()
+    await host.locator('#ready-time').fill('15')
+    await host.locator('[data-action="uncover-question"]').click()
+    await expect(participant.get_by_role('heading', name=SORT_RULE, exact=True)).to_be_visible()
+    items = participant.locator('[data-sort-value]')
+    await expect(items).to_have_count(8)
+    assert await items.all_text_contents() != SORT_ITEMS
+    submit = participant.get_by_role('button', name='Reihenfolge abgeben', exact=True)
+    await expect(submit).to_be_in_viewport(ratio=1)
+    await submit.click()
+    update = participant.get_by_role('button', name='Antwort aktualisieren', exact=True)
+    await expect(update).to_be_visible()
+    for index, name in enumerate(SORT_ITEMS):
+        position = (await items.all_text_contents()).index(name)
+        while position > index:
+            await participant.get_by_role('button', name=name + ' nach oben', exact=True).click()
+            position -= 1
+            await expect(items.nth(position)).to_have_text(name)
+    await expect(items).to_have_text(SORT_ITEMS)
+    await update.click()
+    await expect(participant.locator('.bq-answer-saved')).to_contain_text(' → '.join(SORT_ITEMS))
+    await expect(other.locator('.review-card.is-hidden')).to_have_count(1, timeout=18000)
+    await expect(other.locator('.review-answer')).to_have_count(0)
+    await host.locator('.review-card.is-hidden').click()
+    await expect(host.locator('.review-answer')).to_have_text(' → '.join(SORT_ITEMS))
+    await host.locator('[data-action="judge-review-correct"]').first.click()
+    await host.locator('[data-action="reveal"]').first.click()
+    await host.locator('[data-action="back"]').first.click()
+    print('PASS: eight sorting items, individual criterion, shuffled mobile list, editable private submission and host grading', flush=True)
 
 
 async def run(browser, root):
@@ -283,6 +332,7 @@ async def run(browser, root):
 
     await host.locator('[data-action="emoji-close"]').click()
     await play_drawing(host, players, viewer)
+    await play_sorting(host, alice, bob)
     await tile(host, 'Fähigkeiten').click()
     await host.locator('[data-action="uncover-question"]').click()
     images = lambda page: page.locator('.bq-question-panel .se-kind-image img')
