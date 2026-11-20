@@ -54,7 +54,7 @@ jobs:
           timeout -k 10s 120s python tests/sound-effects-browser.py || failed=1
           timeout -k 10s 120s python tests/buzzer-auto-reveal-browser.py || failed=1
           timeout -k 10s 120s python tests/answer-tab-browser.py || failed=1
-          timeout -k 10s 120s python tests/team-emoji-browser.py || failed=1
+          timeout -k 10s 150s python tests/team-emoji-browser.py || failed=1
           timeout -k 10s 120s python tests/board-rounds-browser.py || failed=1
           timeout -k 10s 120s python tests/team-turns-browser.py || failed=1
           timeout -k 10s 120s python tests/one-screen-reveal-browser.py || failed=1
@@ -98,13 +98,13 @@ jobs:
           export HOME=/root
           timeout -k 10s 150s env BRAINQUIZ_BROWSER=firefox python tests/recovery-projector-browser.py
           timeout -k 10s 150s env BRAINQUIZ_BROWSER=webkit python tests/recovery-projector-browser.py
-  deploy:
+  package:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: [check, crossbrowser]
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.artifact.outputs.name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -112,17 +112,26 @@ jobs:
           node-version: '22'
       - name: Verify standalone PeerJS shell
         run: npm run build:pages
-      - uses: actions/configure-pages@v5
-      # Artifact names must be unique across rerun attempts of the same workflow run.
-      # Otherwise deploy-pages sees duplicate "github-pages" artifacts and hard-fails.
+      - id: artifact
+        run: echo "name=github-pages-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v4
         with:
           path: ./docs
-          name: github-pages-${{ github.run_attempt }}
+          name: ${{ steps.artifact.outputs.name }}
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: [check, crossbrowser, package]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
-          artifact_name: github-pages-${{ github.run_attempt }}
+          artifact_name: ${{ needs.package.outputs.artifact_name }}
       - name: Verify published app and projector files
         env:
           PAGES_URL: ${{ steps.deployment.outputs.page_url }}
@@ -130,7 +139,7 @@ jobs:
           test -n "$PAGES_URL"
           published="$(mktemp)"
           trap 'rm -f "$published"' EXIT
-          for asset in app.mjs sound-effects.mjs team-emoji.mjs emoji-catalog.json session-ui.css studio-editor.mjs projector.html sw.js; do
+          for asset in app.mjs sound-effects.mjs team-emoji.mjs emoji-catalog.json host-flow.css session-ui.css studio-editor.mjs studio-model.mjs projector.html sw.js; do
             verified=false
             for attempt in $(seq 1 12); do
               if curl -fsS --max-time 10 "${PAGES_URL%/}/$asset?release=$GITHUB_SHA-$attempt" -o "$published" && cmp -s "docs/$asset" "$published"; then

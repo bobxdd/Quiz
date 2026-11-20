@@ -157,7 +157,7 @@ async function sendGuestAction(label,send){
  guestReceipt=pending;schedule();
  try{
   const result=await send();
-  if(guestReceipt===pending)guestReceipt={tone:'good',text:result===false?'Buzzer bestätigt. Ein anderes Signal war zuerst da.':label+' vom Host bestätigt.'};
+  if(guestReceipt===pending)guestReceipt={tone:'good',label,text:result===false?'Buzzer bestätigt. Ein anderes Signal war zuerst da.':label+' vom Host bestätigt.'};
   return result;
  }catch(error){
   if(guestReceipt===pending)guestReceipt={tone:'bad',text:error.message||'Aktion konnte nicht bestätigt werden.'};
@@ -167,7 +167,12 @@ async function sendGuestAction(label,send){
 function guestReceiptMarkup(){
  const retry=!connected&&game?.mode==='guest';
  const diagnostic=game?.diagnostics?.();
- const status=connected?guestReceipt?.text||'':diagnostic?.error||'Verbindung unterbrochen. Wiederverbindung läuft …';
+ const inlineReceipt=guestReceipt?.tone==='good'&&(
+  guestReceipt.label==='Teamwahl'&&hasLiveQuestion()||
+  publicState?.teamEmoji&&['Rollenwahl','Emoji-Hinweis','Rateversuch'].includes(guestReceipt.label)
+ );
+ const status=connected?(inlineReceipt?'':guestReceipt?.text||''):diagnostic?.error||'Verbindung unterbrochen. Wiederverbindung läuft …';
+ if(!status&&!retry)return '';
  return `<div class="bq-guest-receipt ${guestReceipt?.tone||''}" role="status" aria-atomic="true">${e(status)}
   ${retry?`<span class="bq-reconnect-actions">${btn('Erneut verbinden','retry-connect','small primary')}${btn('Fehlerbericht kopieren','copy-connection-report','small')}</span>`:''}</div>`;
 }
@@ -189,7 +194,7 @@ function preserveForm(draw){
   'button'+[...focused.attributes].filter(attr=>attr.name.startsWith('data-'))
    .map(({name,value})=>`[${name}="${CSS.escape(value)}"]`).join(''):'';
  const expanded=[...document.querySelectorAll('#app details[data-bq-persist][open]')].map(el=>el.dataset.bqPersist);
- const scrollable=['.questionlist','.studio-list','.studio-tools','.workspace','.chatfeed','.bq-scene-content','.bq-guest-compose','.bq-answers-panel .answer-review','.bq-emoji-palette','.bq-host-solution-body'];
+ const scrollable=['.questionlist','.studio-list','.studio-tools','.workspace','.chatfeed','.bq-scene-content','.bq-guest-compose','.bq-answer-question','.bq-team-emoji','.bq-answers-panel .answer-review','.bq-emoji-palette','.bq-host-solution-body'];
  const saved=[...document.querySelectorAll(scrollable.join(','))].map(el=>({selector:el.id?'#'+CSS.escape(el.id):scrollable.find(selector=>el.matches(selector)),top:el.scrollTop,left:el.scrollLeft,nearBottom:el.classList.contains('chatfeed')&&el.scrollHeight-el.scrollTop-el.clientHeight<60}));
  draw();
  const nextScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
@@ -203,17 +208,20 @@ function preserveForm(draw){
  }else if(previousScene===nextScene&&focusSurface){
   document.querySelector('#app '+focusSurface)?.focus({preventScroll:true});
  }
- for(const item of saved){if(!item.selector)continue;const el=document.querySelector(item.selector);if(el){el.scrollTop=item.nearBottom?el.scrollHeight: item.top;el.scrollLeft=item.left;}}
+ for(const item of saved){if(!item.selector||previousScene!==nextScene&&['.bq-answer-question','.bq-team-emoji'].includes(item.selector))continue;const el=document.querySelector(item.selector);if(el){el.scrollTop=item.nearBottom?el.scrollHeight: item.top;el.scrollLeft=item.left;}}
+ if(previousScene===nextScene&&document.activeElement?.dataset.action==='move-order'){
+  document.activeElement.scrollIntoView({block:'nearest'});
+ }
  if(emojiKeyboard?.open&&emojiKeyboard.dataset.round!==emojiClueOwner()?.id)emojiKeyboard.close();
  paintDrawing();
  syncAnswerViewport();
 }
 function syncAnswerViewport(){
  const body=document.body,viewport=window.visualViewport;
- const editing=document.activeElement?.matches('.bq-answer-entry :is(input,textarea)');
+ const editing=document.activeElement?.matches('.bq-answer-entry :is(input,textarea),.bq-emoji-entry input,.bq-emoji-keyboard input');
  if(!editing&&!body.classList.contains('bq-answer-keyboard'))return;
  const keyboard=role==='guest'&&viewport?.scale===1&&window.innerHeight-viewport.height>100&&
-  !!document.querySelector('.bq-question-scene .bq-answer-entry');
+  !!document.querySelector('.bq-question-scene :is(.bq-answer-entry,.bq-emoji-entry)');
  body.classList.toggle('bq-answer-keyboard',keyboard);
  if(keyboard){
   body.style.setProperty('--bq-keyboard-height',viewport.height+'px');
@@ -1239,11 +1247,10 @@ async function openEmojiKeyboard(){
    <label class="field">Kategorie<select id="emoji-catalog-category"><option value="">Alle</option></select></label></div>
   <div class="bq-emoji-keyboard-list" role="region" aria-label="Emoji-Katalog" tabindex="0"><p role="status">Emojis werden geladen …</p></div>`;
  emojiKeyboard=dialog;
- const opener=document.activeElement;
  dialog.addEventListener('close',()=>{
   dialog.remove();
   if(emojiKeyboard===dialog)emojiKeyboard=null;
-  if(opener?.isConnected)opener.focus({preventScroll:true});
+  document.querySelector('[data-action="emoji-keyboard"]')?.focus({preventScroll:true});
  },{once:true});
  document.body.append(dialog);
  dialog.showModal();
@@ -1263,7 +1270,7 @@ async function openEmojiKeyboard(){
     const matches=words.length?entries.filter(row=>{const label=emojiSearchText(row.join(' '));return words.every(word=>label.includes(word));}):entries;
     if(!matches.length)return '';
     return `<section><h3>${e(name)}</h3><div class="bq-emoji-keyboard-grid">${matches.map(([symbol,label])=>
-     `<button type="button" class="btn" data-catalog-emoji="${e(symbol)}" aria-label="${e(label)}" title="${e(label)}">${e(symbol)}</button>`).join('')}</div></section>`;
+     `<button type="button" class="btn" data-catalog-emoji="${e(symbol)}" aria-label="${e(label)}" title="${e(label)}"><span class="bq-emoji-catalog-symbol">${e(symbol)}</span></button>`).join('')}</div></section>`;
    }).join('')||'<p>Keine passenden Emojis gefunden.</p>';
    list.scrollTop=0;
   };
@@ -1451,8 +1458,8 @@ function renderDrawControls(own,disabled){
   <div class="bq-drawing-tools"><div class="bq-drawing-colors" role="group" aria-label="Pinselfarbe">
    ${DRAW_COLOR_NAMES.slice(0,-1).map((name,i)=>`<button type="button" class="btn bq-drawing-swatch"
     style="--ink:${DRAW_COLORS[i]}" data-action="draw-color" data-index="${i}" title="${name}" aria-label="${name}" aria-pressed="${draft.color===i}" ${disabled}></button>`).join('')}
-   ${btn('Radierer','draw-color','small',`data-index="${DRAW_COLORS.length-1}" aria-pressed="${draft.color===DRAW_COLORS.length-1}" ${disabled}`)}
   </div><div class="bq-drawing-actions">
+   ${btn('Radierer','draw-color','small',`data-index="${DRAW_COLORS.length-1}" aria-pressed="${draft.color===DRAW_COLORS.length-1}" ${disabled}`)}
    <label class="field">Strich<select id="team-draw-size" ${disabled}>${['Fein','Normal','Breit'].map((label,i)=>`<option value="${i}" ${i===draft.size?'selected':''}>${label}</option>`).join('')}</select></label>
    ${btn('Rückgängig','draw-undo','small',draft.strokes.length?disabled:'disabled')}
    ${btn('Leeren','draw-clear','small',draft.strokes.length?disabled:'disabled')}
@@ -1479,16 +1486,14 @@ function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null
   const draft=emojiDraftFor(own),{symbols:picks,group}=draft;
   const nativeHelp=/win/i.test(navigator.userAgentData?.platform||navigator.platform||'');
   return `<p class="bq-emoji-target">Dein geheimer Begriff <strong>${e(own.target)}</strong></p>
-   <div class="bq-emoji-entry"><label class="field">Eure Emojis<input id="team-emoji-text" value="${e(picks.join(' '))}" maxlength="205"
+   <div class="bq-emoji-compose"><div class="bq-emoji-entry"><label class="field">Eure Emojis<input id="team-emoji-text" value="${e(picks.join(' '))}" maxlength="205"
     autocomplete="off" spellcheck="false" aria-describedby="bq-emoji-native-help" ${disabled}></label>
     ${btn('Emoji-Tastatur','emoji-keyboard','small',disabled)}
     <small id="bq-emoji-native-help">${nativeHelp?'Klick ins Feld für Win + . oder füge Emojis ein.':'Du kannst Emojis auch einfügen.'}</small>
    </div>
-   <div class="bq-emoji-selection" role="group" aria-label="Dein Hinweis in Reihenfolge">
-    ${emojiSelection(picks,disabled)}
-   </div>
-   <div class="row">${btn('Hinweis speichern','emoji-clue','primary',emojiSaved(own,draft)||!picks.length?'disabled':disabled)}
-    <span role="status" data-emoji-status>${emojiSelectionStatus(own,draft)}</span></div>
+   <div class="bq-emoji-selection" role="group" aria-label="Dein Hinweis in Reihenfolge">${emojiSelection(picks,disabled)}</div>
+   <div class="row bq-emoji-submit">${btn('Hinweis speichern','emoji-clue','primary',emojiSaved(own,draft)||!picks.length?'disabled':disabled)}
+    <span role="status" data-emoji-status>${emojiSelectionStatus(own,draft)}</span></div></div>
    ${renderEmojiPalette(own.palette,group,picks.length>=MAX_EMOJI_CLUES?'disabled':disabled)}`;
  }
  if(own.role!=='guess')return drawing?'<p>Dein Team rät jetzt anhand deiner Zeichnung.</p>':'<p>Dein Team rät jetzt anhand deines Hinweises.</p>';

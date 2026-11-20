@@ -10,6 +10,7 @@ const cap=(v,n=1000)=>String(v??'').slice(0,n);
 const num=(v,a,b,def)=>Number.isFinite(Number(v))?Math.min(b,Math.max(a,Number(v))):def;
 const safeImage=(s,limit=450000)=>typeof s==='string'&&/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(s)&&s.length<limit?s:'';
 export const elemId=()=>`el${Math.random().toString(36).slice(2,11)}`;
+export const orderSlotPosition=index=>({x:70+(index%2)*450,y:151+Math.floor(index/2)*77,w:416,h:65});
 export function element(kind='text',overrides={}){
  return normalizeElement({id:elemId(),kind,x:85,y:95,w:430,h:95,text:kind==='image'?'':kind==='shape'?'':'Text',font:32,step:0,fill:'#ffffff',bg:'#252c30',align:'left',shape:'rect',letter:'',src:'',role:'content',...overrides});
 }
@@ -41,7 +42,7 @@ export function templateScene(name='text',q={}){
    solution.every(value=>q.orderDisplayItems.includes(value))?q.orderDisplayItems:solution;
   const letters='ABCDEFGHIJ'.slice(0,display.length>=2?display.length:7).split('');
   sortCorrect=display.length>=2?solution.map(value=>letters[display.indexOf(value)]):letters;
-  elements.push(...letters.map((letter,i)=>element('order',{letter,x:70+(i%2)*450,y:151+Math.floor(i/2)*77,w:416,h:65,
+  elements.push(...letters.map((letter,i)=>element('order',{letter,...orderSlotPosition(i),
    text:display[i]||`Eintrag ${letter}`,font:21,bg:'#363e43'})));
  }
  if(template==='hints')elements.push(...[1,2,3,4].map((n,i)=>element('text',{x:90+(i%2)*420,y:180+Math.floor(i/2)*143,w:395,h:112,text:`Hinweis ${n}`,step:n,bg:'#363e43'}))); 

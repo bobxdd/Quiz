@@ -6,7 +6,7 @@ import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mj
 import {mountMapViewport} from './map-viewport.mjs';
 import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
 /* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
-import {TEMPLATE_NAMES,element,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
+import {TEMPLATE_NAMES,element,orderSlotPosition,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
  let sel='',reveal=0,preview=false,search='',snap=true,drag=null,draftTimer=null,redrawPending=false,trackedInput=null,menu=null,libraryMenu=null,touchTimer=null,touchStart=null;
  let activeCategory='',showCategoryForm=false,renamingCategory=false,categoryDraft='',editorRound=1,transferCategoryName='';
@@ -117,7 +117,10 @@ export function createStudioEditor(api){
   const timing={kind:'number',min:EMOJI_TIMER_MIN,max:EMOJI_TIMER_MAX,step:1};
   return `<section class="se-question-pane se-team-emoji" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}>
    <div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><h2>${drawing?'Champion zeichnen':'Emoji-Teamrunde'}</h2></div></div>
-   <div class="se-properties"><p>${drawing?'Lege den geheimen Champion und bei Bedarf ein Vorlagenbild im Antwort-Tab fest. Jedes Team wählt vor der Frage, wer zeichnet und wer rät.':'Trage den geheimen Champion oder Begriff im Antwort-Tab ein.'}</p>
+   <div class="se-properties">
+    <label class="se-field"><span>Geheimer Champion</span><input id="se-team-champion" data-se-field="answerText" maxlength="100"
+     value="${escape(item.answerText||item.answer||'')}" autocomplete="off" spellcheck="false" placeholder="z. B. Ahri"></label>
+    <p class="se-muted">${drawing?'Den Champion sieht während der Zeichenphase die zeichnende Person im Team. Im Antwort-Tab kannst du ein Vorlagenbild ergänzen.':'Der Champion gehört zu dieser Frage. Während der Emoji-Phase sieht ihn im Team die erklärende Person.'}</p>
     <div class="se-two">${drawing?input('drawSeconds','Zeit fürs Zeichnen (Sekunden)',settings.drawSeconds,timing):input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
     ${drawing?'':`${input('emojiPalette','Emoji-Schnellauswahl',settings.palette,{rows:3})}
@@ -522,7 +525,18 @@ export function createStudioEditor(api){
   case 'layer-front':{const idx=scene.elements.findIndex(x=>x.id===sel);if(idx<0)return;snapshot();scene.elements.push(scene.elements.splice(idx,1)[0]);persist(true);return;}
   case 'layer-back':{const idx=scene.elements.findIndex(x=>x.id===sel);if(idx<0)return;snapshot();scene.elements.unshift(scene.elements.splice(idx,1)[0]);persist(true);return;}
   case 'sort-up':case 'sort-down':{const i=Number(button.dataset.pos),j=i+(action==='sort-up'?-1:1);if(i<0||j<0||j>=scene.sortCorrect.length)return;snapshot();[scene.sortCorrect[i],scene.sortCorrect[j]]=[scene.sortCorrect[j],scene.sortCorrect[i]];persist(true);return;}
-  case 'sort-add':{const known=new Set(scene.elements.filter(v=>v.kind==='order').map(v=>v.letter));if(known.size>=8)return;const k=letterList.find(l=>!known.has(l));if(!k)return;snapshot();const spot=findInsertion(scene.elements,416,70);scene.elements.push(element('order',{letter:k,text:`Eintrag ${k}`,...spot,w:416,h:70,font:21,bg:'#343644'}));scene.sortCorrect.push(k);persist(true);return;}
+  case 'sort-add':{
+   const known=new Set(scene.elements.filter(v=>v.kind==='order').map(v=>v.letter));
+   if(known.size>=8)return;
+   const k=letterList.find(l=>!known.has(l));
+   if(!k)return;
+   const slot=orderSlotPosition(letterList.indexOf(k));
+   snapshot();
+   const occupied=scene.elements.some(el=>el.x<slot.x+slot.w&&el.x+el.w>slot.x&&el.y<slot.y+slot.h&&el.y+el.h>slot.y);
+   const position=occupied?findInsertion(scene.elements,slot.w,slot.h):slot;
+   scene.elements.push(element('order',{...slot,...position,letter:k,text:`Eintrag ${k}`,font:21,bg:'#363e43'}));
+   scene.sortCorrect.push(k);persist(true);return;
+  }
   case 'sort-remove':{if(scene.sortCorrect.length<=2)return;snapshot();const last=scene.sortCorrect.at(-1);scene.sortCorrect=scene.sortCorrect.filter(key=>key!==last);scene.elements=scene.elements.filter(v=>v.kind!=='order'||v.letter!==last);sel='';persist(true);return;}
  }
  }

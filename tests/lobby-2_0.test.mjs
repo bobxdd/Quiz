@@ -45,6 +45,6 @@ test('P2P host confirms team membership; guest requests never directly grant acc
 });
 test('GitHub Pages workflow publishes the static PeerJS site after tests',()=>{
  const y=readFileSync(new URL('../.github/workflows/pages.yml',import.meta.url),'utf8');
- assert.match(y,/needs:\s*\[check,\s*crossbrowser\]/);assert.doesNotMatch(y,/vars.FIREBASE/);assert.match(y,/npm run build:pages/);
+ assert.match(y,/needs:\s*\[check,\s*crossbrowser,\s*package\]/);assert.doesNotMatch(y,/vars.FIREBASE/);assert.match(y,/npm run build:pages/);
  assert.match(y,/deploy-pages@v4/);
 });

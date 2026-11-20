@@ -41,20 +41,21 @@ async def edit_questions(host):
     await host.locator('[data-se-action="category-preset"][data-category="Emoji-Teamrunde"]').click()
     await host.locator('[data-se-action="new"][data-template="team-emoji"]').click()
     await expect(host.locator('.se-team-emoji')).to_be_visible()
+    await host.get_by_label('Geheimer Champion', exact=True).fill(TARGET)
+    await host.get_by_label('Geheimer Champion', exact=True).blur()
     for field, value in [('emojiClueSeconds', '20'), ('emojiGuessSeconds', '8'), ('emojiPalette', '🦊 ❄️ 🔥')]:
         control = host.locator(f'[data-se-field="{field}"]')
         await control.fill(value)
         await control.blur()
         await expect(control).to_have_value(value)
     await host.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
-    await host.get_by_label('Champion oder Begriff (geheim)').fill(TARGET)
-    await host.locator('#se-answer-text').blur()
+    await expect(host.get_by_label('Champion oder Begriff (geheim)')).to_have_value(TARGET)
     await expect(host.locator('.se-answer-readiness.is-ready')).to_be_visible()
     await host.locator('[data-se-action="editor-pane"][data-pane="question"]').click()
     await host.locator('.se-team-emoji [data-se-action="category-overview"]').click()
     await host.locator('[data-se-action="category-preset"][data-category="Champion zeichnen"]').click()
     await host.locator('[data-se-action="new"][data-template="team-draw"]').click()
-    for field, value in [('drawSeconds', '14'), ('emojiGuessSeconds', '8')]:
+    for field, value in [('drawSeconds', '16'), ('emojiGuessSeconds', '8')]:
         control = host.locator(f'[data-se-field="{field}"]')
         await control.fill(value)
         await control.blur()
@@ -126,6 +127,8 @@ async def save_clue(player, labels):
     await expect(player.locator('.bq-emoji-palette button')).to_have_count(3)
     verify_catalogue = labels[0] == 'Fuchs'
     if verify_catalogue:
+        await player.set_viewport_size({'width': 320, 'height': 568})
+        await expect(player.get_by_role('button', name='Emoji-Tastatur', exact=True)).to_be_in_viewport(ratio=.98)
         await player.get_by_role('button', name='Tiere', exact=True).click()
         await expect(player.locator('.bq-emoji-palette button')).to_have_count(1)
         await player.get_by_role('button', name='Fuchs', exact=True).click()
@@ -139,6 +142,8 @@ async def save_clue(player, labels):
         await player.get_by_role('button', name='Emoji-Tastatur', exact=True).click()
         keyboard = player.get_by_role('dialog', name='Emoji-Tastatur')
         await expect(keyboard.locator('[data-catalog-emoji]')).to_have_count(3944)
+        await expect(keyboard.get_by_label('Emoji suchen')).to_be_in_viewport(ratio=.98)
+        await expect(keyboard.get_by_role('button', name='Fertig', exact=True)).to_be_in_viewport(ratio=.98)
         assert await keyboard.locator('.bq-emoji-keyboard-list').evaluate('(el) => el.scrollHeight > el.clientHeight')
         await keyboard.get_by_label('Kategorie').select_option(label='Flaggen')
         await keyboard.get_by_label('Emoji suchen').fill('deutschland')
@@ -187,8 +192,21 @@ async def draw_line(player, touch=False, reverse=False):
     await expect(player.get_by_text('Zeichnung gespeichert.', exact=True)).to_be_visible()
 
 
+async def expect_ink(player, rgba):
+    await player.wait_for_function("""expected => {
+        const canvas = document.querySelector('#team-draw-canvas');
+        if (!canvas) return false;
+        const pixel = canvas.getContext('2d').getImageData(320, 190, 1, 1).data;
+        return expected.every((channel, i) => pixel[i] === channel);
+    }""", arg=rgba, timeout=4000)
+
+
 async def play_drawing(host, players, viewer):
     alice, bob, claire, deniz = players
+    await bob.set_viewport_size({'width': 320, 'height': 568})
+    await deniz.set_viewport_size({'width': 667, 'height': 375})
+    await alice.set_viewport_size({'width': 320, 'height': 568})
+    await claire.set_viewport_size({'width': 640, 'height': 360})
     await tile(host, 'Champion zeichnen').click()
     await host.locator('[data-action="uncover-question"]').click()
     for player in players:
@@ -200,26 +218,46 @@ async def play_drawing(host, players, viewer):
         await guesser.get_by_role('button', name='Raten', exact=True).click()
     await expect(host.get_by_text('Rollen bereit', exact=True)).to_have_count(2)
     await host.get_by_role('button', name='Zeichenphase starten', exact=True).click()
+    await expect(host.locator('#clock')).to_have_text(re.compile(r'^0:1[0-6]$'))
     for artist in [bob, deniz]:
         await expect(artist.locator('.bq-drawing-prompt')).to_contain_text('Jinx')
         await expect(artist.get_by_role('img', name='Vorlage für Jinx')).to_be_visible()
+        await expect(artist.locator('#team-draw-canvas')).to_be_in_viewport(ratio=.98)
+        await expect(artist.get_by_role('button', name='Radierer', exact=True)).to_be_in_viewport(ratio=.98)
+        await expect(artist.get_by_label('Strich')).to_be_in_viewport(ratio=.98)
     for guest in [alice, claire, viewer]:
         await expect(guest.locator('.bq-team-emoji')).not_to_contain_text('Jinx')
         await expect(guest.locator('.bq-drawing-art, .bq-drawing-reference')).to_have_count(0)
+    await expect(bob.get_by_role('group', name='Pinselfarbe').get_by_role('button')).to_have_count(8)
     await bob.get_by_role('button', name='Rot', exact=True).click()
+    await expect(bob.get_by_role('button', name='Rot', exact=True)).to_have_attribute('aria-pressed', 'true')
     await bob.get_by_label('Strich').select_option('2')
     await deniz.get_by_role('button', name='Blau', exact=True).click()
     await asyncio.gather(draw_line(bob), draw_line(deniz, touch=True))
+    await expect_ink(bob, [215, 59, 71, 255])
     await bob.get_by_role('button', name='Radierer', exact=True).click()
     await draw_line(bob, reverse=True)
+    await expect_ink(bob, [255, 255, 255, 255])
     await bob.get_by_role('button', name='Rückgängig', exact=True).click()
+    await expect_ink(bob, [215, 59, 71, 255])
     await expect(bob.get_by_text('Zeichnung gespeichert.', exact=True)).to_be_visible()
+    await deniz.get_by_role('button', name='Leeren', exact=True).click()
+    await expect(deniz.get_by_text('Zeichne den Champion auf die Fläche.', exact=True)).to_be_visible()
+    await expect_ink(deniz, [0, 0, 0, 0])
+    await draw_line(deniz, touch=True, reverse=True)
+    await expect(host.get_by_role('heading', name='Jetzt raten')).to_be_visible(timeout=18000)
+    await expect(host.locator('#clock')).to_have_text(re.compile(r'^0:0[5-8]$'))
     for guest, colour in [(alice, '#d73b47'), (claire, '#2579cb')]:
         paths = guest.locator('.bq-drawing-guess path')
         await expect(paths).to_have_count(1, timeout=16000)
         await expect(paths).to_have_attribute('stroke', colour)
-        await expect(guest.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=1)
+        drawing = guest.locator('.bq-drawing-guess svg')
+        await expect(drawing).to_be_in_viewport(ratio=.98)
+        assert (await drawing.bounding_box())['height'] >= 95
+        await expect(guest.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=.98)
+        await expect(guest.get_by_role('button', name='Antwort fürs Team abgeben')).to_be_in_viewport(ratio=.98)
         await expect(guest.locator('.bq-team-emoji')).not_to_contain_text('Jinx')
+    await expect(alice.locator('.bq-drawing-guess path')).to_have_attribute('stroke-width', '15')
     await expect(viewer.locator('.bq-drawing-art')).to_have_count(0)
     await alice.get_by_label('Eure Antwort').fill('Jinx')
     await alice.get_by_role('button', name='Antwort fürs Team abgeben').click()
@@ -228,45 +266,71 @@ async def play_drawing(host, players, viewer):
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Keine Antwort')
     await host.locator('[data-action="emoji-score-correct"][data-team="t2"]').click()
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Richtig')
+    for participant in players:
+        await expect(participant.locator('.bq-emoji-results .bq-drawing-art')).to_have_count(2)
     await expect(viewer.locator('img.bq-drawing-art')).to_have_count(2)
     await viewer.wait_for_function("""() => {
         const drawings = [...document.querySelectorAll('img.bq-drawing-art')];
         return drawings.length === 2 && drawings.every(image => image.complete && image.naturalWidth > 0);
     }""")
     await host.locator('[data-action="emoji-close"]').click()
-    print('PASS: new drawing roles, private reference, mouse and touch strokes, undo, team-only clues and manual scoring', flush=True)
+    await bob.set_viewport_size({'width': 640, 'height': 360})
+    print('PASS: drawing layouts, drawing tools, separate timers, private reference, isolated guessing, shared drawings at reveal and manual scoring', flush=True)
+
+
+async def move_sort_item(participant, name, step):
+    items = participant.locator('[data-sort-value]')
+    position = (await items.all_text_contents()).index(name)
+    direction = 'oben' if step < 0 else 'unten'
+    button = participant.get_by_role('button', name=f'{name} nach {direction}', exact=True)
+    await button.click()
+    await expect(items.nth(position + step)).to_have_text(name)
+    await expect(button).to_be_focused()
+
+
+async def exercise_sorting(participant, target):
+    items = participant.locator('[data-sort-value]')
+    initial = await items.all_text_contents()
+    for name in initial:
+        step = -1 if initial.index(name) == len(initial) - 1 else 1
+        await move_sort_item(participant, name, step)
+        await move_sort_item(participant, name, -step)
+    await expect(items).to_have_text(initial)
+    for index, name in enumerate(target):
+        position = (await items.all_text_contents()).index(name)
+        while position > index:
+            await move_sort_item(participant, name, -1)
+            position -= 1
+    await expect(items).to_have_text(target)
+    await participant.get_by_role('button', name='Antwort aktualisieren', exact=True).click()
+    await expect(participant.locator('.bq-answer-saved')).to_contain_text(' → '.join(target))
 
 
 async def play_sorting(host, participant, other):
     await tile(host, 'Sortieren').click()
-    await host.locator('#ready-time').fill('15')
+    await host.locator('#ready-time').fill('28')
     await host.locator('[data-action="uncover-question"]').click()
-    await expect(participant.get_by_role('heading', name=SORT_RULE, exact=True)).to_be_visible()
-    items = participant.locator('[data-sort-value]')
-    await expect(items).to_have_count(8)
-    assert await items.all_text_contents() != SORT_ITEMS
-    submit = participant.get_by_role('button', name='Reihenfolge abgeben', exact=True)
-    await expect(submit).to_be_in_viewport(ratio=1)
-    await submit.click()
-    update = participant.get_by_role('button', name='Antwort aktualisieren', exact=True)
-    await expect(update).to_be_visible()
-    for index, name in enumerate(SORT_ITEMS):
-        position = (await items.all_text_contents()).index(name)
-        while position > index:
-            await participant.get_by_role('button', name=name + ' nach oben', exact=True).click()
-            position -= 1
-            await expect(items.nth(position)).to_have_text(name)
-    await expect(items).to_have_text(SORT_ITEMS)
-    await update.click()
-    await expect(participant.locator('.bq-answer-saved')).to_contain_text(' → '.join(SORT_ITEMS))
-    await expect(other.locator('.review-card.is-hidden')).to_have_count(1, timeout=18000)
+    for player in [participant, other]:
+        await expect(player.get_by_role('heading', name=SORT_RULE, exact=True)).to_be_visible()
+        items = player.locator('[data-sort-value]')
+        await expect(items).to_have_count(8)
+        assert await items.all_text_contents() != SORT_ITEMS
+        submit = player.get_by_role('button', name='Reihenfolge abgeben', exact=True)
+        await expect(submit).to_be_in_viewport(ratio=1)
+        await submit.click()
+        await expect(player.get_by_role('button', name='Antwort aktualisieren', exact=True)).to_be_visible()
+    reversed_items = list(reversed(SORT_ITEMS))
+    await asyncio.gather(exercise_sorting(participant, SORT_ITEMS), exercise_sorting(other, reversed_items))
+    await expect(other.locator('.review-card.is-hidden')).to_have_count(2, timeout=32000)
     await expect(other.locator('.review-answer')).to_have_count(0)
-    await host.locator('.review-card.is-hidden').click()
-    await expect(host.locator('.review-answer')).to_have_text(' → '.join(SORT_ITEMS))
-    await host.locator('[data-action="judge-review-correct"]').first.click()
+    for name, target in [('Alice', SORT_ITEMS), ('Bob', reversed_items)]:
+        card = host.locator('.review-card').filter(has_text=name)
+        await card.click()
+        await expect(card.locator('.review-answer')).to_have_text(' → '.join(target))
+    await host.locator('.review-card').filter(has_text='Alice').locator('[data-action="judge-review-correct"]').click()
     await host.locator('[data-action="reveal"]').first.click()
     await host.locator('[data-action="back"]').first.click()
-    print('PASS: eight sorting items, individual criterion, shuffled mobile list, editable private submission and host grading', flush=True)
+    print('PASS: both teammates move all eight items in both directions, update independently and the host receives both exact sequences', flush=True)
 
 
 async def run(browser, root):

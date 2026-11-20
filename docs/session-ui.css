@@ -523,52 +523,81 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 
 .bq-team-emoji { display: grid; gap: .9rem; min-width: 0; }
 .bq-team-emoji h3, .bq-team-emoji p { margin: 0; }
-.bq-team-emoji .panelhead { flex-wrap: wrap; align-items: center; gap: .65rem; }
+.bq-question-scene>.bq-team-emoji {
+ display:flex;flex:1 1 auto;flex-direction:column;min-height:0;
+ overflow:auto;overscroll-behavior:contain;padding:clamp(10px,1.6vw,20px);gap:8px;
+}
+.bq-team-emoji .panelhead {
+ display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:6px 10px;
+ flex:0 0 auto;margin:0;
+}
+.bq-game-mode .page-live .bq-team-emoji>.panelhead{padding-bottom:7px}
+.bq-team-emoji .panelhead p{font-size:.875rem;line-height:1.35;overflow-wrap:anywhere}
+.bq-team-emoji .panelhead h3{overflow-wrap:anywhere}
+.bq-team-emoji>[role="status"],.bq-team-emoji>.stack{flex:0 0 auto}
+.bq-emoji-compose{display:grid;gap:7px 12px}
 .bq-emoji-entry,.bq-emoji-keyboard-filters{
  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:4px 8px;
 }
 .bq-emoji-entry>small{grid-column:1/-1}
 .bq-emoji-entry input,.bq-emoji-keyboard input{font-size:16px;min-width:0}
+.bq-emoji-entry .btn{min-height:42px}
+.bq-emoji-catalog-symbol{
+ font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
+}
 .bq-emoji-selection:empty{display:none}
 .bq-emoji-keyboard{
  width:min(680px,calc(100vw - 20px));height:min(720px,88dvh);max-height:calc(100dvh - 18px);
  padding:12px;border:1px solid #657b77;border-radius:14px;background:#232b30;color:#f2f6f7;
 }
 .bq-emoji-keyboard[open]{display:flex;flex-direction:column;gap:10px}
+.bq-answer-keyboard .bq-emoji-keyboard{
+ position:fixed;top:calc(var(--bq-keyboard-top) + 4px);bottom:auto;margin:0 auto;
+ height:calc(var(--bq-keyboard-height) - 8px);max-height:none;
+}
 .bq-emoji-keyboard::backdrop{background:#101619d9}
 .bq-emoji-keyboard-header{display:flex;align-items:center;gap:9px}
 .bq-emoji-keyboard-header h2{flex:1;margin:0;font-size:clamp(18px,4vw,24px)}
-.bq-emoji-keyboard-header .btn{min-height:36px}
+.bq-emoji-keyboard-header .btn{min-height:42px}
 .bq-emoji-keyboard-filters select{max-width:min(41vw,180px);min-width:0}
 .bq-emoji-keyboard-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
 .bq-emoji-keyboard-list h3{margin:.5rem .2rem;font-size:15px}
 .bq-emoji-keyboard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(43px,1fr));gap:4px}
 .bq-emoji-keyboard-grid .btn{min-height:44px;min-width:0;padding:1px;font-size:24px}
-.bq-team-emoji:has(.bq-drawing-workspace),.bq-team-emoji:has(.bq-emoji-entry){
- display:flex;flex-direction:column;flex:1 1 0;min-height:0;overflow:auto;gap:7px;
+.bq-emoji-keyboard-grid .bq-emoji-catalog-symbol{font-size:inherit}
+.bq-team-emoji:has(.bq-emoji-entry)>*{flex:0 0 auto}
+.bq-drawing-workspace{display:flex;flex-direction:column;flex:1 0 auto;min-height:0;gap:6px}
+.bq-drawing-prompt{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none}
+.bq-drawing-reference{width:auto;max-width:34%;height:auto;max-height:82px;object-fit:contain;border-radius:6px}
+.bq-drawing-tools,.bq-drawing-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.bq-drawing-tools{justify-content:space-between;flex:none}
+.bq-drawing-colors{
+ display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px;width:min(100%,310px);padding:3px;
 }
-.bq-drawing-workspace{display:flex;flex-direction:column;flex:1;min-height:0;gap:6px}
-.bq-drawing-prompt{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.bq-drawing-reference{width:auto;max-width:30%;height:auto;max-height:68px;object-fit:contain;border-radius:6px}
-.bq-drawing-tools,.bq-drawing-colors,.bq-drawing-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
-.bq-drawing-tools{justify-content:space-between}
-.bq-drawing-tools .btn{min-height:32px;padding:4px 7px}
+.bq-drawing-tools .btn{min-height:36px;padding:3px 7px}
 .bq-drawing-tools .field{display:flex;align-items:center;gap:4px}
-.bq-drawing-tools .field select{width:auto;padding:3px}
+.bq-drawing-tools .field select{width:auto;min-height:36px;padding:3px}
 .bq-drawing-tools .bq-drawing-swatch{
- width:30px;min-width:30px;padding:0;background:var(--ink);border:1px solid #a1a8af;border-radius:7px;
+ width:100%;min-width:0;padding:0;background:var(--ink);border:1px solid #a1a8af;border-radius:7px;
 }
 .bq-drawing-swatch[aria-pressed="true"]{outline:2px solid #e6f4ee;outline-offset:1px}
 .bq-drawing-paper,.bq-drawing-guess{
  display:flex;justify-content:center;align-items:center;container-type:size;
- flex:1 1 0;min-height:110px;min-width:0;
+ flex:1 0 112px;min-height:112px;min-width:0;
 }
-.bq-drawing-guess{min-height:0}
+@media(max-width:540px){
+ .bq-drawing-reference{max-height:54px}
+ .bq-drawing-tools{gap:3px}
+ .bq-drawing-tools .btn{min-height:34px}
+ .bq-drawing-prompt .bq-emoji-target{gap:0}
+}
 #team-draw-canvas,.bq-drawing-art{display:block;background:#fff;border-radius:6px;max-width:100%;aspect-ratio:8/5}
 #team-draw-canvas,.bq-drawing-guess>.bq-drawing-art{width:min(100%,160cqh);height:auto}
 #team-draw-canvas{touch-action:none;user-select:none;cursor:crosshair}
-.bq-emoji-results .bq-drawing-art{width:min(170px,100%);height:auto}
-.bq-emoji-results:has(.bq-drawing-art){max-height:min(50dvh,440px);overflow:auto}
+.bq-emoji-results:has(.bq-drawing-art){grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+.bq-team-emoji>.bq-emoji-results{flex:0 0 auto}
+.bq-emoji-results:has(.bq-drawing-art)>li{display:grid;align-content:start;padding:9px}
+.bq-emoji-results .bq-drawing-art{width:min(100%,320px);height:auto;justify-self:center}
 .bq-emoji-target { display: grid; gap: .3rem; }
 .bq-emoji-target strong { font-size: clamp(1.35rem, 4vw, 2.15rem); overflow-wrap: anywhere; }
 .bq-emoji-filters{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
@@ -586,6 +615,8 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-team-emoji #team-emoji-guess-form { max-width: 32rem; }
 .bq-team-emoji .bq-answer-view { margin: 0; }
 .bq-question-scene .bq-question-panel .bq-order-stage{justify-content:flex-start}
+.bq-order-stage h2{font-size:clamp(17px,2.2vw,25px);overflow-wrap:anywhere}
+.bq-order-stage,.bq-order-list li{min-width:0}
 .bq-order-list{display:grid;gap:5px;padding:0;margin:0;list-style:none;width:100%}
 .bq-order-list li{
  display:grid;grid-template-columns:26px minmax(0,1fr) auto auto;align-items:center;gap:4px 7px;
@@ -593,10 +624,12 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 .bq-order-list [data-sort-value]{overflow-wrap:anywhere}
 .bq-order-position{font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
-.bq-order-list .btn{min-width:36px;min-height:35px;padding:1px 5px}
+.bq-order-list .btn{min-width:42px;min-height:40px;padding:1px 5px;touch-action:manipulation}
 .bq-order-list .btn[aria-disabled="true"]{opacity:.38;cursor:default}
 .se-sort-entry.se-sort-input-row{grid-template-columns:22px minmax(0,1fr) auto auto}
-.se-sort-input-row input{width:100%;min-width:0}
+.se-sort-input-row input{width:100%;min-width:0;min-height:34px}
+.se-studio .se-sort-entry.se-sort-input-row>button{min-width:32px;min-height:32px;padding:2px 5px}
+@media(max-width:620px){.se-sort-input-row input{font-size:16px}.se-studio .se-sort-entry.se-sort-input-row>button{min-width:36px;min-height:36px}}
 .bq-question-covered { display: grid; place-content: center; gap: 1.2rem; min-height: 48vh; text-align: center; }
 .bq-question-covered .row { justify-content: center; }
 .bq-game-mode .page-live.bq-session-page:has(.bq-ready-scene) { overflow-y: auto; }
@@ -632,7 +665,7 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 /* The dedicated non-buzzer team-emoji round already owns a synced #clock.
    Make that existing timer as visible as the written-round countdown. */
 .bq-team-emoji .panelhead #clock{display:inline-grid;place-items:center;flex:none;min-width:110px;min-height:51px;padding:5px 13px;border:2px solid #8ed1c2;border-radius:10px;background:#16353d;color:#f7ffff;font-size:clamp(23px,2.5vw,34px);font-weight:900;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:.025em}
-@media(max-width:580px){.bq-team-emoji .panelhead #clock{min-width:88px;min-height:44px;padding:5px 9px;font-size:24px}}
+@media(max-width:580px),(max-height:440px){.bq-team-emoji .panelhead #clock{min-width:64px;min-height:40px;padding:4px 6px;font-size:23px}}
 /* The shared quizboard is view-only for guests; only host tiles are interactive. */
 .bq-board-scene .bq-board-full .tile.bq-tile-view-only{cursor:default;pointer-events:none;user-select:none}
 .bq-buzzer-cover {
