@@ -4,7 +4,7 @@ No external server/PeerJS required: uses a local host-only draft.
 import asyncio,functools,threading,shutil
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from board_library_test_support import read_board, wait_board_saved
 
 ROOT=Path(__file__).resolve().parents[1] / 'docs'
@@ -36,6 +36,7 @@ async def run():
    saved=(await read_board(page))['quiz']['questions'][0]
    assert not saved['mapTargetSet'],'unset host position was incorrectly complete'
    print('PASS: fresh map question is incomplete until host deliberately drops dagger')
+   await expect(page.locator('[data-se-roundmode]')).to_have_count(0)
    await page.locator('[data-se-field="mapPrompt"]').fill('Wo befindet sich diese Stadt?')
    await page.locator('[data-se-field="mapPrompt"]').blur()
    await page.wait_for_timeout(700)
@@ -55,12 +56,12 @@ async def run():
    print('PASS: actual mouse click sets and persists secret dagger target with fractional coordinates')
    old=(saved['mapTargetX'],saved['mapTargetY'])
    await page.locator('[data-map-zoom="in"]').click()
-   await page.locator('.bq-map-zoom-value').get_by_text('170 %').wait_for()
+   await expect(page.locator('.bq-map-zoom-value')).to_have_text('150 %')
    await page.locator('.bq-map-viewport').hover()
    await page.mouse.wheel(0,-140)
    await page.wait_for_timeout(120)
    zoomed=await page.locator('.bq-map-zoom-value').inner_text()
-   assert zoomed!='170 %',zoomed
+   assert zoomed!='150 %',zoomed
    rect=await page.locator('.bq-map-viewport').bounding_box()
    await page.mouse.move(rect['x']+rect['width']*.48,rect['y']+rect['height']*.5)
    await page.mouse.down();await page.mouse.move(rect['x']+rect['width']*.57,rect['y']+rect['height']*.47,steps=5)

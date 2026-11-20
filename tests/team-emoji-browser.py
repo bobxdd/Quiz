@@ -112,7 +112,7 @@ async def save_clue(player, labels):
 async def submit_guess(player, hint, guess):
     await expect(player.locator('.bq-emoji-hint')).to_have_text(hint,timeout=15000)
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
-    await player.get_by_label('Euer Rateversuch').fill(guess)
+    await player.get_by_label('Eure Antwort').fill(guess)
     await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
     await expect(player.get_by_text('Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.')).to_be_visible()
 
@@ -168,7 +168,7 @@ async def run(browser, root):
     await expect(deniz.locator('.bq-emoji-palette')).to_have_count(0)
 
     await asyncio.gather(submit_guess(bob, '🦊 ❄️', 'Jinx'), submit_guess(deniz, '🔥', 'Amumu'))
-    await bob.get_by_label('Euer Rateversuch').fill('KAISA')
+    await bob.get_by_label('Eure Antwort').fill('KAISA')
     await bob.get_by_role('button',name='Teamantwort aktualisieren').click()
     await expect(alice.get_by_text('Amumu', exact=True)).to_have_count(0)
     for page in [host, *players, viewer]:

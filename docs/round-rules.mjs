@@ -1,6 +1,6 @@
 /** Round rules kept separate from rendering and transport. */
-import {judgementDelta,updatePlayerScore} from './core.mjs';
-export const roundMode=q=>q?.type==='team-emoji'?'team-emoji':q?.roundMode==='written'?'written':'buzzer';
+import {judgementDelta,updatePlayerScore,questionRoundMode as roundMode} from './core.mjs';
+export {roundMode};
 export const scoreMode=state=>state?.scoreMode==='individual'?'individual':'team';
 export function buzzerCoverActive(state,buzzers){
  const round=String(state?.round||0);
@@ -11,11 +11,6 @@ export function buzzerLocked(state,uid,team){
  const round=String(state?.round||0);
  return state?.buzzerReleased?.[round]?.[uid]!==true&&
   !!(state?.buzzerBlocked?.[round]?.[uid]||(scoreMode(state)==='team'&&state?.buzzerBlockedTeams?.[round]?.[team]));
-}
-export function canPlaceMapPin(state,buzzers,uid,team,time=Date.now()){
- if(!uid||!team||state?.current?.type!=='map'||state.phase!=='question'||(state.deadline&&state.deadline<=time))return false;
- if(roundMode(state.current)==='written')return !!state.answerParticipants?.[uid];
- return !buzzerCoverActive(state,buzzers)&&!buzzerLocked(state,uid,team);
 }
 export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  const round=String(state?.round||0);

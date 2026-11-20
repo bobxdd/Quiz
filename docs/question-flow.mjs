@@ -94,8 +94,9 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
   if(!Number.isSafeInteger(round)||round>999999)return null;
   const doublePoints=finalSixActive(state);
   const effectivePoints=Number(question.points)*(doublePoints?2:1);
-  const current=covered?{id:question.id,category:question.category,type:question.type,points:effectivePoints,roundMode:playerQuestion.roundMode}
-   :{...playerQuestion,points:effectivePoints};
+  const mode=question.type==='map'?'written':playerQuestion.roundMode;
+  const current=covered?{id:question.id,category:question.category,type:question.type,points:effectivePoints,roundMode:mode}
+   :{...playerQuestion,roundMode:mode,points:effectivePoints};
   current.basePoints=Number(question.points);
   current.doublePoints=doublePoints;
   return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,

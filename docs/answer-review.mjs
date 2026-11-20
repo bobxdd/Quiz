@@ -2,6 +2,7 @@
    unrevealed submission; private answers remain under /responses/<round>/<uid>.
    Pure functions shared by browser runtime and regression tests. */
 import {MAX_PLAYERS} from './lobby-model.mjs';
+import {roundMode} from './round-rules.mjs';
 const safeText=(v,max)=>String(v??'').slice(0,max);
 const allowedId=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{2,128}$/.test(id)&&!['__proto__','prototype','constructor'].includes(id);
 export function participantSnapshot(roster){
@@ -13,12 +14,10 @@ export function answerProgress(expected,responses){
  const count=ids.filter(id=>typeof responses?.[id]?.text==='string'&&responses[id].text.trim().length>0).length;
  return {total:ids.length,submitted:count,complete:ids.length>0&&count===ids.length};
 }
-/** When all written answers arrive, open review immediately. Timed written
- * questions must ALSO conclude at the deadline even if someone disconnected.
- * A map question keeps its original rule: pins remain editable until timeout;
- * if no timer was configured, only the host can close map submissions. */
+/** Timed submissions stay editable until the deadline. Without a timer,
+ * written answers open review when complete and map pins close by host action. */
 export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
- if(state?.phase!=='question'||state?.current?.roundMode!=='written')return false;
+ if(state?.phase!=='question'||roundMode(state.current)!=='written')return false;
  const expected=state.answerParticipants||{};
  const progress=answerProgress(expected,responses);
  if(!progress.total)return false;

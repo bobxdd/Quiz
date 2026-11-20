@@ -90,7 +90,14 @@ async def main():
   await bob.locator('[data-action="buzz"]').click()
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.buzzers||{}).some(b=>b&&b.name==='Bob')",timeout=10000)
   await expect(alice.locator('[data-action="buzz"]')).to_be_disabled(timeout=10000)
-  # No guest can restart after listening. The host gets replay only at the end.
+  for guest in (alice,bob):
+   await expect(guest.locator('.bq-buzzer-cover')).to_be_visible()
+   assert await guest.evaluate("!window.__probe.info().publicState.audioPlayback")
+   assert await guest.evaluate("!window.__probe.info().publicState.current.audio")
+  await expect(host.locator('[data-action="audio-play"]')).to_have_count(0)
+  await expect(host.locator('[data-action="reveal"]')).to_be_disabled()
+  await host.locator('[data-action="buzz-wrong"]').click()
+  # Replay stays host-only after the verdict and the end of the initial clip.
   await host.get_by_role('button',name='↻ Sound erneut abspielen').wait_for(timeout=10000)
   assert await alice.locator('[data-action="audio-play"]').count()==0
   assert await bob.locator('[data-action="audio-play"]').count()==0
@@ -102,18 +109,13 @@ async def main():
   if await host.locator('[data-action="audio-unblock"]').count():
    await host.locator('[data-action="audio-unblock"]').click()
   await host.get_by_role('button',name='↻ Sound erneut abspielen').wait_for(timeout=10000)
-  # The host must explicitly judge or clear an active buzzer BEFORE revealing.
-  # This question tests the manual solution, so reset an accidental buzz,
-  # keep the scores unchanged, then reveal normally.
-  await expect(host.locator('[data-action="reveal"]')).to_be_disabled()
-  await host.locator('.bq-buzzer-winner [data-action="reset-buzz"]').click()
   await expect(host.locator('[data-action="reveal"]')).to_be_enabled()
   await host.locator('[data-action="reveal"]').first.click()
   await alice.wait_for_function("() => window.__probe.info().publicState.phase==='reveal'",timeout=10000)
   assert await alice.locator('[data-action="audio-unblock"]').count()==0
   assert await alice.locator('[data-action="audio-play"]').count()==0
   assert not errors,errors
-  print('PASS: host-only start/replay after ended, 2 synchronized authorization events, buzz while audio plays, no native replay, no JS errors')
+  print('PASS: sound concealed until the verdict, synchronized host-only playback and replay, no browser errors')
   await browser.close()
 
 if __name__=='__main__':asyncio.run(main())

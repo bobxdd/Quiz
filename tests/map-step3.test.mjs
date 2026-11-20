@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {normalizePoint,encodePoint,decodePoint,DEFAULT_MAP_VIEW,normalizeMapView,mapScreenPosition,mapWorldPosition,mapZoomAt,mapPanBy,mapViewCss} from '../docs/map-tools.mjs';
 import {normalizedQuiz,validateQuestion,publicQuestion} from '../docs/core.mjs';
 import {templateScene,renderScene} from '../docs/studio-model.mjs';
+import {canBuzz} from '../docs/round-rules.mjs';
 const docs=new URL('../docs/',import.meta.url);
 const source=path=>readFileSync(new URL(path,docs),'utf8');
 const mk=(props={})=>normalizedQuiz({questions:[{id:'map1',category:'Weltkarte',title:'Frage',type:'map',roundMode:'written',prompt:'Wo ist der Ort?',answer:'',scene:templateScene('map',{prompt:'Wo ist der Ort?'}),...props}]}).questions[0];
@@ -21,6 +22,15 @@ test('normalized target flag survives host save/import, but never leaks to guest
  const after=publicQuestion(q,true,'',0,6);
  assert.deepEqual({x:after.mapTargetX,y:after.mapTargetY},{x:62.345,y:38.112});
  assert.equal(Object.hasOwn(after,'mapTargetSet'),false);
+});
+test('older map questions keep their coordinates and points in a pin-only round',()=>{
+ const q=mk({roundMode:'buzzer',mapTargetSet:true,mapTargetX:81.234,mapTargetY:27.456,points:300,seconds:75,answerTolerance:100});
+ assert.equal(q.roundMode,'written');
+ assert.deepEqual([q.mapTargetX,q.mapTargetY,q.points,q.seconds,q.answerTolerance],[81.234,27.456,300,75,100]);
+ const current=publicQuestion({...q,roundMode:'buzzer'});
+ assert.equal(current.roundMode,'written');
+ assert.equal(canBuzz({phase:'question',round:1,current:{...current,roundMode:'buzzer'}},{},'player','t1'),false);
+ assert.equal(Object.hasOwn(current,'answerTolerance'),false);
 });
 test('map normalizes, encodes and decodes sub-kilometer precision without injection',()=>{
  for(const p of [{x:50.0002,y:22.56789},{x:0,y:0},{x:100,y:100}]){

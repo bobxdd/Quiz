@@ -3,7 +3,8 @@
  * the connected host browser keeps the authoritative room in memory.
  * No Firebase, cloud database, or public hosting of private quiz solutions.
  */
-import {canBuzz,canPlaceMapPin,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
+import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
+import {participantSnapshot} from './answer-review.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,questionSeconds} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot} from './lobby-model.mjs';
@@ -243,6 +244,11 @@ function guestIdentity(room,restoreCode=''){
 }
 function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
+function writtenParticipants(data,round=data.public.round){
+ const eligible=Object.entries(data.roster||{}).filter(([uid])=>!waitsForNextQuestion({round},data.members?.[uid]));
+ return participantSnapshot(Object.fromEntries(eligible));
+}
+
 export class PeerGame{
  constructor(){this.mode='idle';this.uid='';this.secret='';this.room='';this.peer=null;this.conn=null;this.connected=false;this.offset=0;this.data=null;this.guestData={};this.guestConnections=new Map();this.unverifiedConnections=new Set();this.projectorConnections=new Set();this.projectorFrame=null;this.memberSecrets={};this.listeners=[];this.hostQuiz=null;this.pending=new Map();this.uncertainActions=new Map();this.requestNo=0;this.reconnectTimer=null;this.hostReconnectTimer=null;this.hostReconnectAttempts=0;this.snapshotTimer=null;this.cachedQuizAudio=null;this.quitting=false;this.netError='';this.connectionPhase='idle';this.iceState='unknown';this.iceErrorCode=0;this.retryPromise=null;this.connectAttempt=null;}
  async init(){return this;}
@@ -473,6 +479,11 @@ export class PeerGame{
   this.uid=previous.uid;this.data=previous.data;this.memberSecrets=previous.secrets||{};
   this.savedAt=Number(previous.savedAt)||0;
   this.hostQuiz=await loadBestHostQuiz(room);
+  const active=this.data.public;
+  if(active.current?.type==='map'&&active.current.roundMode!=='written'&&['question','paused'].includes(active.phase)){
+   active.current.roundMode='written';
+   active.answerParticipants=writtenParticipants(this.data);
+  }
   this.data.presence={};await this._openHostPeer(room);this._scheduleTeamEmojiDeadline();this._persist();return room;
  }
  async saveHostQuiz(room,quiz){this._assertHost(room);if(!quiz||!Array.isArray(quiz.questions)||quiz.questions.length>180)throw Error('Ungültiges Host-Quiz.');
@@ -866,10 +877,9 @@ export class PeerGame{
    }
    case 'answer':{
     if(pub?.phase!=='question'||String(payload.round)!==round||(pub.deadline&&now>=pub.deadline))throw Error('Frage ist nicht offen.');
-    const written=roundMode(pub.current)==='written',map=pub.current?.type==='map';
-    if(!written&&!map)throw Error('Diese Frage wird mündlich beantwortet.');
-    if(written&&!pub.answerParticipants?.[ctx.uid])throw Error('Nicht für diese Schreib-Runde freigegeben.');
-    if(map&&!canPlaceMapPin(pub,this.data.buzzers,ctx.uid,member.team,now))throw Error('Du kannst deinen Pin setzen, solange die Karte offen ist.');
+    const map=pub.current?.type==='map';
+    if(roundMode(pub.current)!=='written')throw Error('Diese Frage wird mündlich beantwortet.');
+    if(!pub.answerParticipants?.[ctx.uid])throw Error('Du bist für diese Runde noch nicht freigegeben.');
     const text=safeText(payload.text,800);
     if(!text)throw Error('Antwort darf nicht leer sein.');
     if(map&&!decodePoint(text))throw Error('Kartenpunkt liegt außerhalb der Weltkarte.');
@@ -960,16 +970,16 @@ export class PeerGame{
   const d=this._getHostData(room);
   const state=covered&&!d.public.selectionTurn?{...d.public,selectionTurn:makeSelectionTurn(d.public,d.roster),boardSequence:true}:d.public;
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
+  const expected=emoji?null:participants??(question.type==='map'?writtenParticipants(d,Number(expectedRound)+1):null);
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
-   participants:emoji?null:participants,deadline:emoji?0:deadline,covered});
+   participants:expected,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
   d.public=next;
   if(emoji)emoji.points=next.current.points;
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
    d.pendingQuestion={round:next.round,id:question.id,
-    current:{...clone(playerQuestion),points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints},
-    participants:clone(participants),
+     current:{...clone(playerQuestion),roundMode:next.current.roundMode,points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints},
      duration:deadline?(questionSeconds(question.seconds)*1000||Math.max(0,deadline-Date.now())):0};
   }
   else if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
@@ -999,7 +1009,7 @@ export class PeerGame{
   (p.settings??={}).buzzerEnabled=true;
   this._changed();
  }
- async uncoverQuestion(room,round,id,seconds,participants){
+ async uncoverQuestion(room,round,id,seconds){
   const d=this._getHostData(room),pending=d.pendingQuestion;
   if(d.public.phase!=='ready'||d.public.round!==Number(round)||d.public.current?.id!==id||pending?.round!==Number(round)||pending.id!==id)throw Error('Die ausgewählte Frage hat sich geändert.');
   const question=this.hostQuiz?.questions.find(item=>item.id===id);
@@ -1007,8 +1017,9 @@ export class PeerGame{
   const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   if(emoji)emoji.points=d.public.current.points;
    const duration=seconds===undefined?pending.duration:questionSeconds(seconds)*1000;
-   d.public={...d.public,phase:'question',current:clone(pending.current),
-    answerParticipants:emoji?null:participants??pending.participants,
+   const mode=roundMode(question);
+   d.public={...d.public,phase:'question',current:{...clone(pending.current),roundMode:mode},
+    answerParticipants:mode==='written'?writtenParticipants(d):null,
     deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
   if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
   delete d.pendingQuestion;
@@ -1156,7 +1167,7 @@ export class PeerGame{
  async judgeWritten(room,round,uid,result){
   const d=this._getHostData(room),p=d.public,key=String(round);
    const entry=p?.answerReview?.entries?.[uid];
-  if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||p?.current?.roundMode!=='written'||
+   if(String(p?.round)!==key||!['review','reveal'].includes(p?.phase)||roundMode(p.current)!=='written'||p.buzzerResolved?.[key]||
       !entry||(entry.submitted&&!entry.revealed)||!d.roster?.[uid]||!['correct','wrong'].includes(result))
    throw Error('Diese schriftliche Antwort ist nicht bewertbar.');
   const teamMode=p.scoreMode!=='individual',team=teamMode?d.roster[uid].team:'';

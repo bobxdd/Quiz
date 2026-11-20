@@ -419,6 +419,9 @@ body.bq-game-mode:has(.bq-question-scene .bq-map-viewport) .shell{
 .bq-question-scene .bq-action-bar:has(>.bq-auxiliary[open]){
  position:relative;overflow:visible!important;z-index:299!important;
 }
+.bq-question-scene .bq-action-bar>.bq-auxiliary[open]>summary{
+ position:relative;z-index:301;background:#273438;
+}
 @media(max-width:680px){
  .bq-question-scene .bq-action-bar>.bq-auxiliary[open]>.bq-host-detail{
   left:8px!important;
