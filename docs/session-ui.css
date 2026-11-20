@@ -511,6 +511,16 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-projector-page .bq-projector-scores .scoreline{display:inline-flex;gap:20px;padding:7px 14px;vertical-align:middle}
 .bq-projector-page .bq-projector-scene .bq-session-scene{max-width:100%;min-width:0}
 .bq-projector-page .bq-projector-scene .bq-answer-view{max-width:1200px}
+.bq-projector-page .bq-projector-scene .bq-question-scene,
+.bq-projector-page .bq-question-scene>.bq-question-panel,
+.bq-projector-page .bq-question-scene .bq-scene-content{flex:none}
+.bq-projector-page .bq-question-scene .bq-scene-content{container-type:normal;overflow:visible}
+.bq-projector-page .bq-question-scene .bq-question-panel .stage{
+ flex:none;height:auto;max-height:none;overflow:visible;
+}
+.bq-projector-page .bq-projector-scene .bq-question-scene .bq-question-panel .stage>.se-scene{
+ flex:none;width:min(100%,132dvh);max-height:none;
+}
 @media(max-width:600px){.bq-projector-page #projector-root{padding:10px}.bq-projector-page .bq-projector-scores .scoreline{display:flex;justify-content:space-between}}
 .bq-guest-receipt {
   margin: 0 0 .7rem;

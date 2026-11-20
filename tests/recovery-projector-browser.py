@@ -159,14 +159,28 @@ async def main():
    errors=[];projector.on('pageerror',lambda error:errors.append(str(error)))
    await projector.goto(f'{root}/projector.html?room={room}#{token}')
    await expect(projector.locator('.bq-projector-wait')).to_be_visible()
-   await page.evaluate("""([room,token])=>{
-    const bc=new BroadcastChannel('brainquiz-projector-'+room+'-'+token);
-    bc.postMessage({t:'frame',html:'<section class="bq-session-scene"><h1>PUBLIC BOARD</h1><p>Score: 200</p><button data-action="score">No host controls</button></section>'});
-    setTimeout(()=>bc.close(),1000);
-   }""",[room,token])
+   async def send_frame(html):
+    await page.evaluate("""([room,token,html])=>{
+     const bc=new BroadcastChannel('brainquiz-projector-'+room+'-'+token);
+     bc.postMessage({t:'frame',html});
+     setTimeout(()=>bc.close(),1000);
+    }""",[room,token,html])
+   await send_frame('<section class="bq-session-scene"><h1>PUBLIC BOARD</h1><p>Score: 200</p><button data-action="score">No host controls</button></section>')
    await expect(projector.locator('#projector-root')).to_contain_text('PUBLIC BOARD',timeout=10000)
    await expect(projector.locator('#projector-root')).to_contain_text('Score: 200')
    assert await projector.locator('#projector-root button, #projector-root [data-action]').count()==0
+   frame='<div class="bq-projector-scene"><section class="bq-session-scene bq-question-scene"><div class="glass panel bq-question-panel"><div class="bq-scene-content">{}</div></div></section></div>'
+   question='<div class="stage"><div class="se-scene"><div class="se-element se-kind-image" style="left:10%;top:10%;width:80%;height:80%"><img src="./pixel-corner.png" alt="Fragebild"></div></div></div>'
+   await send_frame(frame.format(question))
+   picture=projector.get_by_alt_text('Fragebild')
+   await expect(picture).to_be_in_viewport(ratio=.95)
+   assert (await picture.bounding_box())['width']>=160
+   await send_frame(frame.format('<div class="bq-buzzer-cover" role="status"><strong>Frage verdeckt</strong></div>'))
+   await expect(projector.get_by_text('Frage verdeckt',exact=True)).to_be_in_viewport(ratio=.95)
+   await expect(picture).to_have_count(0)
+   await send_frame(frame.format(question))
+   await expect(picture).to_be_in_viewport(ratio=.95)
+   print('PASS: projector image, full buzzer cover and restored image occupy visible space',flush=True)
    assert not errors,errors
    await page.close();await projector.close()
    print('PASS: local projector receives only explicitly published display frames and has no game engine')
