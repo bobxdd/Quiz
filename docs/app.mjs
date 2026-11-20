@@ -1,6 +1,6 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement,buzzerCoverActive,buzzerLocked} from './round-rules.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
-import {TEAM_EMOJI,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
+import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,DRAW_WIDTH,DRAW_HEIGHT,DRAW_COLORS,DRAW_SIZES,MAX_DRAW_STROKES,MAX_DRAW_POINTS,emojisFromText,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,normalizeTeamDraw,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
 import {latestUndoableEvent,mayRegradeScore} from './score-ledger.mjs';
 import {loadLastHostRoom,loadLocalHostQuiz,saveLastHostRoom,saveLocalHostQuiz,loadGuestResume} from './backup-store.mjs';
@@ -28,7 +28,8 @@ let cloudTimer=null,cloudInFlight=false,cloudDirty=false,hostCloudReady=false,cl
 let projectorChannel=null,projectorRoom='',projectorToken='';
 let guestReceipt=null;
 let reviewTeam='all',reviewTeamRound=-1; // Local host filter; does not change scoring.
-let playerEmoji=null,emojiDraft=null;
+let playerEmoji=null,emojiDraft=null,emojiKeyboard=null,emojiCatalog=null;
+let drawingDraft=null,drawingGesture=null;
 let rehearsal=null;
 let boardId='',boardRevision=0,boardConflict=false;
 let boardLibrary=null,libraryOpening=null,libraryError='';
@@ -203,6 +204,8 @@ function preserveForm(draw){
   document.querySelector('#app '+focusSurface)?.focus({preventScroll:true});
  }
  for(const item of saved){if(!item.selector)continue;const el=document.querySelector(item.selector);if(el){el.scrollTop=item.nearBottom?el.scrollHeight: item.top;el.scrollLeft=item.left;}}
+ if(emojiKeyboard?.open&&emojiKeyboard.dataset.round!==emojiClueOwner()?.id)emojiKeyboard.close();
+ paintDrawing();
  syncAnswerViewport();
 }
 function syncAnswerViewport(){
@@ -296,9 +299,9 @@ function presentationControls(){
   ${publicState?.phase!=='finished'?`<div class="row" aria-label="Beamer-Szene">${choices.map(([key,label])=>btn(label,'projector-scene','small'+((publicState?.presentation||'')===key?' primary':''),`data-slide="${key}" aria-pressed="${(publicState?.presentation||'')===key}"`)).join('')}</div>`:''}</details>`;
 }
 function schedule(){
- if(renderQueued||liveMapGesture)return;
+ if(renderQueued||liveMapGesture||drawingInProgress())return;
  renderQueued=true;
- requestAnimationFrame(()=>{renderQueued=false;if(liveMapGesture)return;preserveForm(render);updateClock();pushProjector()});
+ requestAnimationFrame(()=>{renderQueued=false;if(liveMapGesture||drawingInProgress())return;preserveForm(render);updateClock();pushProjector()});
 }
 function btn(label,action,cls='',attrs=''){return `<button type="button" class="btn ${cls}" data-action="${action}" ${attrs}>${label}</button>`;}
 function hasValidRoom(value){return /^[A-HJ-NP-Z2-9]{16}$/.test(value);}
@@ -532,7 +535,7 @@ function soundMenu(){
   +'<p class="small muted">Sound-Vorschau startet auch den Ton im Browser.</p></div></details>';
 }
 
-function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;playerEmoji=null;emojiDraft=null;reviewStartPending=-1;questionHistory={};
+function listenRoom(){buzzWatchReady=false;game.clearWatchers();stopGuestListeners();connected=false;guestLobby=null;publicState=null;members={};roster={};presence={};buzzers={};responses={};messages={};picks={};scoreTarget='';myResponse=null;playerEmoji=null;emojiDraft=null;drawingDraft=null;drawingGesture=null;reviewStartPending=-1;questionHistory={};
  game.watch('.info/connected',v=>{const wasConnected=connected;connected=!!v;if(connected&&!wasConnected&&(canHost()||member?.status==='approved'))game.enterPresence(room).catch(()=>{});if(connected&&!wasConnected&&cloudDirty&&canHost())queueHostCloudSave();schedule();});game.watch('.info/serverTimeOffset',v=>game.offset=v||0);
  game.watch('.info/diagnostics',()=>{if(!connected||view==='setup')schedule();});
  if(canHost()){
@@ -1013,7 +1016,7 @@ function publicQuestionStage(){
 }
 function renderStage(readOnly=false,previewQuestion=null){let q=previewQuestion||activeQuestion();const isReveal=publicState.phase==='reveal';if(q?.type==='map'&&mapCameraQuestion!==q.id){mapCamera={...DEFAULT_MAP_VIEW};mapCameraQuestion=q.id;}if(!q)return `<div class="stage"><h2>${canHost()?'Frage auswählen':'Keine Frage aktiv'}</h2></div>`;
  if(publicState.phase==='ready'&&!previewQuestion)return readyQuestionContent(false);
- if(q.type===TEAM_EMOJI&&publicState.teamEmoji)return renderTeamEmoji(readOnly);
+ if(isTeamChallenge(q.type)&&publicState.teamEmoji)return renderTeamEmoji(readOnly);
  const showAnswer=isReveal&&publicState.solutionVisible!==false;
  // For a step back, reproduce the previous public question display without
  // duplicating its media in network snapshots or changing the scored round.
@@ -1118,7 +1121,7 @@ function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=public
  if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer frei · Das erste Signal zählt.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
  return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}${btn('Irrtümlichen Buzzer zurücksetzen','reset-buzz','small')}</div></div>`;
 }
-function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(activeQuestion()?.type===TEAM_EMOJI||publicState.settings.lockOnBuzz&&winner())));}
+function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(isTeamChallenge(activeQuestion()?.type)||publicState.settings.lockOnBuzz&&winner())));}
 function renderChat(){const teams=Object.entries(publicState?.teams||{});const host=canHost(),selected=host?chatTeam:member?.team;if(host&&selected!=='ALL'&&!publicState?.teams?.[selected])chatTeam='ALL';let all=[];
  for(const [teamId,items]of Object.entries(messages||{})){if(!host&&teamId!==selected)continue;if(host&&selected!=='ALL'&&teamId!==selected)continue;for(const [id,msg]of Object.entries(items||{})){all.push({...msg,id,teamId});}}
  all.sort((a,b)=>(a.at||0)-(b.at||0));all=all.slice(-80);
@@ -1149,17 +1152,24 @@ function renderFinalResults(host=false){
 
 const emojiPhases={
  roles:['Rollen wählen','Pro Team erklärt eine Person. Die übrigen Teammitglieder können raten.'],
- clues:['Emoji-Hinweise legen','Die Hinweisgeber verwenden die vorgegebenen Emojis für denselben Begriff.'],
+ clues:['Emoji-Hinweise legen','Die Hinweisgeber können bis zu fünf Emojis für den geheimen Begriff wählen.'],
  guess:['Jetzt raten','Die letzte gespeicherte Antwort eures Teams zählt.'],
  reveal:['Alle Team-Ergebnisse','']
 };
+const drawingPhases={
+ roles:['Rollen wählen','Pro Team zeichnet eine Person. Alle anderen können raten.'],
+ clues:['Champion zeichnen','Die Zeichnung erscheint beim Start der Ratephase.'],
+ guess:['Jetzt raten','Erratet den Champion anhand der Zeichnung eures Teams.'],
+ reveal:emojiPhases.reveal
+};
+const teamPhases=round=>round.type===TEAM_DRAW?drawingPhases:emojiPhases;
 function readyQuestionContent(host){
  const q=activeQuestion();
  const preview=host&&(isOffline()?preparedLocalQuestion:game.questionPreview(room,publicState.round,q.id));
  return `<section class="glass panel bq-question-covered" aria-label="${host?'Private Fragenvorschau':'Verdeckte Frage'}">
   <p class="bq-eyebrow">RUNDE ${boardRoundOf(publicState)}</p><h2>${e(q.category)} · ${e(q.points)} Punkte</h2>
   <p>${host?'Nur für dich sichtbar. Lies die Frage vor und decke sie dann für alle auf.':'Die Frage ist ausgewählt. Der Host deckt sie für alle auf.'}</p>
-  ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control')}${btn('Zurück zur Übersicht','back','small')}${q.type===TEAM_EMOJI?'':`<label class="field">Antwortzeit in Sekunden (0 = aus)<input id="ready-time" type="number" min="0" max="${MAX_QUESTION_SECONDS}" step="1" value="${questionSeconds(quiz.questions.find(item=>item.id===q.id)?.seconds)}"></label>`}</div>`:''}
+  ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control')}${btn('Zurück zur Übersicht','back','small')}${isTeamChallenge(q.type)?'':`<label class="field">Antwortzeit in Sekunden (0 = aus)<input id="ready-time" type="number" min="0" max="${MAX_QUESTION_SECONDS}" step="1" value="${questionSeconds(quiz.questions.find(item=>item.id===q.id)?.seconds)}"></label>`}</div>`:''}
  </section>${preview?.id===q.id?`<section class="glass panel bq-question-panel bq-private-preview" aria-label="Fragenvorschau nur für den Host"><div class="bq-scene-content">${renderStage(true,preview)}</div></section>${hostPrivateSolution()}`:''}`;
 }
 function readyQuestionScene(){
@@ -1180,8 +1190,98 @@ async function uncoverSelectedQuestion(){
 const emojiStatus={correct:'Richtig',wrong:'Falsch','no-roles':'Kein Rollenpaar','no-clues':'Kein Hinweis','no-guess':'Keine Antwort'};
 
 function emojiDraftFor(own){
- if(emojiDraft?.id!==own.id)emojiDraft={id:own.id,indices:[...(own.selected||[])],group:''};
+ if(emojiDraft?.id!==own.id)emojiDraft={id:own.id,symbols:[...(own.selected||[])],group:''};
  return emojiDraft;
+}
+
+function emojiClueOwner(){
+ const round=publicState?.teamEmoji,own=playerEmoji;
+ return round?.phase==='clues'&&own?.id===round.id&&own.palette&&(connected||rehearsal)?own:null;
+}
+
+function emojiSelection(symbols,disabled){
+ return symbols.map((symbol,i)=>btn(e(symbol),'emoji-remove','small',
+  `data-emoji-index="${i}" aria-label="${e(emojiName(symbol))} an Position ${i+1} entfernen" ${disabled}`)).join('');
+}
+
+function emojiSaved(own,draft){
+ return draft.symbols.length>0&&JSON.stringify(draft.symbols)===JSON.stringify(own.selected);
+}
+
+function emojiSelectionStatus(own,draft){
+ return emojiSaved(own,draft)?'Hinweis gespeichert.':draft.symbols.length+' von '+MAX_EMOJI_CLUES+' gewählt';
+}
+
+function updateEmojiEntry(own,keepText=false){
+ const entry=$('team-emoji-text'),draft=emojiDraftFor(own);
+ if(!entry)return;
+ const panel=entry.closest('.bq-team-emoji');
+ if(!keepText)entry.value=draft.symbols.join(' ');
+ panel.querySelector('.bq-emoji-selection').innerHTML=emojiSelection(draft.symbols,'');
+ panel.querySelector('[data-action="emoji-clue"]').disabled=emojiSaved(own,draft)||!draft.symbols.length;
+ panel.querySelector('[data-emoji-status]').textContent=emojiSelectionStatus(own,draft);
+ panel.querySelectorAll('[data-action="emoji-add"]').forEach(button=>{button.disabled=draft.symbols.length>=MAX_EMOJI_CLUES;});
+ if(emojiKeyboard?.open)emojiKeyboard.querySelector('[data-emoji-count]').textContent=draft.symbols.length+' von '+MAX_EMOJI_CLUES;
+}
+
+const emojiSearchText=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('de').replaceAll('ß','ss');
+
+async function openEmojiKeyboard(){
+ const own=emojiClueOwner();
+ if(!own||emojiKeyboard?.open)return;
+ const dialog=document.createElement('dialog');
+ dialog.className='bq-emoji-keyboard';
+ dialog.dataset.round=own.id;
+ dialog.setAttribute('aria-labelledby','bq-emoji-keyboard-title');
+ dialog.innerHTML=`<form method="dialog" class="bq-emoji-keyboard-header"><h2 id="bq-emoji-keyboard-title">Emoji-Tastatur</h2>
+  <span data-emoji-count role="status">${emojiDraftFor(own).symbols.length} von ${MAX_EMOJI_CLUES}</span><button class="btn" autofocus>Fertig</button></form>
+  <div class="bq-emoji-keyboard-filters"><label class="field">Emoji suchen<input type="search" placeholder="z. B. Katze" id="emoji-catalog-search" autocomplete="off"></label>
+   <label class="field">Kategorie<select id="emoji-catalog-category"><option value="">Alle</option></select></label></div>
+  <div class="bq-emoji-keyboard-list" role="region" aria-label="Emoji-Katalog" tabindex="0"><p role="status">Emojis werden geladen …</p></div>`;
+ emojiKeyboard=dialog;
+ const opener=document.activeElement;
+ dialog.addEventListener('close',()=>{
+  dialog.remove();
+  if(emojiKeyboard===dialog)emojiKeyboard=null;
+  if(opener?.isConnected)opener.focus({preventScroll:true});
+ },{once:true});
+ document.body.append(dialog);
+ dialog.showModal();
+ const list=dialog.querySelector('.bq-emoji-keyboard-list'),search=dialog.querySelector('input'),category=dialog.querySelector('select');
+ try{
+  emojiCatalog??=fetch(new URL('./emoji-catalog.json',document.baseURI)).then(response=>{
+   if(!response.ok)throw Error('Emoji-Katalog konnte nicht geladen werden.');
+   return response.json();
+  });
+  const catalog=await emojiCatalog;
+  if(!dialog.open)return;
+  category.insertAdjacentHTML('beforeend',catalog.map(([name],i)=>`<option value="${i}">${e(name)}</option>`).join(''));
+  const show=()=>{
+   const words=emojiSearchText(search.value).trim().split(/\s+/).filter(Boolean);
+   list.innerHTML=catalog.map(([name,entries],i)=>{
+    if(category.value!==''&&Number(category.value)!==i)return '';
+    const matches=words.length?entries.filter(row=>{const label=emojiSearchText(row.join(' '));return words.every(word=>label.includes(word));}):entries;
+    if(!matches.length)return '';
+    return `<section><h3>${e(name)}</h3><div class="bq-emoji-keyboard-grid">${matches.map(([symbol,label])=>
+     `<button type="button" class="btn" data-catalog-emoji="${e(symbol)}" aria-label="${e(label)}" title="${e(label)}">${e(symbol)}</button>`).join('')}</div></section>`;
+   }).join('')||'<p>Keine passenden Emojis gefunden.</p>';
+   list.scrollTop=0;
+  };
+  search.addEventListener('input',show);
+  category.addEventListener('change',show);
+  list.addEventListener('click',event=>{
+   const symbol=event.target.closest('[data-catalog-emoji]')?.dataset.catalogEmoji,current=emojiClueOwner();
+   if(!symbol||current?.id!==own.id)return;
+   const draft=emojiDraftFor(current);
+   if(draft.symbols.length<MAX_EMOJI_CLUES)draft.symbols.push(symbol);
+   updateEmojiEntry(current);
+   if(draft.symbols.length===MAX_EMOJI_CLUES)dialog.close();
+  });
+  show();
+ }catch{
+  emojiCatalog=null;
+  list.innerHTML='<p role="alert">Die Emoji-Tastatur konnte nicht geladen werden. Öffne sie erneut, um es noch einmal zu versuchen.</p>';
+ }
 }
 
 function renderEmojiPalette(palette,group,disabled){
@@ -1197,30 +1297,194 @@ function renderEmojiPalette(palette,group,disabled){
  </div>`;
 }
 
+const DRAW_COLOR_NAMES=['Schwarz','Rot','Orange','Gelb','Grün','Blau','Violett','Braun','Radierer'];
+const drawingPoints=strokes=>strokes.reduce((count,stroke)=>count+(stroke.length-2)/2,0);
+
+function drawingDraftFor(own){
+ if(drawingDraft?.id!==own.id){
+  const strokes=(own.drawing||[]).map(stroke=>stroke.slice());
+  drawingDraft={id:own.id,strokes,points:drawingPoints(strokes),color:0,size:1,revision:0,saved:0,timer:null,sending:false,failed:false};
+ }
+ return drawingDraft;
+}
+
+function canEditDrawing(id){
+ const round=publicState?.teamEmoji;
+ return round?.type===TEAM_DRAW&&round.id===id&&round.phase==='clues'&&playerEmoji?.id===id&&
+  playerEmoji.role==='clue'&&playerEmoji.active&&(rehearsal||connected&&(!publicState.deadline||now()<publicState.deadline));
+}
+
+function drawingInProgress(){
+ if(drawingGesture&&!canEditDrawing(drawingGesture.draft.id))drawingGesture=null;
+ return !!drawingGesture;
+}
+
+function drawingStatus(draft){
+ if(draft.failed)return 'Noch nicht übertragen. Du kannst erneut speichern.';
+ if(draft.revision!==draft.saved)return 'Zeichnung wird gespeichert …';
+ return draft.strokes.length?'Zeichnung gespeichert.':'Zeichne den Champion auf die Fläche.';
+}
+
+function queueDrawingSave(draft,delay=160){
+ clearTimeout(draft.timer);
+ draft.timer=setTimeout(()=>void saveDrawing(draft),delay);
+}
+
+async function saveDrawing(draft){
+ if(drawingDraft!==draft||!canEditDrawing(draft.id)||draft.sending||draft.saved===draft.revision)return;
+ draft.sending=true;draft.failed=false;
+ const revision=draft.revision,strokes=draft.strokes.map(stroke=>stroke.slice());
+ try{
+  if(rehearsal){
+   const round=rehearsal.emoji;
+   playTeamEmoji(round,'t1',rehearsal.emojiActing,'clue',strokes,round.deadline-1);
+   publicState.teamEmoji=publicTeamEmoji(round);
+  }else await game.submitTeamEmoji(room,draft.id,'clue',strokes);
+  draft.saved=revision;
+ }catch{
+  draft.failed=true;
+ }finally{
+  draft.sending=false;
+  if(draft.revision!==revision&&canEditDrawing(draft.id))queueDrawingSave(draft);
+  schedule();
+ }
+}
+
+function drawingChanged(draft){
+ draft.revision++;draft.failed=false;
+ queueDrawingSave(draft,!rehearsal&&publicState.deadline-now()<250?0:160);
+ schedule();
+}
+
+function paintStroke(ctx,stroke){
+ const [color,size,x,y]=stroke;
+ ctx.strokeStyle=ctx.fillStyle=DRAW_COLORS[color];
+ ctx.lineWidth=DRAW_SIZES[size];ctx.lineCap=ctx.lineJoin='round';
+ ctx.beginPath();
+ if(stroke.length===4){ctx.arc(x,y,ctx.lineWidth/2,0,Math.PI*2);ctx.fill();return;}
+ ctx.moveTo(x,y);
+ for(let i=4;i<stroke.length;i+=2)ctx.lineTo(stroke[i],stroke[i+1]);
+ ctx.stroke();
+}
+
+function paintDrawing(){
+ const canvas=$('team-draw-canvas');
+ if(!canvas||!drawingDraft)return;
+ const ctx=canvas.getContext('2d');
+ ctx.clearRect(0,0,DRAW_WIDTH,DRAW_HEIGHT);
+ for(const stroke of drawingDraft.strokes)paintStroke(ctx,stroke);
+}
+
+function drawingPoint(canvas,event){
+ const box=canvas.getBoundingClientRect();
+ return [
+  Math.round(Math.max(0,Math.min(DRAW_WIDTH,(event.clientX-box.left)*DRAW_WIDTH/box.width))),
+  Math.round(Math.max(0,Math.min(DRAW_HEIGHT,(event.clientY-box.top)*DRAW_HEIGHT/box.height)))
+ ];
+}
+
+function compactDrawing(draft){
+ for(const stroke of draft.strokes){
+  if(stroke.length<10)continue;
+  const simpler=stroke.slice(0,4);
+  for(let i=6;i<stroke.length-2;i+=4)simpler.push(stroke[i],stroke[i+1]);
+  stroke.splice(0,stroke.length,...simpler,...stroke.slice(-2));
+ }
+ draft.points=drawingPoints(draft.strokes);
+ paintDrawing();
+}
+
+function startDrawing(event){
+ const canvas=event.target,draft=drawingDraft;
+ if(canvas.id!=='team-draw-canvas'||event.button!==0||drawingGesture||!draft||!canEditDrawing(draft.id))return;
+ if(draft.strokes.length>=MAX_DRAW_STROKES)return notice('Die Zeichenfläche ist voll. Nimm einen Strich zurück oder leere sie.');
+ if(draft.points>=MAX_DRAW_POINTS)compactDrawing(draft);
+ const stroke=[draft.color,draft.size,...drawingPoint(canvas,event)];
+ draft.strokes.push(stroke);draft.points++;
+ drawingGesture={canvas,draft,stroke,pointer:event.pointerId};
+ canvas.setPointerCapture(event.pointerId);
+ paintStroke(canvas.getContext('2d'),stroke);
+}
+
+function moveDrawing(event){
+ const gesture=drawingGesture;
+ if(!gesture||event.pointerId!==gesture.pointer||!canEditDrawing(gesture.draft.id))return;
+ const {canvas,draft,stroke}=gesture,point=drawingPoint(canvas,event);
+ const last=stroke.slice(-2);
+ if(Math.hypot(point[0]-last[0],point[1]-last[1])<3)return;
+ if(draft.points>=MAX_DRAW_POINTS)compactDrawing(draft);
+ if(draft.points>=MAX_DRAW_POINTS)return;
+ stroke.push(...point);draft.points++;
+ paintStroke(canvas.getContext('2d'),[stroke[0],stroke[1],...last,...point]);
+}
+
+function stopDrawing(event){
+ if(event.pointerId!==drawingGesture?.pointer)return;
+ const draft=drawingGesture.draft;
+ drawingGesture=null;
+ drawingChanged(draft);
+}
+
+function renderDrawing(drawing){
+ if(!drawing?.length)return '';
+ return `<svg class="bq-drawing-art" viewBox="0 0 ${DRAW_WIDTH} ${DRAW_HEIGHT}" role="img" aria-label="Zeichnung des Teams">${drawing.map(stroke=>{
+  const [color,size,x,y]=stroke;
+  const path=stroke.length===4?`M${x} ${y}h.01`:'M'+stroke.slice(2).join(' ');
+  return `<path d="${e(path)}" fill="none" stroke="${DRAW_COLORS[color]}" stroke-width="${DRAW_SIZES[size]}" stroke-linecap="round" stroke-linejoin="round"/>`;
+ }).join('')}</svg>`;
+}
+
+function renderDrawControls(own,disabled){
+ const draft=drawingDraftFor(own);
+ return `<div class="bq-drawing-workspace"><div class="bq-drawing-prompt">
+  <p class="bq-emoji-target">Dein geheimer Champion <strong>${e(own.target)}</strong></p>
+  ${isImageData(own.reference)?`<img class="bq-drawing-reference" src="${e(own.reference)}" alt="Vorlage für ${e(own.target)}">`:''}</div>
+  <div class="bq-drawing-tools"><div class="bq-drawing-colors" role="group" aria-label="Pinselfarbe">
+   ${DRAW_COLOR_NAMES.slice(0,-1).map((name,i)=>`<button type="button" class="btn bq-drawing-swatch"
+    style="--ink:${DRAW_COLORS[i]}" data-action="draw-color" data-index="${i}" title="${name}" aria-label="${name}" aria-pressed="${draft.color===i}" ${disabled}></button>`).join('')}
+   ${btn('Radierer','draw-color','small',`data-index="${DRAW_COLORS.length-1}" aria-pressed="${draft.color===DRAW_COLORS.length-1}" ${disabled}`)}
+  </div><div class="bq-drawing-actions">
+   <label class="field">Strich<select id="team-draw-size" ${disabled}>${['Fein','Normal','Breit'].map((label,i)=>`<option value="${i}" ${i===draft.size?'selected':''}>${label}</option>`).join('')}</select></label>
+   ${btn('Rückgängig','draw-undo','small',draft.strokes.length?disabled:'disabled')}
+   ${btn('Leeren','draw-clear','small',draft.strokes.length?disabled:'disabled')}
+   ${btn('Speichern','draw-save','small primary',draft.revision!==draft.saved&&!draft.sending?disabled:'disabled')}
+  </div></div>
+  <div class="bq-drawing-paper"><canvas id="team-draw-canvas" width="${DRAW_WIDTH}" height="${DRAW_HEIGHT}" aria-label="Zeichenfläche"></canvas></div>
+  <small role="status">${drawingStatus(draft)}</small>
+ </div>`;
+}
+
 function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null,local=false){
  const disabled=!local&&!connected?'disabled':'';
+ const drawing=round.type===TEAM_DRAW;
  if(!own||own.players<2)return '<p>Für diese Teamrunde braucht dein Team mindestens zwei Spieler.</p>';
  if(round.phase==='roles')return `<div class="stack">
   <div class="row" role="group" aria-label="Deine Rolle">
-   ${btn('Emojis legen','emoji-role',own.role==='clue'?'primary':'',`data-emoji-role="clue" aria-pressed="${own.role==='clue'}" ${own.clueTaken?'disabled':disabled}`)}
+   ${btn(drawing?'Zeichnen':'Emojis legen','emoji-role',own.role==='clue'?'primary':'',`data-emoji-role="clue" aria-pressed="${own.role==='clue'}" ${own.clueTaken?'disabled':disabled}`)}
    ${btn('Raten','emoji-role',own.role==='guess'?'primary':'',`data-emoji-role="guess" aria-pressed="${own.role==='guess'}" ${disabled}`)}
-  </div><p role="status">${own.ready?'Euer Rollenpaar ist bereit.':own.clueTaken?'Die Hinweisrolle ist belegt. Du kannst raten.':'Wählt mindestens je eine Person für beide Rollen.'}</p></div>`;
+  </div><p role="status">${own.ready?'Euer Rollenpaar ist bereit.':own.clueTaken?(drawing?'Jemand aus deinem Team zeichnet. Du kannst raten.':'Die Hinweisrolle ist belegt. Du kannst raten.'):'Wählt mindestens je eine Person für beide Rollen.'}</p></div>`;
  if(!own.active||!own.role)return '<p>Du schaust in dieser Runde zu.</p>';
  if(round.phase==='clues'){
-  if(own.role!=='clue')return '<p>Euer Hinweisgeber legt einen Hinweis. Die Emojis erscheinen in der Ratephase.</p>';
-  const {indices:picks,group}=emojiDraftFor(own);
-  const saved=JSON.stringify(picks)===JSON.stringify(own.selected)&&picks.length;
+  if(own.role!=='clue')return drawing?'<p>Euer Teammitglied zeichnet gerade. Gleich kannst du raten.</p>':'<p>Euer Hinweisgeber legt einen Hinweis. Die Emojis erscheinen in der Ratephase.</p>';
+  if(drawing)return renderDrawControls(own,disabled);
+  const draft=emojiDraftFor(own),{symbols:picks,group}=draft;
+  const nativeHelp=/win/i.test(navigator.userAgentData?.platform||navigator.platform||'');
   return `<p class="bq-emoji-target">Dein geheimer Begriff <strong>${e(own.target)}</strong></p>
-   <div class="bq-emoji-selection" role="group" aria-label="Dein Hinweis in Reihenfolge">
-    ${picks.map((index,i)=>btn(e(own.palette[index]),'emoji-remove','small',`data-emoji-index="${i}" aria-label="${e(emojiName(own.palette[index]))} an Position ${i+1} entfernen" ${disabled}`)).join('')||'<span>Wähle bis zu fünf Emojis.</span>'}
+   <div class="bq-emoji-entry"><label class="field">Eure Emojis<input id="team-emoji-text" value="${e(picks.join(' '))}" maxlength="205"
+    autocomplete="off" spellcheck="false" aria-describedby="bq-emoji-native-help" ${disabled}></label>
+    ${btn('Emoji-Tastatur','emoji-keyboard','small',disabled)}
+    <small id="bq-emoji-native-help">${nativeHelp?'Klick ins Feld für Win + . oder füge Emojis ein.':'Du kannst Emojis auch einfügen.'}</small>
    </div>
-   <div class="row">${btn('Hinweis speichern','emoji-clue','primary',saved||!picks.length?'disabled':disabled)}
-    <span role="status">${saved?'Hinweis gespeichert.':picks.length?picks.length+' von '+MAX_EMOJI_CLUES+' gewählt':''}</span></div>
+   <div class="bq-emoji-selection" role="group" aria-label="Dein Hinweis in Reihenfolge">
+    ${emojiSelection(picks,disabled)}
+   </div>
+   <div class="row">${btn('Hinweis speichern','emoji-clue','primary',emojiSaved(own,draft)||!picks.length?'disabled':disabled)}
+    <span role="status" data-emoji-status>${emojiSelectionStatus(own,draft)}</span></div>
    ${renderEmojiPalette(own.palette,group,picks.length>=MAX_EMOJI_CLUES?'disabled':disabled)}`;
  }
- if(own.role!=='guess')return '<p>Dein Team rät jetzt anhand deines Hinweises.</p>';
- if(!own.clues?.length)return '<p>Für euer Team wurde kein Hinweis gespeichert.</p>';
- return `<p class="bq-emoji-hint" aria-label="Emoji-Hinweis">${e(own.clues.join(' '))}</p>
+ if(own.role!=='guess')return drawing?'<p>Dein Team rät jetzt anhand deiner Zeichnung.</p>':'<p>Dein Team rät jetzt anhand deines Hinweises.</p>';
+ if(drawing?!own.drawing?.length:!own.clues?.length)return drawing?'<p>Für euer Team wurde keine Zeichnung gespeichert.</p>':'<p>Für euer Team wurde kein Hinweis gespeichert.</p>';
+ return `${drawing?`<div class="bq-drawing-guess">${renderDrawing(own.drawing)}</div>`:`<p class="bq-emoji-hint" aria-label="Emoji-Hinweis">${e(own.clues.join(' '))}</p>`}
   <form id="team-emoji-guess-form" class="bq-answer-entry">
    <label class="field">Eure Antwort<input id="team-emoji-guess" required maxlength="100" autocomplete="off" spellcheck="false" value="${e(own.guess||'')}" ${disabled}></label>
    <button type="submit" class="btn primary" ${disabled}>${own.answered?'Teamantwort aktualisieren':'Antwort fürs Team abgeben'}</button>
@@ -1230,26 +1494,26 @@ function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null
 
 function renderTeamEmoji(readOnly=false){
  const round=publicState.teamEmoji;
- const host=!readOnly&&canHost();
- const [heading,message]=emojiPhases[round.phase];
+ const host=!readOnly&&canHost(),drawing=round.type===TEAM_DRAW;
+ const [heading,message]=teamPhases(round)[round.phase];
  if(round.phase==='reveal')return `<section class="glass panel bq-team-emoji">
   ${renderAnswerView(activeQuestion())}
   <h3>${heading}</h3>
   <ul class="bq-emoji-results">
    ${round.results.map(result=>`<li><strong>${e(teamName(result.id))}</strong>
-    ${result.clues.length?`<span class="bq-emoji-result-icons">${e(result.clues.join(' '))}</span>`:''}
+    ${drawing?renderDrawing(result.drawing):result.clues.length?`<span class="bq-emoji-result-icons">${e(result.clues.join(' '))}</span>`:''}
     ${result.guess?`<span>${e(result.guess)}</span>`:''}
-     <span class="${result.status==='correct'?'good':'muted'}">${emojiStatus[result.status]} · ${result.points?'+':''}${e(result.points)} Punkte</span>
+     <span class="${result.status==='correct'?'good':'muted'}">${drawing&&result.status==='no-clues'?'Keine Zeichnung':emojiStatus[result.status]} · ${result.points?'+':''}${e(result.points)} Punkte</span>
      ${host&&!isOffline()?`<div class="row">${btn('✓ Richtig','emoji-score-correct','small',`data-team="${e(result.id)}"`)}${btn('✕ Falsch','emoji-score-wrong','small',`data-team="${e(result.id)}"`)}</div>`:''}</li>`).join('')}
   </ul>${host?btn('Zurück zum Quizbrett','emoji-close','primary'):''}
  </section>`;
  const progress=host?`<ul class="bq-emoji-progress" aria-label="Fortschritt pro Team">
   ${round.teams.map(team=>`<li><strong>${e(teamName(team.id))}</strong><span>${team.players<2?'Mindestens zwei Spieler nötig':
    round.phase==='roles'?(team.ready?'Rollen bereit':'Rollenwahl läuft'):
-   !team.ready?'Kein Rollenpaar':round.phase==='clues'?(team.clued?'Hinweis gespeichert':'Hinweis ausstehend'):
-   !team.clued?'Kein Hinweis':team.guessed?'Antwort abgegeben':'Antwort ausstehend'}</span></li>`).join('')}
+   !team.ready?'Kein Rollenpaar':round.phase==='clues'?(drawing?(team.clued?'Zeichnung gespeichert':'Zeichnung ausstehend'):(team.clued?'Hinweis gespeichert':'Hinweis ausstehend')):
+   !team.clued?(drawing?'Keine Zeichnung':'Kein Hinweis'):team.guessed?'Antwort abgegeben':'Antwort ausstehend'}</span></li>`).join('')}
  </ul><div class="row">
-  ${round.phase==='roles'?btn('Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):''}
+  ${round.phase==='roles'?btn(drawing?'Zeichenphase starten':'Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):''}
    ${!isOffline()?btn('Zur manuellen Wertung','emoji-review','small'):''}
    ${btn(round.phase==='roles'?'Zurück zum Quizbrett':'Runde abbrechen','emoji-close','small')}
  </div>`:'';
@@ -1261,7 +1525,7 @@ function renderTeamEmoji(readOnly=false){
 
 function teamEmojiScene(){
  const q=activeQuestion();
- return `<section class="bq-session-scene bq-question-scene" data-scene="team-emoji-${publicState.teamEmoji.phase}">
+ return `<section class="bq-session-scene bq-question-scene" data-scene="${q.type}-${publicState.teamEmoji.phase}">
   <div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(publicState.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div></div>
   ${hostPrivateSolution()}${renderTeamEmoji()}${sessionFooter()}
  </section>`;
@@ -1270,7 +1534,7 @@ function teamEmojiScene(){
 function renderHostLive(){
  if(publicState?.phase==='finished')return renderFinalResults(true);
  if(publicState?.phase==='ready')return readyQuestionScene();
- if(activeQuestion()?.type===TEAM_EMOJI&&publicState.teamEmoji)return teamEmojiScene();
+ if(isTeamChallenge(activeQuestion()?.type)&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion()){
   const roundTwoPending=boardRoundOf(publicState)===1&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===2);
   return boardScene(true)+(mayFinishGame(publicState)&&!roundTwoPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
@@ -1314,7 +1578,7 @@ function guestWritingControls(q,canWrite){
 function renderGuestLive(){
  if(publicState?.phase==='finished')return renderFinalResults(false);
  if(publicState?.phase==='ready')return readyQuestionScene();
- if(activeQuestion()?.type===TEAM_EMOJI&&publicState.teamEmoji)return teamEmojiScene();
+ if(isTeamChallenge(activeQuestion()?.type)&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion())return boardScene(false);
  if(reviewIsCurrent(publicState))return renderReviewView();
  const q=activeQuestion(),open=isOpen(),b=winner(),written=roundMode(q)==='written',timeUp=!!publicState.deadline&&publicState.deadline<now(),lockedOut=isBuzzLocked(game?.uid);
@@ -1437,9 +1701,9 @@ function endRehearsal(){
  rehearsal=null;
 }
 function startRehearsalQuestion(q){
- if(q.type===TEAM_EMOJI){
+ if(isTeamChallenge(q.type)){
   rehearsal.emoji=newTeamEmojiRound({...q,points:publicState.current.points},publicState,{probe_1:{team:'t1'},probe_2:{team:'t1'}},'probe-'+publicState.round);
-  rehearsal.emojiActing='probe_1';emojiDraft=null;
+  rehearsal.emojiActing='probe_1';emojiDraft=null;drawingDraft=null;
   publicState.teamEmoji=publicTeamEmoji(rehearsal.emoji);
  }else rehearsal.rounds.set(q.id,{state:publicState,buzzers:{},answers:{}});
 }
@@ -1489,14 +1753,15 @@ function renderRehearsalControls(q){
 function renderEmojiRehearsal(q){
  const demo=rehearsal.emoji,round=publicState.teamEmoji;
  const acting=rehearsal.emojiActing;
+ const drawing=round.type===TEAM_DRAW;
  playerEmoji=teamEmojiForPlayer(demo,'t1',acting);
  const header=`<section class="glass panel bq-rehearsal">
-  <h3>Emoji-Teamrunde proben</h3><div class="row" aria-label="Simulierter Teilnehmer">
+  <h3>${drawing?'Zeichenrunde proben':'Emoji-Teamrunde proben'}</h3><div class="row" aria-label="Simulierter Teilnehmer">
    ${Object.entries(REHEARSAL_PLAYERS).map(([id,person])=>btn(person.name,'probe-emoji-player','small',`data-player="${id}" aria-pressed="${acting===id}"`)).join('')}
   </div></section>`;
  const controls=round.phase==='reveal'?renderTeamEmoji(true):`<section class="glass panel bq-team-emoji">
-  <h3>${emojiPhases[round.phase][0]}</h3>${renderPlayerEmoji(round,playerEmoji,true)}
-  ${round.phase==='roles'?btn('Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):
+  <h3>${teamPhases(round)[round.phase][0]}</h3>${renderPlayerEmoji(round,playerEmoji,true)}
+  ${round.phase==='roles'?btn(drawing?'Zeichenphase starten':'Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):
    btn('Zeitablauf simulieren','probe-emoji-time','small')}
  </section>`;
  return header+controls+`<div class="row">${btn('Zurück zur Übersicht','back','primary')}</div>`+sessionFooter();
@@ -1568,7 +1833,7 @@ function renderPresenter(){
  let content;
  if(publicState.phase==='board')content=boardScene(true);
  else if(publicState.phase==='ready')content=readyQuestionScene();
- else if(q?.type===TEAM_EMOJI)content=renderEmojiRehearsal(q);
+ else if(isTeamChallenge(q?.type))content=renderEmojiRehearsal(q);
  else content=`<section class="bq-session-scene bq-question-scene" data-scene="rehearsal">
   ${q?renderRehearsalControls(q):''}
   <section class="glass panel bq-question-panel presenter-stage">${renderStage()}</section>
@@ -1602,7 +1867,7 @@ async function hostOpen(id){
  const q=quiz.questions.find(x=>x.id===id);
  if(!q||!validQuestionPair(publicState,q))throw Error('Dieses Fragenfeld ist nicht mehr verfügbar oder gehört nicht zum aktuellen Quizbrett.');
  const invalid=validateQuestion(q,quiz.scoreMode);if(invalid)throw Error('Diese Frage ist noch unvollständig: '+invalid);
- if(q.type===TEAM_EMOJI&&isOffline()&&!rehearsal)throw Error('Öffne die Generalprobe für diesen Fragetyp.');
+ if(isTeamChallenge(q.type)&&isOffline()&&!rehearsal)throw Error('Öffne die Generalprobe für diesen Fragetyp.');
  const expectedRound=Number(publicState.round)||0;
  openingQuestion=true;
  try{
@@ -1728,9 +1993,10 @@ const studio=createStudioEditor({
   quiz.categories=collectCategories(quiz.categories,quiz.questions.concat(q));
   if(template!=='text'){
    q.type=Object.hasOwn(MODES,template)?template:'text';
-   if(template==='image'||template==='map'||template===TEAM_EMOJI)q.scene=templateScene(template,q);
+   if(template==='image'||template==='map'||isTeamChallenge(template))q.scene=templateScene(template,q);
    if(template==='written'||template==='map')q.roundMode='written';
    if(template===TEAM_EMOJI){q.roundMode=TEAM_EMOJI;q.teamEmoji=normalizeTeamEmoji();}
+   if(template===TEAM_DRAW){q.roundMode=TEAM_DRAW;q.teamDraw=normalizeTeamDraw();}
   }
   quiz.questions.push(q);selected=q.id;saveLocal();
  },
@@ -1756,7 +2022,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  }
  case 'emoji-review':{
   const q=publicState?.teamEmoji;
-  if(canHost()&&!isOffline()&&q&&confirm('Emoji-Runde beenden und die Teamergebnisse zur Wertung zeigen?'))await game.reviewTeamEmoji(room,q.id,q.phase);
+  if(canHost()&&!isOffline()&&q&&confirm('Teamrunde beenden und die Ergebnisse zur Wertung zeigen?'))await game.reviewTeamEmoji(room,q.id,q.phase);
   return;
  }
  case 'emoji-score-correct':case 'emoji-score-wrong':{
@@ -1777,18 +2043,19 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!await game.closeTeamEmoji(room,round.id,round.phase))notice('Die Runde ist inzwischen weitergelaufen.');
   return;
  }
+ case 'emoji-keyboard':await openEmojiKeyboard();return;
  case 'emoji-filter':case 'emoji-add':case 'emoji-remove':{
-  const own=playerEmoji;
-  if(!own?.palette||publicState?.teamEmoji?.phase!=='clues'||own.id!==publicState.teamEmoji.id)return;
+  const own=emojiClueOwner();
+  if(!own)return;
   const draft=emojiDraftFor(own);
   if(action==='emoji-filter'){
    draft.group=button.dataset.emojiGroup||'';
    document.querySelector('.bq-emoji-palette')?.scrollTo(0,0);
    schedule();return;
   }
-  const index=Number(button.dataset.emojiIndex),selection=draft.indices;
+  const index=Number(button.dataset.emojiIndex),selection=draft.symbols;
   if(!Number.isInteger(index)||index<0)return;
-  if(action==='emoji-add'&&index<own.palette.length&&selection.length<MAX_EMOJI_CLUES)selection.push(index);
+  if(action==='emoji-add'&&index<own.palette.length&&selection.length<MAX_EMOJI_CLUES)selection.push(own.palette[index]);
   if(action==='emoji-remove'&&index<selection.length)selection.splice(index,1);
   schedule();return;
  }
@@ -1796,7 +2063,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const round=publicState?.teamEmoji;
   if(!round||!rehearsal&&(role!=='guest'||!connected))return;
   const kind=action.slice('emoji-'.length);
-  const value=kind==='role'?button.dataset.emojiRole:kind==='clue'?[...(emojiDraft?.indices||[])]:$('team-emoji-guess')?.value;
+  const value=kind==='role'?button.dataset.emojiRole:kind==='clue'?[...(emojiDraft?.symbols||[])]:$('team-emoji-guess')?.value;
   const label={role:'Rollenwahl',clue:'Emoji-Hinweis',guess:'Rateversuch'}[kind];
   if(rehearsal){
    const demo=rehearsal.emoji;
@@ -1804,6 +2071,24 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
    publicState.teamEmoji=publicTeamEmoji(demo);schedule();return;
   }
   await sendGuestAction(label,()=>game.submitTeamEmoji(room,round.id,kind,value));return;
+ }
+ case 'draw-color':case 'draw-undo':case 'draw-clear':case 'draw-save':{
+  const draft=drawingDraft;
+  if(!draft||!canEditDrawing(draft.id))return;
+  if(action==='draw-save'){await saveDrawing(draft);return;}
+  if(action==='draw-color'){
+   const color=Number(button.dataset.index);
+   if(DRAW_COLORS[color]){
+    draft.color=color;
+    button.closest('.bq-drawing-colors').querySelectorAll('button').forEach(control=>
+     control.setAttribute('aria-pressed',String(Number(control.dataset.index)===color)));
+   }
+   return;
+  }
+  if(action==='draw-undo')draft.strokes.pop();
+  else draft.strokes=[];
+  draft.points=drawingPoints(draft.strokes);
+  drawingChanged(draft);return;
  }
  case 'sfx-mute':sfx.setMuted(!sfx.values().muted);schedule();return;
   case 'sfx-preview':if(await sfx.unlock())sfx.play(button.dataset.sfx);return;
@@ -1905,10 +2190,11 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'undo-layout':undoLayout('undo');return;
  case 'redo-layout':undoLayout('redo');return;
  case 'fullscreen':{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();return;}
- case 'probe-emoji-player':if(rehearsal){rehearsal.emojiActing=button.dataset.player;emojiDraft=null;schedule();}return;
+ case 'probe-emoji-player':if(rehearsal){rehearsal.emojiActing=button.dataset.player;emojiDraft=null;drawingDraft=null;schedule();}return;
  case 'probe-emoji-time':{
   if(!rehearsal?.emoji)return;
   const demo=rehearsal.emoji;
+  if(drawingDraft&&demo.type===TEAM_DRAW)await saveDrawing(drawingDraft);
   if(!advanceTeamEmoji(demo,demo.deadline))return;
   publicState.teamEmoji=publicTeamEmoji(demo);
   if(demo.phase==='reveal'){
@@ -2100,7 +2386,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'toggle-lock':if(isOffline()){publicState.settings.lockOnBuzz=!publicState.settings.lockOnBuzz;schedule();}else await game.setState(room,{'settings/lockOnBuzz':!publicState.settings.lockOnBuzz});return;
  case 'start-timer':case 'stop-timer':{
   const p=publicState,q=activeQuestion();
-  if(!canHost()||!q||q.type===TEAM_EMOJI||!['question','paused'].includes(p.phase))return;
+  if(!canHost()||!q||isTeamChallenge(q.type)||!['question','paused'].includes(p.phase))return;
   const seconds=action==='start-timer'?questionSeconds($('time-choice')?.value):0;
   const changes={deadline:seconds?now()+seconds*1000:0,pausedRemaining:0,phase:'question'};
   if(isOffline()){publicState={...p,...changes};schedule();}
@@ -2368,3 +2654,23 @@ window.addEventListener('resize',()=>{if(isGameView())schedule();},{passive:true
 window.visualViewport?.addEventListener('resize',syncAnswerViewport);
 window.visualViewport?.addEventListener('scroll',syncAnswerViewport,{passive:true});
 document.addEventListener('focusin',syncAnswerViewport);
+function updateEmojiText(event){
+ const input=event.target;
+ if(input.id!=='team-emoji-text'||event.isComposing)return;
+ const own=emojiClueOwner();
+ if(!own)return;
+ const draft=emojiDraftFor(own);
+ draft.symbols=emojisFromText(input.value);
+ if(input.value.replace(/\s/gu,'')!==draft.symbols.join(''))input.value=draft.symbols.join(' ');
+ updateEmojiEntry(own,true);
+}
+document.addEventListener('input',updateEmojiText);
+document.addEventListener('compositionend',updateEmojiText);
+document.addEventListener('change',event=>{
+ if(event.target.id!=='team-draw-size'||!drawingDraft||!canEditDrawing(drawingDraft.id))return;
+ const size=Number(event.target.value);
+ if(DRAW_SIZES[size])drawingDraft.size=size;
+});
+document.addEventListener('pointerdown',startDrawing);
+document.addEventListener('pointermove',moveDrawing);
+for(const eventName of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(eventName,stopDrawing);

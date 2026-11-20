@@ -10,7 +10,7 @@ import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,re
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz,isGuestResumeCode,rememberGuestResume} from './backup-store.mjs';
-import {TEAM_EMOJI,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,finishTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
+import {TEAM_EMOJI,isTeamChallenge,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,finishTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 
 const HOST_PREFIX='brainquiz27-';
 const UID_RE=/^[a-zA-Z0-9_-]{8,100}$/;
@@ -859,7 +859,7 @@ export class PeerGame{
   switch(action){
    case TEAM_EMOJI:{
     const emoji=this.data.teamEmoji;
-    if(!emoji||emoji.id!==payload.id||pub.phase!=='question')throw Error('Diese Emoji-Teamrunde ist nicht mehr offen.');
+    if(!emoji||emoji.id!==payload.id||pub.phase!=='question')throw Error('Diese Teamrunde ist nicht mehr offen.');
     playTeamEmoji(emoji,member.team,ctx.uid,payload.kind,payload.value,now);
     this._syncTeamEmoji();
     return true;
@@ -887,7 +887,7 @@ export class PeerGame{
     this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now};
     return true;
    }
-   case 'message':{if(pub?.current?.type===TEAM_EMOJI&&pub.phase==='question')throw Error('Während der Emoji-Teamrunde ist der Teamchat geschlossen.');if(!pub?.settings?.chatOpen||(pub.settings.lockOnBuzz&&pub.phase==='question'&&this.data.buzzers[round]))throw Error('Teamchat geschlossen.');const text=safeText(payload.text,500);if(!text||now-ctx.lastChat<1000)throw Error('Nachrichtenrate begrenzt.');ctx.lastChat=now;this.data.messages[member.team]??={};const messages=this.data.messages[member.team];messages['m_'+randomHex(9)]={uid:ctx.uid,name:member.name,text,at:now};const keys=Object.keys(messages);for(const key of keys.slice(0,-80))delete messages[key];return true}
+   case 'message':{if(isTeamChallenge(pub?.current?.type)&&pub.phase==='question')throw Error('Während der Teamrunde ist der Teamchat geschlossen.');if(!pub?.settings?.chatOpen||(pub.settings.lockOnBuzz&&pub.phase==='question'&&this.data.buzzers[round]))throw Error('Teamchat geschlossen.');const text=safeText(payload.text,500);if(!text||now-ctx.lastChat<1000)throw Error('Nachrichtenrate begrenzt.');ctx.lastChat=now;this.data.messages[member.team]??={};const messages=this.data.messages[member.team];messages['m_'+randomHex(9)]={uid:ctx.uid,name:member.name,text,at:now};const keys=Object.keys(messages);for(const key of keys.slice(0,-80))delete messages[key];return true}
    default:throw Error('Aktion nicht erlaubt.');
   }
  }
@@ -968,7 +968,7 @@ export class PeerGame{
  async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
   const d=this._getHostData(room);
   const state=covered&&!d.public.selectionTurn?{...d.public,selectionTurn:makeSelectionTurn(d.public,d.roster),boardSequence:true}:d.public;
-  const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
+  const emoji=isTeamChallenge(question.type)?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   const expected=emoji?null:participants??(question.type==='map'?writtenParticipants(d,Number(expectedRound)+1):null);
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
    participants:expected,deadline:emoji?0:deadline,covered});
@@ -1013,7 +1013,7 @@ export class PeerGame{
   if(d.public.phase!=='ready'||d.public.round!==Number(round)||d.public.current?.id!==id||pending?.round!==Number(round)||pending.id!==id)throw Error('Die ausgewählte Frage hat sich geändert.');
   const question=this.hostQuiz?.questions.find(item=>item.id===id);
   if(!question)throw Error('Die Originalfrage fehlt im Host-Quiz.');
-  const emoji=question.type===TEAM_EMOJI?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
+  const emoji=isTeamChallenge(question.type)?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
   if(emoji)emoji.points=d.public.current.points;
    const duration=seconds===undefined?pending.duration:questionSeconds(seconds)*1000;
    const mode=roundMode(question);
@@ -1064,7 +1064,7 @@ export class PeerGame{
   if(!next)throw Error('Runde 2 kann nur von der Übersicht aus gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
- async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Die Emoji-Teamrunde hat eine eigene Phasensteuerung.');
+ async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
   if(changes?.phase==='reveal'&&['question','paused','review','answered'].includes(d.public?.phase)&&
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Ein Buzzer ist noch offen. Zuerst Richtig oder Falsch bestätigen oder den Buzzer zurücksetzen.');
@@ -1117,7 +1117,7 @@ export class PeerGame{
  }
  async reviewTeamEmoji(room,id,phase){
   this._assertHost(room);
-  if(phase==='reveal'||!this._advanceTeamEmoji(id,phase,true))throw Error('Diese Emoji-Teamrunde ist nicht mehr offen.');
+  if(phase==='reveal'||!this._advanceTeamEmoji(id,phase,true))throw Error('Diese Teamrunde ist nicht mehr offen.');
  }
  async judgeTeamEmoji(room,id,team,verdict){
   const d=this._getHostData(room),round=d.teamEmoji,p=d.public;

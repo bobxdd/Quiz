@@ -524,6 +524,51 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-team-emoji { display: grid; gap: .9rem; min-width: 0; }
 .bq-team-emoji h3, .bq-team-emoji p { margin: 0; }
 .bq-team-emoji .panelhead { flex-wrap: wrap; align-items: center; gap: .65rem; }
+.bq-emoji-entry,.bq-emoji-keyboard-filters{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:4px 8px;
+}
+.bq-emoji-entry>small{grid-column:1/-1}
+.bq-emoji-entry input,.bq-emoji-keyboard input{font-size:16px;min-width:0}
+.bq-emoji-selection:empty{display:none}
+.bq-emoji-keyboard{
+ width:min(680px,calc(100vw - 20px));height:min(720px,88dvh);max-height:calc(100dvh - 18px);
+ padding:12px;border:1px solid #657b77;border-radius:14px;background:#232b30;color:#f2f6f7;
+}
+.bq-emoji-keyboard[open]{display:flex;flex-direction:column;gap:10px}
+.bq-emoji-keyboard::backdrop{background:#101619d9}
+.bq-emoji-keyboard-header{display:flex;align-items:center;gap:9px}
+.bq-emoji-keyboard-header h2{flex:1;margin:0;font-size:clamp(18px,4vw,24px)}
+.bq-emoji-keyboard-header .btn{min-height:36px}
+.bq-emoji-keyboard-filters select{max-width:min(41vw,180px);min-width:0}
+.bq-emoji-keyboard-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.bq-emoji-keyboard-list h3{margin:.5rem .2rem;font-size:15px}
+.bq-emoji-keyboard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(43px,1fr));gap:4px}
+.bq-emoji-keyboard-grid .btn{min-height:44px;min-width:0;padding:1px;font-size:24px}
+.bq-team-emoji:has(.bq-drawing-workspace),.bq-team-emoji:has(.bq-emoji-entry){
+ display:flex;flex-direction:column;flex:1 1 0;min-height:0;overflow:auto;gap:7px;
+}
+.bq-drawing-workspace{display:flex;flex-direction:column;flex:1;min-height:0;gap:6px}
+.bq-drawing-prompt{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bq-drawing-reference{width:auto;max-width:30%;height:auto;max-height:68px;object-fit:contain;border-radius:6px}
+.bq-drawing-tools,.bq-drawing-colors,.bq-drawing-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.bq-drawing-tools{justify-content:space-between}
+.bq-drawing-tools .btn{min-height:32px;padding:4px 7px}
+.bq-drawing-tools .field{display:flex;align-items:center;gap:4px}
+.bq-drawing-tools .field select{width:auto;padding:3px}
+.bq-drawing-tools .bq-drawing-swatch{
+ width:30px;min-width:30px;padding:0;background:var(--ink);border:1px solid #a1a8af;border-radius:7px;
+}
+.bq-drawing-swatch[aria-pressed="true"]{outline:2px solid #e6f4ee;outline-offset:1px}
+.bq-drawing-paper,.bq-drawing-guess{
+ display:flex;justify-content:center;align-items:center;container-type:size;
+ flex:1 1 0;min-height:110px;min-width:0;
+}
+.bq-drawing-guess{min-height:0}
+#team-draw-canvas,.bq-drawing-art{display:block;background:#fff;border-radius:6px;max-width:100%;aspect-ratio:8/5}
+#team-draw-canvas,.bq-drawing-guess>.bq-drawing-art{width:min(100%,160cqh);height:auto}
+#team-draw-canvas{touch-action:none;user-select:none;cursor:crosshair}
+.bq-emoji-results .bq-drawing-art{width:min(170px,100%);height:auto}
+.bq-emoji-results:has(.bq-drawing-art){max-height:min(50dvh,440px);overflow:auto}
 .bq-emoji-target { display: grid; gap: .3rem; }
 .bq-emoji-target strong { font-size: clamp(1.35rem, 4vw, 2.15rem); overflow-wrap: anywhere; }
 .bq-emoji-filters{display:flex;align-items:center;flex-wrap:wrap;gap:5px}

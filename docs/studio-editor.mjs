@@ -1,6 +1,6 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
-import {TEAM_EMOJI,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji} from './team-emoji.mjs';
+import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji,normalizeTeamDraw} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
@@ -95,10 +95,11 @@ export function createStudioEditor(api){
 
  function setType(name){flushDraft();const item=current();if(!item)return; if(item.scene?.elements?.length&&!confirm('Vorlage wechseln? Die bisherigen Elemente dieser Frage werden durch die Vorlage ersetzt.')){draw();return;}
   snapshot();item.scene=templateScene(name,item);
-  item.type=['multiple','order','imposter','quote','emoji','audio','estimate','map',TEAM_EMOJI].includes(name)?name:'text';
+  item.type=['multiple','order','imposter','quote','emoji','audio','estimate','map',TEAM_EMOJI,TEAM_DRAW].includes(name)?name:'text';
   if(name==='map')item.roundMode='written';
   else if(name===TEAM_EMOJI){item.roundMode=TEAM_EMOJI;item.teamEmoji=normalizeTeamEmoji(item.teamEmoji);}
-  else if(item.roundMode===TEAM_EMOJI)item.roundMode='buzzer';
+  else if(name===TEAM_DRAW){item.roundMode=TEAM_DRAW;item.teamDraw=normalizeTeamDraw(item.teamDraw);}
+  else if(isTeamChallenge(item.roundMode))item.roundMode='buzzer';
   sel='';reveal=0;preview=false;persist(true);
  }
  const input=(name,label,value,{kind='text',min,max,step,rows=0,options}={})=>{
@@ -111,15 +112,16 @@ export function createStudioEditor(api){
  const mainTemplate=scene=>`<label class="se-field"><span>Vorlage</span><select data-se-template>${Object.entries(TEMPLATE_NAMES).map(([key,label])=>
   `<option value="${key}" ${scene.template===key?'selected':''}>${escape(label)}</option>`).join('')}</select></label>`;
  function teamEmojiEditor(item){
-  const settings=normalizeTeamEmoji(item.teamEmoji);
+  const drawing=item.type===TEAM_DRAW;
+  const settings=drawing?normalizeTeamDraw(item.teamDraw):normalizeTeamEmoji(item.teamEmoji);
   const timing={kind:'number',min:EMOJI_TIMER_MIN,max:EMOJI_TIMER_MAX,step:1};
   return `<section class="se-question-pane se-team-emoji" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}>
-   <div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><h2>Emoji-Teamrunde</h2></div></div>
-   <div class="se-properties"><p>Trage den geheimen Champion oder Begriff im Antwort-Tab ein. Jedes Team erhält denselben Begriff und dieselbe Emoji-Auswahl.</p>
-    <div class="se-two">${input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
+   <div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><h2>${drawing?'Champion zeichnen':'Emoji-Teamrunde'}</h2></div></div>
+   <div class="se-properties"><p>${drawing?'Lege den geheimen Champion und bei Bedarf ein Vorlagenbild im Antwort-Tab fest. Jedes Team wählt vor der Frage, wer zeichnet und wer rät.':'Trage den geheimen Champion oder Begriff im Antwort-Tab ein.'}</p>
+    <div class="se-two">${drawing?input('drawSeconds','Zeit fürs Zeichnen (Sekunden)',settings.drawSeconds,timing):input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
-    ${input('emojiPalette','Vorgegebene Emojis',settings.palette,{rows:3})}
-    <p class="se-muted">Die Hinweisgeber wählen direkt im Spiel bis zu fünf Emojis. Für eine eigene Auswahl bis zu ${MAX_EMOJI_PALETTE} Emojis einfügen. Ein leeres Feld lädt die Standardauswahl.</p>
+    ${drawing?'':`${input('emojiPalette','Emoji-Schnellauswahl',settings.palette,{rows:3})}
+    <p class="se-muted">Bis zu ${MAX_EMOJI_PALETTE} Emojis für die Schnellauswahl hinterlegen. Im Spiel lässt sich zusätzlich die vollständige Emoji-Tastatur öffnen.</p>`}
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
     ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${mainTemplate(item.scene)}
    </div></section>`;
@@ -152,7 +154,7 @@ export function createStudioEditor(api){
 
  function answerEditor(item){
   const info=answerViewContent(item),ready=hasRequiredAnswer(item),automatic=!!(info.text||info.image)&&!item.answerText?.trim()&&!item.answerImage;
-  const teamEmoji=item.type===TEAM_EMOJI,imposter=item.type==='imposter';
+  const teamEmoji=isTeamChallenge(item.type),drawing=item.type===TEAM_DRAW,imposter=item.type==='imposter';
   const previewMap=item.type==='map'&&item.mapTargetSet?
    '<div class="se-answer-map-preview"><h4>Kartenlösung</h4>'
     +renderScene(item.scene,{revealed:true,mapView:mapCamera,mapSolution:normalizePoint({x:item.mapTargetX,y:item.mapTargetY})})
@@ -160,10 +162,10 @@ export function createStudioEditor(api){
   const currentText=item.answerText||(!['multiple','order','estimate','map','imposter'].includes(item.type)?item.answer||'':'');
   return '<section class="se-answer-tab-content" id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" tabindex="0">'
    +'<div class="se-answer-sectionhead"><div><span class="se-eyebrow">SCHRITT 2 · VERPFLICHTEND</span><h3>Antwort gestalten</h3>'
-   +'<p>'+(teamEmoji?'Nur die Hinweisgeber sehen den Begriff während der Emoji-Phase. Nach dem Raten sehen alle die Lösung.':imposter?'Bei der Auflösung wird der gewählte Bildslot durch das Original ersetzt.':'Diese Ansicht erscheint bei der Auflösung.')+'</p></div>'
+   +'<p>'+(drawing?'Vor der Auflösung sehen nur die Zeichnenden den Champion und das optionale Vorlagenbild.':teamEmoji?'Nur die Hinweisgeber sehen den Begriff während der Emoji-Phase. Nach dem Raten sehen alle die Lösung.':imposter?'Bei der Auflösung wird der gewählte Bildslot durch das Original ersetzt.':'Diese Ansicht erscheint bei der Auflösung.')+'</p></div>'
    +'<span class="se-answer-readiness '+(ready?'is-ready':'is-missing')+'" role="status">'+(ready?'✓ Antwort bereit':'⚠ Antwort fehlt')+'</span></div>'
    +'<div class="se-answer-edit-grid"><div class="se-answer-fields">'
-   +'<label class="se-field"><span>'+(teamEmoji?'Champion oder Begriff (geheim)':'Antworttext')+'</span><textarea id="se-answer-text" data-se-field="answerText" rows="'+(teamEmoji?1:4)+'" maxlength="'+(teamEmoji?100:2000)+'" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
+   +'<label class="se-field"><span>'+(drawing?'Champion (geheim)':teamEmoji?'Champion oder Begriff (geheim)':'Antworttext')+'</span><textarea id="se-answer-text" data-se-field="answerText" rows="'+(teamEmoji?1:4)+'" maxlength="'+(teamEmoji?100:2000)+'" placeholder="Die richtige Antwort …">'+escape(currentText)+'</textarea></label>'
    +'<p class="se-muted">'+(teamEmoji?'Ein Begriff ist Pflicht. Richtige Teamantworten bringen den vollen Fragewert.':'Der Text ist optional, wenn ein Antwortbild vorhanden ist. Du kannst aber auch beides gleichzeitig verwenden.')+'</p>'
    +'<label class="se-field se-answer-upload" data-se-upload-zone="answer-image"><span>Antwortbild · PNG, JPG oder WebP</span>'
    +'<small class="se-drop-help">Bild auswählen, hier ablegen oder mit Strg+V einfügen (max. 6 MB Original, wird verkleinert)</small>'
@@ -291,11 +293,11 @@ export function createStudioEditor(api){
     <details class="se-question-bank" ${bankOpen?'open':''}><summary>Fragenbank · Frage übernehmen</summary><label class="se-field"><span>In anderen Kategorien suchen</span><input data-se-bank-search value="${escape(bankQuery)}" placeholder="Frage oder Kategorie …"></label><div class="se-bank-list">${bankItems.length?bankItems.map(x=>`<div class="se-bank-item"><span><strong>${escape(x.title)}</strong><small>${escape(x.category)} · ${x.points} Punkte</small></span><button type="button" data-se-action="reuse-question" data-id="${escape(x.id)}" aria-label="${escape(x.title)} nach ${escape(activeCategory)} kopieren">Übernehmen</button></div>`).join(''):'<p class="se-muted">Keine passenden Fragen in anderen Kategorien.</p>'}</div></details>
     ${selectedQuestions.size?`<div class="se-batch" aria-label="Mehrere Fragen bearbeiten"><strong>${selectedQuestions.size} ausgewählt</strong><label>Kategorie<select data-se-batch-category><option value="">Unverändert</option>${cats.map(name=>`<option value="${escape(name)}">${escape(name)}</option>`).join('')}</select></label><label>Punkte<input data-se-batch-points type="number" min="0" max="10000" step="1" placeholder="Unverändert"></label><div class="se-inline"><button type="button" data-se-action="batch-apply" class="se-primary">Übernehmen</button><button type="button" data-se-action="batch-clear">Auswahl löschen</button></div></div>`:''}`:`<input class="se-search" data-se-search aria-label="Fragen im Quiz suchen" placeholder="Im Quiz suchen …" value="${escape(search)}"><details class="se-advanced-set"><summary>Mehrere Fragen auf einmal</summary><p>Optional: 5 × 5 Felder pro Kategorie.</p><button type="button" class="se-quick" data-se-action="quickset">5 × 5 Schnellset erstellen</button></details>`}
    </aside>
-   <main class="se-main">${!activeCategory?overview(all,cats):item?`${editorTabs}${editorPane==='answer'?answerEditor(item):'<section id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" hidden></section>'}${item.type===TEAM_EMOJI?teamEmojiEditor(item):`<div class="se-question-pane" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}><div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">${escape(activeCategory)}</span><h2>${escape(item.title)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview-device" aria-label="Vorschauformat wechseln">${previewDevice==='desktop'?'Handyansicht':'Desktopansicht'}</button><button type="button" data-se-action="open-menu" aria-label="Elementaktionen als Menü öffnen" aria-haspopup="menu" aria-expanded="${menu?'true':'false'}" title="Rechtsklick oder Menü">⋯ Menü</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
+   <main class="se-main">${!activeCategory?overview(all,cats):item?`${editorTabs}${editorPane==='answer'?answerEditor(item):'<section id="se-answer-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-answer" hidden></section>'}${isTeamChallenge(item.type)?teamEmojiEditor(item):`<div class="se-question-pane" id="se-question-tabpanel" role="tabpanel" aria-labelledby="se-editor-tab-question" ${editorPane==='answer'?'hidden':''}><div class="se-canvas-top"><div><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">${escape(activeCategory)}</span><h2>${escape(item.title)} · ${item.points} Punkte</h2><span class="se-muted">${escape(TEMPLATE_NAMES[item.scene.template])}</span></div><div class="se-inline"><label class="se-check"><input type="checkbox" data-se-snap ${snap?'checked':''}> Raster</label><button type="button" data-se-action="preview-device" aria-label="Vorschauformat wechseln">${previewDevice==='desktop'?'Handyansicht':'Desktopansicht'}</button><button type="button" data-se-action="open-menu" aria-label="Elementaktionen als Menü öffnen" aria-haspopup="menu" aria-expanded="${menu?'true':'false'}" title="Rechtsklick oder Menü">⋯ Menü</button><select data-se-reveal aria-label="Vorschaustufe">${Array.from({length:7},(_,i)=>`<option value="${i}" ${reveal===i?'selected':''}>${i===0?'Start':i===6?'Lösung':`Hinweis ${i}`}</option>`).join('')}</select></div></div>
     <div class="se-context-hint">${item.scene.template==='map'?'Tippe auf die Weltkarte, um den richtigen Zielpunkt zu markieren. Der Punkt ist verpflichtend. Die Frage bearbeitest du im Bereich Eigenschaften.':'Dieselbe Fragenfläche wie bei den Zuschauern. Im Bearbeitungsmodus ziehst du Elemente an ihre Position. PNG-, JPG- oder WebP-Dateien kannst du direkt auf die Fragenfläche ziehen. Auf vorhandene Bilder abgelegte Dateien ersetzen das Bild. Rechtsklick für Aktionen.'}</div><div class="se-stage-grid se-stage-grid--single"><section class="se-stage-card"><div class="se-audience-label"><span>${preview?'Live-Zuschauervorschau (nicht bearbeitbar)':'Bearbeitbare Zuschauerfläche'} · ${reveal===6?'Lösung':reveal?'Hinweis '+reveal:'Startansicht'}</span><button type="button" class="se-preview-toggle" data-se-action="toggle-preview" aria-pressed="${preview}">${preview?'✎ Jetzt bearbeiten':'◉ Ohne Markierungen ansehen'}</button></div><div class="se-canvas-wrap se-audience-preview se-audience-${previewDevice}">${preview?renderScene(item.type==='imposter'?imposterPublicScene(item.scene,item.imposterIndex,reveal===6?item.correctIcon:'',Math.min(5,reveal)):publicScene(item.scene,reveal,reveal===6),{revealed:reveal===6&&item.type!=='imposter',correctIndex:item.correct||0,mapView:mapCamera,mapSolution:reveal===6&&item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null}):renderScene(item.scene,{editing:true,selected:sel,revealed:false,correctIndex:item.correct||0,mapView:mapCamera,mapCanEdit:item.scene.template==='map',mapEditorPoint:item.mapTargetSet?normalizePoint({x:item.mapTargetX,y:item.mapTargetY}):null})}</div>${!preview&&reveal!==0?'<p class="se-muted">Aufdeckungsstufen kontrollierst du über „Ohne Markierungen ansehen“.</p>':''}</section></div>
     ${item.scene.template==='map'?'':`<div class="se-tools"><span>Hinzufügen:</span>${[['text','Text'],['image','Bild'],['shape','Form'],['choice','Antwort'],['order','Sortierfeld']].map(([kind,label])=>`<button type="button" data-se-action="add-element" data-kind="${kind}">+ ${label}</button>`).join('')}</div>`}
-    <div class="se-mini"><span>Aufdecken: 0 = sofort · 1–5 = Hinweise · 6 = Lösung</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div></div>`}`:`<section class="se-empty-category"><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">Kategorie</span><h2>${escape(activeCategory)}</h2><p>Hier gibt es noch keine Frage. Wähle einen Fragetyp oder lege eine einfache Frage an.</p><div class="se-start-templates">${[['text','Textfrage'],['multiple','Multiple Choice'],['estimate','Schätzfrage'],['image','Bildfrage'],['map','Karte auswählen'],['written','Alle schreiben'],['imposter','Imposter'],[TEAM_EMOJI,'Emoji-Teamrunde'],['quote','Zitat']].map(([type,label])=>`<button type="button" data-se-action="new" data-template="${type}">+ ${label}</button>`).join('')}</div></section>`}</main>
-   ${item&&editorPane==='question'&&item.type!==TEAM_EMOJI?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
+    <div class="se-mini"><span>Aufdecken: 0 = sofort · 1–5 = Hinweise · 6 = Lösung</span>${validateScene(item)?`<strong>${escape(validateScene(item))}</strong>`:'<strong>Layout bereit</strong>'}<span class="se-save-status">${escape(api.saveStatus?.()||'')}</span></div></div>`}`:`<section class="se-empty-category"><button type="button" class="se-back" data-se-action="category-overview">‹ Kategorien</button><span class="se-eyebrow">Kategorie</span><h2>${escape(activeCategory)}</h2><p>Hier gibt es noch keine Frage. Wähle einen Fragetyp oder lege eine einfache Frage an.</p><div class="se-start-templates">${[['text','Textfrage'],['multiple','Multiple Choice'],['estimate','Schätzfrage'],['image','Bildfrage'],['map','Karte auswählen'],['written','Alle schreiben'],['imposter','Imposter'],[TEAM_EMOJI,'Emoji-Teamrunde'],[TEAM_DRAW,'Champion zeichnen'],['quote','Zitat']].map(([type,label])=>`<button type="button" data-se-action="new" data-template="${type}">+ ${label}</button>`).join('')}</div></section>`}</main>
+   ${item&&editorPane==='question'&&!isTeamChallenge(item.type)?`<aside class="se-inspector">${propsPanel(item)}</aside>`:''}</div>
    <input type="file" id="import-quiz" accept=".json,.brainquiz" hidden>${contextMenuHTML()}${libraryMenuHTML()}</div>`;
  }
  function draw(){
@@ -352,8 +354,12 @@ export function createStudioEditor(api){
    item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
    deferDraft();return;
   }
-  const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds'}[field];
-  if(key){item.teamEmoji={...normalizeTeamEmoji(item.teamEmoji),[key]:value};deferDraft();return;}
+  const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds',drawSeconds:'drawSeconds'}[field];
+  if(key){
+   if(item.type===TEAM_DRAW)item.teamDraw={...normalizeTeamDraw(item.teamDraw),[key]:value};
+   else item.teamEmoji={...normalizeTeamEmoji(item.teamEmoji),[key]:value};
+   deferDraft();return;
+  }
   if(field==='mapPrompt'&&item.scene?.template==='map'){
    const text=String(value).slice(0,950),heading=item.scene.elements.find(v=>v.kind==='text'&&v.role==='question');
    if(heading)heading.text=text;
@@ -384,7 +390,7 @@ export function createStudioEditor(api){
   const item=current(),root=document.getElementById('se-root');
   if(!item||!root)return;
   const heading=root.querySelector('.se-canvas-top h2');
-  if(heading&&item.type!==TEAM_EMOJI)heading.textContent=item.title+' · '+item.points+' Punkte';
+  if(heading&&!isTeamChallenge(item.type))heading.textContent=item.title+' · '+item.points+' Punkte';
   const row=[...root.querySelectorAll('.se-qrow')].find(element=>element.dataset.id===item.id);
   if(!row)return;
   row.querySelector('strong').textContent=item.points+' Punkte';

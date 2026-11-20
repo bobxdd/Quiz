@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,publicQuestion,validateQuestion} from '../docs/core.mjs';
-import {advanceTeamEmoji,emojiGroup,emojiName,MAX_EMOJI_PALETTE,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
+import {advanceTeamEmoji,emojiGroup,emojiName,emojisFromText,MAX_DRAW_POINTS,MAX_EMOJI_PALETTE,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
 import {canBuzz} from '../docs/round-rules.mjs';
 import {templateScene,reconcileQuestion} from '../docs/studio-model.mjs';
 
@@ -108,4 +108,73 @@ test('four Ability-Imposter slots share the same decoy and only that slot is rep
  assert.equal(after.correctIcon,image(8),'the genuine icon is released alongside the answer');
  assert.equal(after.imposterIndex,2,'the answer identifies which wrong slot to outline');
  assert.equal(copy.icons[2],image(2));
+});
+
+test('catalogue and operating-system emoji can be used outside the shortcut palette',()=>{
+ const round=newTeamEmojiRound(question,state,roster,'full-emoji');
+ playTeamEmoji(round,'t1','a','role','clue',10);
+ playTeamEmoji(round,'t1','b','role','guess',10);
+ advanceTeamEmoji(round,10);
+ const symbols=['🐱','🇩🇪','🧑🏾‍🚀','🐱'];
+ assert.deepEqual(emojisFromText('Text 🐱🇩🇪 🧑🏾‍🚀 🐱'),symbols);
+ for(const invalid of [['🐱🇩🇪'],['Antwort'],Array(6).fill('🐱')]){
+  assert.throws(()=>playTeamEmoji(round,'t1','a','clue',invalid,100),/Emojis/);
+ }
+ playTeamEmoji(round,'t1','a','clue',symbols,100);
+ advanceTeamEmoji(round,round.deadline);
+ assert.deepEqual(teamEmojiForPlayer(round,'t1','b').clues,symbols);
+});
+
+test('drawing rounds keep the reference and artwork private until the appropriate phase',()=>{
+ const reference='data:image/png;base64,YWJj';
+ const config={type:'team-draw',answerText:'Jinx',answerImage:reference,acceptedAnswers:'Powder',points:125,
+  scene:templateScene('team-draw'),teamDraw:{drawSeconds:12,guessSeconds:7}};
+ const q=normalizedQuiz({questions:[reconcileQuestion(config)]}).questions[0];
+ assert.deepEqual(q.teamDraw,{drawSeconds:12,guessSeconds:7});
+ assert.equal(q.type,'team-draw');
+ assert.equal(q.roundMode,'team-draw');
+ assert.equal(validateQuestion(q,'team'),'');
+ assert.match(validateQuestion({...q,answerText:''},'team'),/Antwort-Tab/);
+ assert.match(validateQuestion(q,'individual'),/Teamwertung/);
+ assert.equal(publicQuestion(q).answerImage,undefined);
+ assert.equal(publicQuestion(q,true).answerImage,reference);
+ assert.equal(canBuzz({phase:'question',current:publicQuestion(q)}, {},'b','t1'),false);
+ const round=newTeamEmojiRound(q,state,roster,'draw');
+ const act=(team,who,kind,value,time=50)=>playTeamEmoji(round,team,who,kind,value,time);
+ const view=(team,who)=>teamEmojiForPlayer(round,team,who);
+ for(const [team,drawer,guesser] of [['t1','a','b'],['t2','c','d']]){
+  act(team,drawer,'role','clue');
+  act(team,guesser,'role','guess');
+ }
+ assert.equal(view('t1','a').target,undefined);
+ advanceTeamEmoji(round,100);
+ assert.equal(round.deadline,12100);
+ assert.deepEqual([view('t1','a').target,view('t1','a').reference],['Jinx',reference]);
+ assert.equal(view('t1','b').reference,undefined);
+ const stroke=[0,1,10,10,100,50],other=[2,0,0,80,44,10];
+ assert.throws(()=>act('t1','b','clue',[stroke],101),/Rolle/);
+ for(const invalid of [[[0,0,999,0]], [['#000',1,1,0]], [[0,0,...Array(2*(MAX_DRAW_POINTS+1)).fill(20)]]]){
+  assert.throws(()=>act('t1','a','clue',invalid,101),/Zeichnung/);
+ }
+ act('t1','a','clue',[stroke],102);
+ act('t1','a','clue',[],103);
+ assert.equal(publicTeamEmoji(round).teams[0].clued,false,'clearing is stored on the host');
+ act('t1','a','clue',[stroke],104);
+ act('t2','c','clue',[other],104);
+ assert.equal(view('t1','b').drawing,undefined);
+ assert.throws(()=>act('t1','a','clue',[stroke],12100),/abgelaufen/);
+ advanceTeamEmoji(round,12100);
+ assert.equal(round.deadline,19100);
+ assert.deepEqual(view('t1','b').drawing,[stroke]);
+ assert.deepEqual(view('t2','d').drawing,[other]);
+ assert.equal(view('t1','b').target,undefined);
+ assert.equal(publicTeamEmoji(round).results,undefined);
+ act('t1','b','guess','Powder',12101);
+ advanceTeamEmoji(round,19100);
+ const result=publicTeamEmoji(round);
+ assert.equal(result.solution,'Jinx');
+ assert.deepEqual(result.results.map(team=>team.status),['correct','no-guess','no-roles']);
+ assert.deepEqual(result.results[0].drawing,[stroke]);
+ assert.equal(result.results[0].points,125);
+ assert.equal(teamEmojiForPlayer(newTeamEmojiRound(q,state,roster,'next'),'t1','a').role,'');
 });

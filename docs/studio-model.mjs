@@ -1,7 +1,7 @@
 /* BrainQuiz 1.6: standalone question canvas schema. No HTML accepted, no secret answer sent before reveal. */
 import {mapMarkup} from './map-viewport.mjs';
 export const SCENE_WIDTH=1000,SCENE_HEIGHT=560;
-export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji','team-emoji':'Emoji-Teamrunde',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
+export const TEMPLATE_NAMES={text:'Freitext',multiple:'A / B / C / D',order:'Reihenfolge',hints:'Hinweise aufdecken',image:'Bildfrage',imposter:'Bild-Imposter (auch Abilities)',quote:'Zitat',emoji:'Emoji','team-emoji':'Emoji-Teamrunde','team-draw':'Champion zeichnen',estimate:'Schätzfrage',audio:'Audio',map:'Karte / Ort auswählen'};
 const TYPES=new Set(['text','image','shape','choice','order']);
 const COLORS=new Set(['#ffffff','#d4d6e2','#adb0c5','#9c8cff','#ff95a7','#75d7b6','#20212d','#343644']);
 const safeHexColor=(value,fallback)=>typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value)?value.toLowerCase():fallback;
@@ -30,7 +30,7 @@ export function normalizeScene(raw){if(!raw||typeof raw!=='object')return null;
 const question=(text='Frage eingeben')=>element('text',{role:'question',x:58,y:34,w:884,h:106,font:38,text,align:'center',bg:'#252c30'});
 export function templateScene(name='text',q={}){
  const template=Object.hasOwn(TEMPLATE_NAMES,name)?name:'text';
- const prompt=template==='team-emoji'?'Welchen Champion oder Begriff beschreibt dein Team?':q.prompt||'Frage eingeben';
+ const prompt=template==='team-draw'?'Welchen Champion zeichnet dein Team?':template==='team-emoji'?'Welchen Champion oder Begriff beschreibt dein Team?':q.prompt||'Frage eingeben';
  const elements=[question(prompt)];
  const options=(q.options||[]).filter(Boolean);
  if(template==='multiple')elements.push(...'ABCD'.split('').map((letter,i)=>element('choice',{letter,x:80+(i%2)*430,y:200+Math.floor(i/2)*138,w:400,h:111,text:options[i]||`Antwort ${letter}`,font:25,bg:'#363e43'})));
@@ -52,7 +52,7 @@ export function templateScene(name='text',q={}){
 }
 export function ensureScene(q){if(!q.scene)q.scene=templateScene(q.type==='splash'?'image':q.type,q);return q.scene;}
 export function reconcileQuestion(q){const scene=normalizeScene(q.scene);if(!scene)return q;q.scene=scene;
- if(scene.template==='team-emoji'){q.type='team-emoji';q.roundMode='team-emoji';return q;}
+ if(['team-emoji','team-draw'].includes(scene.template)){q.type=scene.template;q.roundMode=scene.template;return q;}
  const heading=scene.elements.find(x=>x.kind==='text'&&x.role==='question')||scene.elements.find(x=>x.kind==='text'&&x.step===0);
  if(heading)q.prompt=heading.text;
  if(scene.template==='multiple'){
