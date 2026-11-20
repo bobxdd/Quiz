@@ -63,9 +63,10 @@ async def main():
    scroller=anna.locator('.bq-answer-question')
    await anna.wait_for_function("""() => {
     const view=document.querySelector('.bq-answer-question');
-    return view && view.scrollHeight>view.clientHeight;
-   }""")
-   assert await scroller.evaluate('(el)=>{el.scrollTop=el.scrollHeight;return el.scrollTop>0}')
+    if (!view) return false;
+    view.scrollTop=view.scrollHeight;
+    return view.scrollTop>0;
+   }""",timeout=5000)
    await expect(field).to_be_in_viewport(ratio=1)
    await expect(save).to_be_in_viewport(ratio=1)
    await scroller.evaluate('(el)=>{el.scrollTop=0}')
@@ -77,10 +78,18 @@ async def main():
     });
     visualViewport.dispatchEvent(new Event('resize'));
    }""")
-   await anna.wait_for_function("document.body.classList.contains('bq-answer-keyboard')")
-   for target in (field,save,scroller):
-    bounds=await target.bounding_box()
-    assert bounds and bounds['y']>=30 and bounds['y']+bounds['height']<=310,bounds
+   # A window resize replaces the live scene on the next animation frame.
+   # Check the three current elements together so a detached locator cannot
+   # fail a viewport check in the middle of that render.
+   await anna.wait_for_function("""() => {
+    if (!document.body.classList.contains('bq-answer-keyboard')) return false;
+    const {offsetTop, height, width}=visualViewport;
+    return ['#answer-text','#answer-form [data-action="submit-answer"]','.bq-answer-question'].every(selector => {
+     const rect=document.querySelector(selector)?.getBoundingClientRect();
+     return rect && rect.width>0 && rect.height>0 &&
+       rect.top>=offsetTop && rect.bottom<=offsetTop+height && rect.left>=0 && rect.right<=width;
+    });
+   }""",timeout=5000)
    await anna.evaluate("""() => {
     delete visualViewport.height;
     delete visualViewport.offsetTop;
