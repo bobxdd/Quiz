@@ -30,13 +30,14 @@ async def question(page,title,points,answer):
 
 
 def tile(page,points):
-    return page.locator('.bq-board-scene [data-action="open"]').filter(has_text=str(points))
+    # The fixtures have short boards, so every remaining tile shows double points.
+    return page.locator('.bq-board-scene [data-action="open"]').filter(has_text=re.compile(fr'^{2 * points}$'))
 
 
 async def choose(page,points):
     await tile(page,points).click()
     await expect(page.locator('.bq-question-covered')).to_be_visible()
-    await expect(page.locator('.bq-question-panel')).to_have_count(0)
+    await expect(page.locator('.bq-private-preview')).to_be_visible()
 
 
 async def run(browser,root):

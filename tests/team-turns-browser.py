@@ -10,8 +10,7 @@ spec=importlib.util.spec_from_file_location('turn_rounds',ROOT/'tests/board-roun
 rounds=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rounds)
 
-def tile(page,points):
-    return page.locator('.bq-board-scene [data-action="open"]').filter(has_text=str(points))
+tile=rounds.tile
 
 async def exercise(browser,root):
     context=await browser.new_context(viewport={'width':1440,'height':950},reduced_motion='reduce')
