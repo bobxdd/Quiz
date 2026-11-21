@@ -748,3 +748,37 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 .bq-host-tolerance strong { font-size: 1.18rem; }
 .bq-host-tolerance span,.bq-tolerance-match { font-size: .87rem; }
+
+
+/* Host-only score correction: always reachable without reducing question height.
+   Popover is removed from scene flow; critical on 320x568 mobile screens. */
+.bq-host-manual-score{
+ position:fixed;z-index:90;right:max(8px,env(safe-area-inset-right));
+ bottom:calc(65px + env(safe-area-inset-bottom));width:min(340px,calc(100vw - 16px));
+ display:flex;flex-direction:column;align-items:flex-end;
+ background:transparent;pointer-events:none;max-height:calc(100dvh - 95px);overflow:visible;
+}
+.bq-host-manual-score>summary{
+ display:list-item;list-style:none;pointer-events:auto;cursor:pointer;flex-shrink:0;
+ font-size:12px;font-weight:700;line-height:1.25;padding:9px 12px;
+ color:#edf7f2;background:rgba(28,51,50,.96);border:1px solid rgba(156,212,190,.6);
+ border-radius:9px;box-shadow:0 3px 15px rgba(0,0,0,.3);
+}
+.bq-host-manual-score>summary::-webkit-details-marker{display:none}
+.bq-host-manual-score[open]{
+ padding:10px;pointer-events:auto;align-items:stretch;
+ background:#1c2829;border:1px solid rgba(160,207,194,.55);border-radius:12px;
+ box-shadow:0 12px 40px rgba(0,0,0,.65);overflow:auto;
+}
+.bq-host-manual-score[open]>summary{align-self:flex-end}
+.bq-manual-score-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:9px}
+.bq-manual-score-form>.field{min-width:110px;flex:1 1 120px}
+.bq-manual-score-form select,.bq-manual-score-form input{width:100%;min-width:0}
+.bq-manual-score-form>.btn{flex:1 1 100%;min-height:38px}
+.bq-host-manual-score p{margin:7px 0 0;font-size:11px;line-height:1.4}
+.bq-first-answer{border:1px solid rgba(165,213,181,.5);border-radius:12px;padding:12px;gap:10px}
+.bq-first-answer>div:first-child{display:flex;flex-direction:column;gap:5px}
+@media(max-width:480px){
+ .bq-host-manual-score{bottom:calc(61px + env(safe-area-inset-bottom));}
+ .bq-host-manual-score>summary{font-size:11px;padding:7px 9px}
+}
