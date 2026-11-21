@@ -1741,7 +1741,7 @@ function beginRehearsal(){
  if(rehearsal)endRehearsal();
  rehearsal={rounds:new Map(),compact:false,media:null,checking:false,previous:{publicState,questionHistory,buzzers,responses,roster,selected}};
  publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
-  board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
+  board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),
   used:{},playerScores:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
  roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
  view='present';boardPage=0;previewRevealed=false;schedule();
@@ -2171,11 +2171,24 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   return;
  }
  case 'first-correct':case 'first-wrong':{
-   if(!canHost()||isOffline()||!activeQuestion()?.firstAnswerPending)throw Error('Keine offene Erstantwort.');
+   if(!canHost()||!activeQuestion()?.firstAnswerPending||!['question','paused'].includes(publicState.phase))throw Error('Keine offene Erstantwort.');
    const q=activeQuestion(),team=q.firstAnswerTeam,result=action==='first-correct'?'correct':'wrong';
    const source=quiz.questions.find(x=>x.id===q.id);
    const patch=result==='correct'?buildRevealPatch(source):null;
-   await game.judgeFirstAnswer(room,roundKey(),team,result,patch);
+   if(isOffline()){
+      if(scoreMode(publicState)!=='team')throw Error('Ausgleichs-Board erfordert Teamwertung.');
+      const after=(Number(publicState.scores?.[team])||0)+(result==='correct'?Number(q.points):-Number(q.points)/2);
+      if(!Number.isFinite(after)||Math.abs(after)>999999)throw Error('Punktelimit überschritten.');
+      const scores={...(publicState.scores||{}),[team]:after},key=roundKey(),at=now();
+      if(result==='correct'){
+        publicState={...publicState,...patch,scores,buzzerResolved:{...(publicState.buzzerResolved||{}),[key]:{team,uid:'',result,at,firstAnswer:true}}};
+      }else{
+        publicState={...publicState,scores,current:{...q,firstAnswerPending:false,firstAnswerResult:result},buzzerArmed:true,deadline:0,
+          buzzerBlockedTeams:{...(publicState.buzzerBlockedTeams||{}),[key]:{...(publicState.buzzerBlockedTeams?.[key]||{}),[team]:{team,at}}},
+          buzzerJudgements:{...(publicState.buzzerJudgements||{}),[key]:{team,uid:'',result,delta:-Number(q.points)/2,at,firstAnswer:true}}};
+      }
+      if(!rehearsal)saveOfflineSession();schedule();
+    }else await game.judgeFirstAnswer(room,roundKey(),team,result,patch);
    notice(result==='correct'?teamName(team)+' richtig: volle Punkte, Lösung aufgedeckt.':teamName(team)+' falsch: halbe Punkte abgezogen. Buzzer für andere Teams frei.');
    return;
   }
