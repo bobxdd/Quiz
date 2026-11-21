@@ -4,7 +4,7 @@
 // load it from an isolated data: URL; relative ES module imports would break them.
 // Mirror the small category model selectors without introducing an import.
 const categoryKey=value=>String(value??'').trim().replace(/\s+/g,' ').slice(0,70).toLocaleLowerCase('de');
-const boardRoundOf=q=>Number(q?.boardRound)===2?2:1;
+const boardRoundOf=q=>[2,3].includes(Number(q?.boardRound))?Number(q.boardRound):1;
 const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(q=>boardRoundOf(q)===Number(round));
 const collectCategories=(stored,questions=[])=>{
  const names=[],seen=new Set();
@@ -116,10 +116,11 @@ export function transferCategoryBetweenBoards(store,{
 }={}){
  if(!validId(sourceId)||!validId(targetId)||sourceId===targetId)
   throw Error('Bitte ein anderes gespeichertes Quizbrett auswählen.');
- if(![1,2].includes(Number(sourceRound))||![1,2].includes(Number(targetRound)))
+ if(![1,2,3].includes(Number(sourceRound))||![1,2,3].includes(Number(targetRound)))
   throw Error('Ungültige Spielrunde.');
  const fromRound=Number(sourceRound),toRound=Number(targetRound);
  const source=loadBoard(store,sourceId),target=loadBoard(store,targetId);
+ if(fromRound===3&&!source.quiz.balanceBoard||toRound===3&&!target.quiz.balanceBoard)throw Error('Ausgleichs-Board ist im gewählten Quiz nicht aktiv.');
  if(source.revision!==expectedSourceRevision)
   throw Error('Das Quellquiz wurde in einem anderen Tab geändert. Bitte neu laden; es wurde nichts übertragen.');
  const sourceNames=roundCategories(source.quiz,fromRound);
@@ -134,6 +135,8 @@ export function transferCategoryBetweenBoards(store,{
   throw Error('Im Zielbrett sind bereits sechs Kategorien. Es wurde nichts übertragen.');
  if(destinationQuestions.length+sourceQuestions.length>6)
   throw Error('Die Kategorie würde im Zielbrett mehr als sechs Fragen enthalten. Es wurde nichts übertragen.');
+ if(toRound===3&&roundQuestions(target.quiz,3).length+sourceQuestions.length>target.quiz.teams.length)throw Error('Im Ausgleichs-Board ist nur eine Frage pro Team erlaubt.');
+ if(toRound===3&&sourceQuestions.some(q=>q.roundMode==='written'||['map','order','team-emoji','team-draw'].includes(q.type)))throw Error('Im Ausgleichs-Board sind nur Buzzerfragen zulässig.');
  if(target.quiz.questions.length+sourceQuestions.length>180)
   throw Error('Das Zielquiz würde mehr als 180 Fragen enthalten. Es wurde nichts übertragen.');
  const targetQuiz=structuredClone(target.quiz);
@@ -146,21 +149,21 @@ export function transferCategoryBetweenBoards(store,{
   existingIds.add(id);
   return {...structuredClone(q),id,category:destinationName,boardRound:toRound};
  });
- const targetRounds={1:roundCategories(targetQuiz,1),2:roundCategories(targetQuiz,2)};
+ const targetRounds={1:roundCategories(targetQuiz,1),2:roundCategories(targetQuiz,2),3:roundCategories(targetQuiz,3)};
  if(!existingName)targetRounds[toRound].push(destinationName);
  targetQuiz.questions.push(...copiedQuestions);
  targetQuiz.roundCategories=targetRounds;
- targetQuiz.categories=collectCategories([...targetRounds[1],...targetRounds[2]],targetQuiz.questions);
+ targetQuiz.categories=collectCategories([...targetRounds[1],...targetRounds[2],...targetRounds[3]],targetQuiz.questions);
  // Validate BOTH future board states before changing any stored data.
  let sourceQuiz=null;
  if(move){
   sourceQuiz=structuredClone(source.quiz);
   const movingIds=new Set(sourceQuestions.map(q=>q.id));
   sourceQuiz.questions=sourceQuiz.questions.filter(q=>!movingIds.has(q.id));
-  const sourceRounds={1:roundCategories(source.quiz,1),2:roundCategories(source.quiz,2)};
+  const sourceRounds={1:roundCategories(source.quiz,1),2:roundCategories(source.quiz,2),3:roundCategories(source.quiz,3)};
   sourceRounds[fromRound]=sourceRounds[fromRound].filter(name=>categoryKey(name)!==categoryKey(sourceName));
   sourceQuiz.roundCategories=sourceRounds;
-  sourceQuiz.categories=collectCategories([...sourceRounds[1],...sourceRounds[2]],sourceQuiz.questions);
+  sourceQuiz.categories=collectCategories([...sourceRounds[1],...sourceRounds[2],...sourceRounds[3]],sourceQuiz.questions);
  }
  const targetRevision=persistBoard(store,target.id,target.revision,targetQuiz);
  let sourceRevision=source.revision;
