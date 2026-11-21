@@ -1049,6 +1049,7 @@ export class PeerGame{
  async returnToBoard(room,round,id){
   const d=this._getHostData(room);
   if(d.public.round!==Number(round)||d.public.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
+  if(d.public?.current?.firstAnswerPending&&!['ready'].includes(d.public.phase))throw Error('Das Ausgleichs-Team muss zuerst bewertet werden.');
   if(d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Offener Buzzer: erst Richtig oder Falsch entscheiden oder den Buzzer zurücksetzen.');
   const previous=d.public,next=returnToBoardState(previous);
@@ -1224,7 +1225,7 @@ export class PeerGame{
     finalState=applyQuestionChanges(next,round,p.current.id,revealPatch,['question','paused']);
     if(!finalState)throw Error('Erstantwort und Lösung konnten nicht gemeinsam übernommen werden.');
    }else{
-    next.buzzerArmed=true;
+    next.buzzerArmed=true;next.deadline=0;
     next.buzzerBlockedTeams={...(next.buzzerBlockedTeams||{}),
       [key]:{...(next.buzzerBlockedTeams?.[key]||{}),[team]:{team,name:p.teams[team],at}}};
     next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid:'',team,result,delta,at,firstAnswer:true}};
