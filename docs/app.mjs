@@ -959,21 +959,24 @@ function sessionFooter(){
 function boardScene(host=false){
  const p=publicState;
  const cells=boardColumns().flatMap(column=>column.items);
- const hasRoundTwo=boardRoundOf(p)===1&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2);
- const remainingFirst=hasRoundTwo?remainingBoardQuestions(p,1).length:0;
- return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
-  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen in Runde ${boardRoundOf(p)}. Der Punktestand zählt über beide Runden.</span></div>`:''}
- <div class="glass bq-selection-turn" role="status"><strong>Der Host wählt die nächste Frage.</strong><span>Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.</span></div>
+ const boardNumber=boardRoundOf(p),nextBoard=boardNumber+1;
+ const hasNext=boardNumber<3&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===nextBoard);
+ const stillOpen=hasNext?remainingBoardQuestions(p,boardNumber).length:0;
+ const maxBoard=Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===3)?3:Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?2:1;
+ const nextLabel=nextBoard===3?'Ausgleichs-Board':'Runde '+nextBoard;
+ return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD · ':''}RUNDE ${boardNumber}${maxBoard>1?' VON '+maxBoard:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen in Runde ${boardRoundOf(p)}. Der Punktestand zählt über alle Boards.</span></div>`:''}
+ <div class="glass bq-selection-turn" role="status"><strong>${boardNumber===3?'Ausgleichs-Board · '+e(teamName(selectingTeam(p)))+' wählt als Nächstes.':'Der Host wählt die nächste Frage.'}</strong><span>${boardNumber===3?'Reihenfolge nach dem Punktestand zu Beginn des Ausgleichs-Boards (wenigste zuerst). Der Host öffnet die Frage; das wählende Team antwortet zuerst, danach bei falscher Antwort alle anderen per Buzzer.':'Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.'}</span></div>
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
- ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn('Runde 2 starten','next-board','primary')}</div>`:''}
- ${host&&hasRoundTwo&&remainingFirst? `<details class="bq-auxiliary bq-round-override"><summary>Ausnahme: Runde 1 vorzeitig beenden</summary><p class="small muted">Noch ${remainingFirst} Frage${remainingFirst===1?'':'n'} offen. Üblicherweise startet Runde 2 erst, wenn alle Fragen aus Runde 1 gespielt wurden. Nur bei einem bewusst verkürzten Spiel verwenden.</p>${btn('Offene Felder überspringen und Runde 2 starten','skip-board','small danger')}</details>`:''}
+ ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn(nextLabel+' starten','next-board','primary')}</div>`:''}
+ ${host&&hasNext&&stillOpen? `<details class="bq-auxiliary bq-round-override"><summary>Ausnahme: Runde ${boardNumber} vorzeitig beenden</summary><p class="small muted">Noch ${stillOpen} Frage${stillOpen===1?'':'n'} offen. Normalerweise wird das nächste Board erst nach allen Fragen freigegeben.</p>${btn('Offene Felder überspringen und '+nextLabel+' starten','skip-board','small danger')}</details>`:''}
  ${sessionFooter()}</section>`;
 }
 function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';}
 function renderReviewView(){
  const p=publicState,q=activeQuestion(),buzzerWinner=p.phase==='reveal'?p.buzzerResolved?.[roundKey()]:null;
- const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
+ const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(buzzerWinner.firstAnswer?'Erstantwort':roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q?.category||'Aktuelle Frage')} · ${e(q?.points||0)} Punkte</h2></div><span class="pill ${p.phase==='reveal'?'good':''}">${p.phase==='reveal'?(p.solutionVisible===false?'Frage im Rückblick':'Lösung sichtbar'):'Antworten aufdecken'}</span></div>
  ${hostPrivateSolution()}${winnerBanner}<div class="bq-answer-review-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
  <section class="glass panel bq-answers-panel"><h3>Antworten</h3>${renderReviewGallery()}</section></div>
@@ -1566,8 +1569,8 @@ function renderHostLive(){
  if(publicState?.phase==='ready')return readyQuestionScene();
  if(isTeamChallenge(activeQuestion()?.type)&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion()){
-  const roundTwoPending=boardRoundOf(publicState)===1&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===2);
-  return boardScene(true)+(mayFinishGame(publicState)&&!roundTwoPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
+  const nextBoardPending=boardRoundOf(publicState)<3&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1);
+  return boardScene(true)+(mayFinishGame(publicState)&&!nextBoardPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  }
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
