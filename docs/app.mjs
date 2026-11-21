@@ -11,7 +11,7 @@ import {mountMapViewport} from './map-viewport.mjs';
 import {createStudioEditor} from './studio-editor.mjs';
 import {quizAudit,createActionLease,checkQuizMedia} from './editor-workflows.mjs';
 import {collectCategories,categoryKey,cleanCategoryName,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
-import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,remainingBoardQuestions,finalSixActive,boardQuestionPoints,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
+import {openQuestionState,validQuestionPair,questionMotion,returnToBoardState,canAdvanceBoard,advanceBoardState,nextBoardRound,remainingBoardQuestions,finalSixActive,boardQuestionPoints,makeSelectionTurn,selectingTeam,resetBoardGameState,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {startMapDaggerThrow,THROW_ACTORS} from './map-dagger-animation.mjs';
 import {MAX_PLAYERS,approvedCount,freeSlots,lobbySnapshot,teamColor,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion} from './lobby-model.mjs';
 import {lobbyGuestHTML,hostLobbySummary} from './lobby-view.mjs';
@@ -255,7 +255,7 @@ function projectorFrame(){
     <div class="glass panel bq-question-panel"><div class="bq-scene-content">${publicQuestionStage()}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board · ':''}Runde ${boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board':'Board '+boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}`;
@@ -959,13 +959,14 @@ function sessionFooter(){
 function boardScene(host=false){
  const p=publicState;
  const cells=boardColumns().flatMap(column=>column.items);
- const boardNumber=boardRoundOf(p),nextBoard=boardNumber+1;
- const hasNext=boardNumber<3&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===nextBoard);
+ const boardNumber=boardRoundOf(p),nextBoard=nextBoardRound(p);
+ const hasNext=nextBoard!==null;
  const stillOpen=hasNext?remainingBoardQuestions(p,boardNumber).length:0;
- const maxBoard=Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===3)?3:Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?2:1;
- const nextLabel=nextBoard===3?'Ausgleichs-Board':'Runde '+nextBoard;
- return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD · ':''}RUNDE ${boardNumber}${maxBoard>1?' VON '+maxBoard:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
-  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen in Runde ${boardRoundOf(p)}. Der Punktestand zählt über alle Boards.</span></div>`:''}
+ const availableRounds=[1,...(Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===3)?[3]:[]),...(Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?[2]:[])];
+ const stageNumber=availableRounds.indexOf(boardNumber)+1;
+ const nextLabel=nextBoard===3?'Ausgleichs-Board':'Board '+nextBoard;
+ return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD':'BOARD '+boardNumber}${availableRounds.length>1?' · SPIELBRETT '+stageNumber+' VON '+availableRounds.length:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen im ${boardNumber===3?'Ausgleichs-Board':'Board '+boardNumber}. Der Punktestand zählt über alle Boards.</span></div>`:''}
  <div class="glass bq-selection-turn" role="status"><strong>${boardNumber===3?'Ausgleichs-Board · '+e(teamName(selectingTeam(p)))+' wählt als Nächstes.':'Der Host wählt die nächste Frage.'}</strong><span>${boardNumber===3?'Reihenfolge nach dem Punktestand zu Beginn des Ausgleichs-Boards (wenigste zuerst). Der Host öffnet die Frage; das wählende Team antwortet zuerst, danach bei falscher Antwort alle anderen per Buzzer.':'Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.'}</span></div>
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
@@ -1569,7 +1570,7 @@ function renderHostLive(){
  if(publicState?.phase==='ready')return readyQuestionScene();
  if(isTeamChallenge(activeQuestion()?.type)&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion()){
-  const nextBoardPending=boardRoundOf(publicState)<3&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1);
+  const nextBoardPending=nextBoardRound(publicState)!==null;
   return boardScene(true)+(mayFinishGame(publicState)&&!nextBoardPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  }
  if(reviewIsCurrent(publicState))return renderReviewView();
@@ -2527,7 +2528,7 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export-history':{if(!canHost())return;const players=Object.fromEntries(participantList().map(([id,name])=>[id,{name}]));const rows=historyRows(questionHistory,responses,publicState?.playerScores,players);if(!rows.length)throw Error('Noch keine Fragerunden im Verlauf.');const solutions=Object.fromEntries(quiz.questions.map(q=>[q.id,answerViewContent(q).text]));const metadata=Object.fromEntries(quiz.questions.map(q=>[q.id,q]));const blob=new Blob([historyCsv(rows,solutions,metadata)],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const link=document.createElement('a');link.href=href;link.download='BrainQuiz_Fragenverlauf.csv';link.click();setTimeout(()=>URL.revokeObjectURL(href),500);return;}
  case 'finish-game':{
   if(!canHost()||isOffline()||!mayFinishGame(publicState))throw Error('Quiz kann nur zwischen Fragen oder nach einer Auflösung beendet werden.');
-  if(boardRoundOf(publicState)<3&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1))
+  if(nextBoardRound(publicState)!==null)
    throw Error('Vor der Siegerehrung muss das nächste Spielbrett gestartet werden.');
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
