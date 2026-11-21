@@ -255,7 +255,7 @@ function projectorFrame(){
     <div class="glass panel bq-question-panel"><div class="bq-scene-content">${publicQuestionStage()}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board':'Board '+boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board':'Runde '+boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}`;
@@ -964,9 +964,9 @@ function boardScene(host=false){
  const stillOpen=hasNext?remainingBoardQuestions(p,boardNumber).length:0;
  const availableRounds=[1,...(Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===3)?[3]:[]),...(Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?[2]:[])];
  const stageNumber=availableRounds.indexOf(boardNumber)+1;
- const nextLabel=nextBoard===3?'Ausgleichs-Board':'Board '+nextBoard;
- return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD':'BOARD '+boardNumber}${availableRounds.length>1?' · SPIELBRETT '+stageNumber+' VON '+availableRounds.length:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
-  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen im ${boardNumber===3?'Ausgleichs-Board':'Board '+boardNumber}. Der Punktestand zählt über alle Boards.</span></div>`:''}
+ const nextLabel=nextBoard===3?'Ausgleichs-Board':'Runde '+nextBoard;
+ return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD':'RUNDE '+boardNumber}${availableRounds.length>1?' · SPIELBRETT '+stageNumber+' VON '+availableRounds.length:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen im ${boardNumber===3?'Ausgleichs-Board':'Runde '+boardNumber}. Der Punktestand zählt über alle Boards.</span></div>`:''}
  <div class="glass bq-selection-turn" role="status"><strong>${boardNumber===3?'Ausgleichs-Board · '+e(teamName(selectingTeam(p)))+' wählt als Nächstes.':'Der Host wählt die nächste Frage.'}</strong><span>${boardNumber===3?'Reihenfolge nach dem Punktestand zu Beginn des Ausgleichs-Boards (wenigste zuerst). Der Host öffnet die Frage; das wählende Team antwortet zuerst, danach bei falscher Antwort alle anderen per Buzzer.':'Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.'}</span></div>
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
