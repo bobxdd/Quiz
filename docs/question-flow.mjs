@@ -62,9 +62,15 @@ export function canAdvanceBoard(state,{force=false}={}){
 }
 export function advanceBoardState(state,{force=false}={}){
  if(!canAdvanceBoard(state,{force}))return null;
- const nextRound=nextBoardRound(state);
+ const nextRound=nextBoardRound(state),previousRound=boardRound(state);
  const next={...state,boardRound:nextRound,current:null,deadline:0,pausedRemaining:0,presentation:null};
- if(nextRound===3)next.selectionTurn=balanceSelectionTurn(next);
+ if(nextRound===3){
+  next.preBalanceSelectionTurn=state.selectionTurn?structuredClone(state.selectionTurn):null;
+  next.selectionTurn=balanceSelectionTurn(next);
+ }else if(previousRound===3){
+  next.selectionTurn=state.preBalanceSelectionTurn??makeSelectionTurn(next);
+  delete next.preBalanceSelectionTurn;
+ }
  return next;
 }
 export function returnToBoardState(state){
