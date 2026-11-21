@@ -17,8 +17,8 @@ export function createStudioEditor(api){
  const categories=()=>roundCategories(quiz(),editorRound);
  const visibleQuestions=()=>roundQuestions(quiz(),editorRound);
  const setCategories=names=>{
-  quiz().roundCategories={1:roundCategories(quiz(),1),2:roundCategories(quiz(),2),[editorRound]:names};
-  quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2]],quiz().questions);
+  quiz().roundCategories={1:roundCategories(quiz(),1),2:roundCategories(quiz(),2),3:roundCategories(quiz(),3),[editorRound]:names};
+  quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2],...quiz().roundCategories[3]],quiz().questions);
  };
  const current=()=>{const item=q();if(!activeCategory||boardRoundOf(item)!==editorRound||categoryKey(item?.category)!==categoryKey(activeCategory))return null;if(item)ensureScene(item);return item;};
  const find=()=>current()?.scene?.elements.find(x=>x.id===sel)||null;
@@ -30,7 +30,7 @@ export function createStudioEditor(api){
   if(warning==='error')return '<section class="se-board-conflict" role="alert" data-save-warning="error"><strong>Dieses Brett konnte nicht sicher gespeichert werden.</strong><p>Dein Entwurf ist noch im geöffneten Editor. Lade vor dem Schließen ein Backup herunter.</p><button type="button" data-action="export">Backup herunterladen</button></section>';
   return '';
  }
- const otherRound=()=>editorRound===1?2:1;
+ const otherRound=()=>editorRound===1?2:editorRound===2?1:2;
  const moveCategoryLabel=()=>`Nach Runde ${otherRound()} verschieben`;
  function libraryMenuHTML(){
   if(!libraryMenu)return '';
@@ -126,7 +126,7 @@ export function createStudioEditor(api){
     ${drawing?'':`${input('emojiPalette','Emoji-Schnellauswahl',settings.palette,{rows:3})}
     <p class="se-muted">Bis zu ${MAX_EMOJI_PALETTE} Emojis für die Schnellauswahl hinterlegen. Im Spiel lässt sich zusätzlich die vollständige Emoji-Tastatur öffnen.</p>`}
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
-    ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${mainTemplate(item.scene)}
+    ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2'],...(quiz().balanceBoard?[[3,'Ausgleichs-Board']]:[])]})}${mainTemplate(item.scene)}
    </div></section>`;
  }
  function orderProperties(item){
@@ -145,7 +145,7 @@ export function createStudioEditor(api){
   </div>`;
  }
  function propsPanel(item){const el=find(),scene=item.scene;
-  const base=`<section class="se-properties"><h3>Frage</h3><div class="se-two">${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('points','Punkte',item.points,{kind:'number',min:0,max:10000,step:50})}</div>${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2']]})}${input('title','Interner Fragetitel',item.title)}${item.type==='map'?'<p class="se-muted">Kartenrunde · Jeder setzt einen eigenen Pin.</p>':item.type==='order'?'<p class="se-muted">Sortierfrage · Verdeckte Abgabe</p>':`<label class="se-field"><span>Spielmodus</span><select data-se-roundmode><option value="buzzer" ${item.roundMode!=='written'?'selected':''}>Buzzer – Antwort durch Host bewerten</option><option value="written" ${item.roundMode==='written'?'selected':''}>Alle schreiben – Antworten verdeckt sammeln</option></select></label>`}
+  const base=`<section class="se-properties"><h3>Frage</h3><div class="se-two">${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('points','Punkte',item.points,{kind:'number',min:0,max:10000,step:50})}</div>${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],[2,'Runde 2'],...(quiz().balanceBoard?[[3,'Ausgleichs-Board']]:[])]})}${input('title','Interner Fragetitel',item.title)}${item.type==='map'?'<p class="se-muted">Kartenrunde · Jeder setzt einen eigenen Pin.</p>':item.type==='order'?'<p class="se-muted">Sortierfrage · Verdeckte Abgabe</p>':`<label class="se-field"><span>Spielmodus</span><select data-se-roundmode><option value="buzzer" ${item.roundMode!=='written'?'selected':''}>Buzzer – Antwort durch Host bewerten</option><option value="written" ${item.roundMode==='written'?'selected':''}>Alle schreiben – Antworten verdeckt sammeln</option></select></label>`}
   ${mainTemplate(scene)}
   ${scene.template==='multiple'?`<div class="se-subpanel"><h4>Richtige Antwort</h4>${input('correct','Musterlösung',letterList[item.correct||0]||'A',{options:'ABCD'.split('').map(k=>[k,k])})}</div>`:''}
   ${scene.template==='order'?orderProperties(item):''}
@@ -451,10 +451,23 @@ export function createStudioEditor(api){
   libraryMenu=null;draw();
   if(opener)document.querySelector('#se-root '+opener)?.focus({preventScroll:true});
  }
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['balance-board-toggle','board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
  switch(action){
-  case 'board-round':{
-   const next=Number(button.dataset.boardRound)===2?2:1;
+  case 'balance-board-toggle':{
+    if(quiz().balanceBoard){
+      const count=roundQuestions(quiz(),3).length;
+      if(count&&!confirm('Ausgleichs-Board mit '+count+' Frage(n) endgültig entfernen? Sichere vorher bei Bedarf dein Quiz als Datei.'))return;
+      flushDraft();snapshot();quiz().questions=quiz().questions.filter(q=>boardRoundOf(q)!==3);
+      quiz().roundCategories={...quiz().roundCategories,3:[]};quiz().balanceBoard=false;
+      if(editorRound===3){editorRound=2;activeCategory='';}
+    }else{
+      flushDraft();snapshot();quiz().balanceBoard=true;quiz().roundCategories={...quiz().roundCategories,3:[]};
+      editorRound=3;activeCategory='';
+    }
+    api.save();draw();return;
+   }
+   case 'board-round':{
+   const requested=Number(button.dataset.boardRound),next=[1,2,3].includes(requested)&&(requested!==3||quiz().balanceBoard)?requested:1;
    flushDraft();editorRound=next;activeCategory='';transferCategoryName='';selectedQuestions.clear();sel='';search='';mobileTab='canvas';editorPane='question';draw();return;
   }
   case 'category-transfer-open':{
@@ -473,12 +486,13 @@ export function createStudioEditor(api){
    const targetQuestions=questionsInCategory(roundQuestions(quiz(),destination),name);
    const moving=questionsInCategory(visibleQuestions(),name);
    if(!targetName&&target.length>=6)throw Error(`Runde ${destination} hat bereits sechs Kategorien.`);
-   if(targetQuestions.length+moving.length>6)throw Error(`In Runde ${destination} sind insgesamt höchstens sechs Fragen in „${targetName||name}“ möglich.`);
+   if(destination===3&&roundQuestions(quiz(),3).length+moving.length>quiz().teams.length)throw Error('Das Ausgleichs-Board erlaubt genau eine Frage je Team.');
+    if(targetQuestions.length+moving.length>6)throw Error(`In Runde ${destination} sind insgesamt höchstens sechs Fragen in „${targetName||name}“ möglich.`);
    flushDraft();snapshot();
    for(const question of moving)question.boardRound=destination;
    for(const question of [...targetQuestions,...moving])question.category=targetName||name;
-   quiz().roundCategories={[editorRound]:oldNames.filter(category=>categoryKey(category)!==key),[destination]:targetName?target:[...target,name]};
-   quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2]],quiz().questions);
+   quiz().roundCategories={...quiz().roundCategories,[editorRound]:oldNames.filter(category=>categoryKey(category)!==key),[destination]:targetName?target:[...target,name]};
+   quiz().categories=collectCategories([...quiz().roundCategories[1],...quiz().roundCategories[2],...quiz().roundCategories[3]],quiz().questions);
    if(categoryKey(activeCategory)===key){activeCategory='';search='';sel='';preview=false;showCategoryForm=false;}
    for(const question of moving)selectedQuestions.delete(question.id);
    libraryMenu=null;api.save();draw();
@@ -511,7 +525,7 @@ export function createStudioEditor(api){
   case 'library-delete':{if(libraryMenu?.kind==='question'&&libraryMenu.id){const target=quiz().questions.find(x=>x.id===libraryMenu.id);libraryMenu=null;if(!target)return;if(!confirm(`Frage „${target.title}“ löschen?`))return;flushDraft();snapshot();quiz().questions=(quiz().questions||[]).filter(q=>q.id!==target.id);selectedQuestions.delete(target.id);if(categoryKey(activeCategory)===categoryKey(target.category)){const remaining=questionsInCategory(quiz().questions,activeCategory);if(remaining.length)api.setSelected(remaining[0].id);}api.save();draw();return;}if(libraryMenu?.kind==='category'&&libraryMenu.category){activeCategory=libraryMenu.category;libraryMenu=null;onAction('category-remove',button);return;}return;}
   case 'category-new-question':{const name=categories().find(c=>categoryKey(c)===categoryKey(button.dataset.category));if(!name)return;flushDraft();activeCategory=name;showCategoryForm=false;makeCategoryQuestion(name,suggestedTemplate(name));return;}
   case 'new':{if(!activeCategory){onAction('category-form',button);return;}makeCategoryQuestion(activeCategory,button.dataset.template||suggestedTemplate(activeCategory));return;}
-  case 'quickset':{const raw=prompt('Kategorien für Runde '+editorRound+' (durch Kommas getrennt)', categories().join(', ')||'Champions, Lorefragen, Schätzen, Splash-Art, Fähigkeiten');if(raw===null)return;const cats=[...new Set(raw.split(',').map(s=>s.trim()).filter(Boolean))];if(cats.length>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');if(!cats.length)return;if(cats.some(cat=>questionsInCategory(visibleQuestions(),cat).length))throw Error('Das Schnellset braucht leere Kategorien.');if(new Set([...categories(),...cats]).size>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');api.quickset(cats,editorRound);setCategories(collectCategories(categories(),visibleQuestions()));activeCategory=cats[0];sel='';draw();return;}
+  case 'quickset':{if(editorRound===3)throw Error('Im Ausgleichs-Board bitte einzelne Fragen anlegen.');const raw=prompt('Kategorien für Runde '+editorRound+' (durch Kommas getrennt)', categories().join(', ')||'Champions, Lorefragen, Schätzen, Splash-Art, Fähigkeiten');if(raw===null)return;const cats=[...new Set(raw.split(',').map(s=>s.trim()).filter(Boolean))];if(cats.length>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');if(!cats.length)return;if(cats.some(cat=>questionsInCategory(visibleQuestions(),cat).length))throw Error('Das Schnellset braucht leere Kategorien.');if(new Set([...categories(),...cats]).size>6)throw Error('Maximal sechs Kategorien pro Spielbrett.');api.quickset(cats,editorRound);setCategories(collectCategories(categories(),visibleQuestions()));activeCategory=cats[0];sel='';draw();return;}
   case 'copy-q':{const targetId=libraryMenu?.kind==='question'?libraryMenu.id:undefined;libraryMenu=null;api.copyQuestion(targetId);sel='';draw();return;}
   case 'delete-q':if(!confirm(`Frage „${item.title}“ löschen?`))return;api.deleteQuestion();const remaining=questionsInCategory(quiz().questions,activeCategory);if(remaining.length)api.setSelected(remaining[0].id);sel='';draw();return;
   case 'backup':api.backup();return;
