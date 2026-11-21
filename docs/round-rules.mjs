@@ -16,13 +16,13 @@ export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  const round=String(state?.round||0);
  return !!uid&&!!team&&state?.phase==='question'&&roundMode(state.current)==='buzzer'&&
   (state.buzzerArmed!==false||state.buzzerReleased?.[round]?.[uid]===true)&&
-  state.settings?.buzzerEnabled!==false&&(!state.deadline||state.deadline>time)&&
+  state.settings?.buzzerEnabled!==false&&!state.current?.firstAnswerPending&&(!state.deadline||state.deadline>time)&&
   !buzzers?.[round]&&!state?.buzzerResolved?.[round]&&!buzzerLocked(state,uid,team);
 }
 export function applyBuzzerJudgement(state,buzzers,{round,uid,result,at=Date.now()}){
  const key=String(round),winner=buzzers?.[key];
  if(!['question','paused'].includes(state?.phase)||roundMode(state.current)!=='buzzer'||key!==String(state.round)||!winner||winner.uid!==uid||!['correct','wrong'].includes(result))throw Error('Buzzer nicht mehr aktuell. Bitte Spielstand aktualisieren.');
- if(state?.buzzerResolved?.[key])throw Error('Der Buzzer wurde bereits bewertet.');
+ if(state?.buzzerResolved?.[key]||state.current?.firstAnswerPending)throw Error('Der Buzzer ist noch für das zuerst antwortende Team reserviert oder wurde bereits bewertet.');
  const points=Number(state.current.points),delta=judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
  next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid,result,delta,team:winner.team,at}};
  if(scoreMode(state)==='team'){
