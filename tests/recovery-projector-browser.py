@@ -105,6 +105,7 @@ async def rehearse_locally(browser,root):
  await page.locator('[data-se-upload="answer-image"]').set_input_files(DOCS/'pixel-corner.png')
  await expect(page.locator('.se-answer-live-preview img')).to_be_visible()
  await wait_board_saved(page)
+ await expect(page.locator('#se-answer-text')).to_have_value('Anivia aus der Generalprobe')
  await page.locator('[data-action="editor-probe"]').click()
  await expect(page.locator('.bq-rehearsal')).to_be_visible()
  saved=lambda:read_boards(page,load_records=True)
