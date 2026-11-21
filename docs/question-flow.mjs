@@ -1,13 +1,18 @@
 // Guarded question lifecycle for host actions. Every question is identified by
 // its unique board ID, not its category/title/position.
 const own=(obj,key)=>obj!=null&&Object.hasOwn(obj,key);
-const boardRound=value=>Number(value?.boardRound)===2?2:1;
+const validBalanceQuestion=q=>q?.roundMode==='buzzer'&&!['map','order','team-emoji','team-draw'].includes(q?.type);
+const boardRound=value=>[2,3].includes(Number(value?.boardRound))?Number(value.boardRound):1;
 export function makeSelectionTurn(state,roster={}){
  if(state?.scoreMode==='individual')return null;
  const occupied=new Set(Object.values(roster).map(player=>player?.team));
  const all=Object.keys(state?.teams||{});
  const order=all.filter(id=>occupied.has(id));
  return {order:order.length?order:all,index:0};
+}
+export function balanceSelectionTurn(state){
+ const order=Object.keys(state?.teams||{}).sort((a,b)=>(Number(state?.scores?.[a])||0)-(Number(state?.scores?.[b])||0)||a.localeCompare(b,'de'));
+ return {order,index:0,balance:true};
 }
 export function selectingTeam(state){
  const turn=state?.selectionTurn;
@@ -43,13 +48,17 @@ export function boardQuestionPoints(state,cell){
  return base*(finalSixActive(state)?2:1);
 }
 export function canAdvanceBoard(state,{force=false}={}){
- return state?.phase==='board'&&boardRound(state)===1&&
-  Object.values(state.board||{}).some(cell=>boardRound(cell)===2)&&
-  (force===true||remainingBoardQuestions(state,1).length===0);
+ const current=boardRound(state),next=current+1;
+ return state?.phase==='board'&&current<3&&
+  Object.values(state.board||{}).some(cell=>boardRound(cell)===next)&&
+  (force===true||remainingBoardQuestions(state,current).length===0);
 }
 export function advanceBoardState(state,{force=false}={}){
  if(!canAdvanceBoard(state,{force}))return null;
- return {...state,boardRound:2,current:null,deadline:0,pausedRemaining:0,presentation:null};
+ const nextRound=boardRound(state)+1;
+ const next={...state,boardRound:nextRound,current:null,deadline:0,pausedRemaining:0,presentation:null};
+ if(nextRound===3)next.selectionTurn=balanceSelectionTurn(next);
+ return next;
 }
 export function returnToBoardState(state){
  if(!state?.current||!['ready','question','answered','paused','review','reveal'].includes(state.phase))return null;
@@ -71,7 +80,7 @@ export function cancelQuestionState(state){
 /** Voluntary host override for a disconnected / inactive selecting team.
  * Only moves the choice token, never gives points or advances the question. */
 export function skipSelectionTurn(state){
- if(state?.phase!=='board'||state.questionPick||state.scoreMode==='individual')return null;
+ if(state?.phase!=='board'||state.questionPick||state.scoreMode==='individual'||boardRound(state)===3)return null;
  const turn=state.selectionTurn;
  if(!Array.isArray(turn?.order))return null;
  const order=turn.order.filter(team=>own(state.teams,team));
@@ -99,7 +108,13 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
    :{...playerQuestion,roundMode:mode,points:effectivePoints};
   current.basePoints=Number(question.points);
   current.doublePoints=doublePoints;
-  return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:!state.settings?.manualBuzzer,
+  if(boardRound(state)===3){
+   const team=selectingTeam(state);
+   if(!team||!validBalanceQuestion(playerQuestion))return null;
+   current.firstAnswerTeam=team;
+   current.firstAnswerPending=true;
+  }
+  return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:boardRound(state)===3?false:!state.settings?.manualBuzzer,
     answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,buzzerAnnouncement:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
