@@ -255,7 +255,7 @@ function projectorFrame(){
     <div class="glass panel bq-question-panel"><div class="bq-scene-content">${publicQuestionStage()}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Runde ${boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board · ':''}Runde ${boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}`;
@@ -900,7 +900,7 @@ function scorePanel(){
  const teamAlreadyJudged=scoreMode(publicState)==='team'&&!!official&&official!==choice?.id;
  const judgeDisabled=teamAlreadyJudged?'disabled title="Pro Team wird nur eine offizielle Antwort je Frage gewertet"':question?'':'disabled';
  return `<section class="glass panel scoring-panel"><div class="panelhead"><h3>${teamMode?'Teams & Antworten':'Teilnehmer & Punkte'}</h3><div class="row"><span class="pill">${people.length}</span>${!teamMode?btn('+ Person','add-person','small'):''}</div></div>
- ${teamMode?`<div class="bq-team-only-scoreboard" aria-label="Ein gemeinsamer Punktestand pro Team"><p class="small muted">Teamwertung: Jedes Team hat genau EINEN Punktestand. Beiträge einzelner Mitglieder zählen nur zur gemeinsamen Teamwertung.</p>${scores()}${!isOffline()?scoreControls():''}</div>`:''}
+ ${teamMode?`<div class="bq-team-only-scoreboard" aria-label="Ein gemeinsamer Punktestand pro Team"><p class="small muted">Teamwertung: Jedes Team hat genau EINEN Punktestand. Beiträge einzelner Mitglieder zählen nur zur gemeinsamen Teamwertung.</p>${scores()}</div>`:''}
  ${people.length?`<div class="score-people">${people.map(p=>`<button type="button" class="score-person ${p.id===scoreTarget?'selected':''} ${locks[p.id]?'is-locked':''}" data-action="select-player" data-person="${e(p.id)}"><span><b>${e(p.name)}</b><small>${e(p.team)}${locks[p.id]?' · Buzzer gesperrt':''}</small></span>${teamMode?'<span class="small muted">Teammitglied</span>':`<strong>${p.points.toLocaleString('de-DE')}</strong>`}</button>`).join('')}</div>`:'<div class="empty">Noch keine Spieler. Im Editor unter „Quiz-Einstellungen“ manuelle Teilnehmer eintragen oder Online-Spieler freigeben.</div>'}
  ${choice?`<div class="score-actions"><div class="small muted">Ausgewählt: ${e(choice.name)}${locks[choice.id]?' · aktuell für diese Frage gesperrt':''}</div><div class="row">${roundMode(question)==='written'?`${teamAlreadyJudged?'<span class="small muted">Eine andere Person dieses Teams wurde bereits offiziell bewertet.</span>':''}${btn('Richtig · +'+pts,'judge-correct','primary',judgeDisabled)}${btn('Falsch · −'+(pts/2),'judge-wrong','danger',judgeDisabled)}`:'<p class="small muted">Buzzer direkt in der Hauptleiste bewerten.</p>'}${btn('Buzzer freigeben','unlock-buzz-player','small',locks[choice.id]?'':'disabled')}</div>${teamMode?'<p class="small muted">Manuelle Punktekorrekturen erfolgen ausschließlich beim gemeinsamen Teampunktestand oben.</p>':`<div class="manual-points"><label class="field">Punkte manuell ändern<input id="person-adjust" type="number" step="0.5" min="-10000" max="10000" value="50"></label>${btn('Hinzufügen / Abziehen','adjust-player','small')}</div>`}<div class="small muted">Bei „Falsch“ verliert der aktuelle Buzzer automatisch die Hälfte der Fragepunkte. Danach wird der Buzzer wieder freigegeben; dieselbe Person bleibt bis zur manuellen Freigabe gesperrt.</div></div>`:''}</section>`;
 }
@@ -954,26 +954,29 @@ function sessionFooter(){
  const unit=scoreMode(publicState)==='team'?'Teams':'Personen';
  return `<footer class="bq-score-footer" aria-label="Aktueller Punktestand"><div class="bq-score-heading"><strong>Punktestand</strong><span>${list.length?list.length+' '+unit:'Noch keine '+unit}</span>${pages>1?`<div class="bq-score-pager"><button type="button" data-action="score-page" data-delta="-1" aria-label="Vorherige Punktestände" ${scorePage===0?'disabled':''}>‹</button><span aria-live="polite">${scorePage+1}/${pages}</span><button type="button" data-action="score-page" data-delta="1" aria-label="Weitere Punktestände" ${scorePage===pages-1?'disabled':''}>›</button></div>`:''}</div>
  <div class="bq-score-items">${visible.length?visible.map(p=>`<span class="bq-score-item" title="${e(p.label)}: ${Number(p.points).toLocaleString('de-DE')} Punkte"><span>${e(p.label)}</span><b>${Number(p.points).toLocaleString('de-DE')}</b></span>`).join(''):'<span class="muted">–</span>'}</div>
- </footer>`;
+ ${canHost()&&scoreMode(publicState)==='team'?scoreControls():''}</footer>`;
 }
 function boardScene(host=false){
  const p=publicState;
  const cells=boardColumns().flatMap(column=>column.items);
- const hasRoundTwo=boardRoundOf(p)===1&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2);
- const remainingFirst=hasRoundTwo?remainingBoardQuestions(p,1).length:0;
- return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">RUNDE ${boardRoundOf(p)}${Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?' VON 2':''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
-  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen in Runde ${boardRoundOf(p)}. Der Punktestand zählt über beide Runden.</span></div>`:''}
- <div class="glass bq-selection-turn" role="status"><strong>Der Host wählt die nächste Frage.</strong><span>Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.</span></div>
+ const boardNumber=boardRoundOf(p),nextBoard=boardNumber+1;
+ const hasNext=boardNumber<3&&Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===nextBoard);
+ const stillOpen=hasNext?remainingBoardQuestions(p,boardNumber).length:0;
+ const maxBoard=Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===3)?3:Object.values(p.board||{}).some(cell=>boardRoundOf(cell)===2)?2:1;
+ const nextLabel=nextBoard===3?'Ausgleichs-Board':'Runde '+nextBoard;
+ return `<section class="bq-session-scene bq-board-scene" data-scene="board"><div class="bq-scene-heading"><div><span class="bq-eyebrow">${boardNumber===3?'AUSGLEICHS-BOARD · ':''}RUNDE ${boardNumber}${maxBoard>1?' VON '+maxBoard:''}</span><h2>Fragenübersicht</h2></div><span class="pill">${cells.filter(q=>q.used).length} / ${cells.length} gespielt</span></div>
+  ${finalSixActive(p)?`<div class="bq-final-six-banner" role="status"><strong>⚡ Doppelte Punkte auf den letzten Feldern</strong><span>Noch ${remainingBoardQuestions(p).length} offen in Runde ${boardRoundOf(p)}. Der Punktestand zählt über alle Boards.</span></div>`:''}
+ <div class="glass bq-selection-turn" role="status"><strong>${boardNumber===3?'Ausgleichs-Board · '+e(teamName(selectingTeam(p)))+' wählt als Nächstes.':'Der Host wählt die nächste Frage.'}</strong><span>${boardNumber===3?'Reihenfolge nach dem Punktestand zu Beginn des Ausgleichs-Boards (wenigste zuerst). Der Host öffnet die Frage; das wählende Team antwortet zuerst, danach bei falscher Antwort alle anderen per Buzzer.':'Alle Teilnehmer dürfen danach antworten, buzzern und mitspielen.'}</span></div>
  ${host&&canArrangeLobby(p)?`<div class="bq-host-lobby-mini"><strong>✓ ${lobbySnapshot({public:p,roster,members,presence}).ready}/${approvedCount(roster)} bereit</strong>${btn('Team-Lobby öffnen','view','small','data-view="teams"')}</div>`:''}<div class="bq-board-frame ${boardPeekRound()?'has-cameo':''}">${sceneCameos('board')}<section class="glass panel bq-board-panel">${boardPeekRound()?'<span class="bq-peek-fingers" aria-hidden="true"></span>':''}${renderBoard()}</section></div>
  ${rehearsal?'':host?`<details class="bq-auxiliary bq-host-tools" data-bq-persist="hosttools"><summary>Spieler verwalten und Einstellungen</summary>${scorePanel()}${renderChat()}</details>`:`<details class="bq-auxiliary bq-shared-team-chat" data-bq-persist="teamchat"><summary>Teamchat · ${e(teamName(member?.team))}</summary>${renderChat()}</details>`}
- ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn('Runde 2 starten','next-board','primary')}</div>`:''}
- ${host&&hasRoundTwo&&remainingFirst? `<details class="bq-auxiliary bq-round-override"><summary>Ausnahme: Runde 1 vorzeitig beenden</summary><p class="small muted">Noch ${remainingFirst} Frage${remainingFirst===1?'':'n'} offen. Üblicherweise startet Runde 2 erst, wenn alle Fragen aus Runde 1 gespielt wurden. Nur bei einem bewusst verkürzten Spiel verwenden.</p>${btn('Offene Felder überspringen und Runde 2 starten','skip-board','small danger')}</details>`:''}
+ ${host&&canAdvanceBoard(p)?`<div class="bq-round-transition">${btn(nextLabel+' starten','next-board','primary')}</div>`:''}
+ ${host&&hasNext&&stillOpen? `<details class="bq-auxiliary bq-round-override"><summary>Ausnahme: Runde ${boardNumber} vorzeitig beenden</summary><p class="small muted">Noch ${stillOpen} Frage${stillOpen===1?'':'n'} offen. Normalerweise wird das nächste Board erst nach allen Fragen freigegeben.</p>${btn('Offene Felder überspringen und '+nextLabel+' starten','skip-board','small danger')}</details>`:''}
  ${sessionFooter()}</section>`;
 }
 function hasLiveQuestion(){return sceneForPublicState(publicState)==='question';}
 function renderReviewView(){
  const p=publicState,q=activeQuestion(),buzzerWinner=p.phase==='reveal'?p.buzzerResolved?.[roundKey()]:null;
- const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
+ const winnerBanner=buzzerWinner?`<div class="bq-quiz-verdict is-right bq-review-winner" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(buzzerWinner.firstAnswer?'Erstantwort':roster?.[buzzerWinner.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(buzzerWinner.team))} · +${e(q?.points||0)} Punkte</span><small>Die Lösung ist aufgedeckt. Der Host wählt die nächste Frage.</small></div>`:'';
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q?.category||'Aktuelle Frage')} · ${e(q?.points||0)} Punkte</h2></div><span class="pill ${p.phase==='reveal'?'good':''}">${p.phase==='reveal'?(p.solutionVisible===false?'Frage im Rückblick':'Lösung sichtbar'):'Antworten aufdecken'}</span></div>
  ${hostPrivateSolution()}${winnerBanner}<div class="bq-answer-review-body"><section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
  <section class="glass panel bq-answers-panel"><h3>Antworten</h3>${renderReviewGallery()}</section></div>
@@ -1050,7 +1053,16 @@ function renderStage(readOnly=false,previewQuestion=null){let q=previewQuestion|
  if(q.type==='splash'&&!showAnswer)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
  html+=showAnswer?'</section></div>':'</div>';return html;}
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label])=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${teamColor(id)}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
-function scoreControls(){const pts=activeQuestion()?.points??100;return Object.entries(publicState?.teams||{}).map(([id,label])=>`<div class="scoreline"><b>${e(label)}</b><div class="row">${btn('−'+pts,'score','small danger',`data-team="${id}" data-amount="-${pts}"`)}${btn('+'+pts,'score','small primary',`data-team="${id}" data-amount="${pts}"`)}</div></div>`).join('');}
+function scoreControls(){
+ const teams=Object.entries(publicState?.teams||{});
+ return `<details class="bq-host-manual-score" data-bq-persist="manual-score">
+  <summary>✎ Punkte ändern</summary>
+  <div class="bq-manual-score-form"><label class="field">Team<select id="manual-score-team">${teams.map(([id,name])=>`<option value="${e(id)}">${e(name)}</option>`).join('')}</select></label>
+  <label class="field">Punkte (+ oder −)<input id="manual-score-amount" type="number" step="0.5" min="-10000" max="10000" value="100" aria-label="Punktekorrektur" /></label>
+  ${btn('Punkte buchen','score-team-custom','small primary')}</div>
+  <p class="small muted">Auch während einer Frage möglich. Beispiel: +100 oder -50. Im Online-Spiel mit Punkteprotokoll und Rückgängig.</p>
+ </details>`;
+}
 function buzzerStatus(){const b=winner(),locks=Object.values(buzzLocks()),teamLocks=Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{});return `<div class="buzzerbox"><div class="sub">BUZZER / SERVERENTSCHEIDUNG</div>${b?`<h2 style="margin:16px 0 4px">◉ ${e(b.name)}</h2><p>${e(teamName(b.team))} ist zuerst eingegangen und darf antworten.</p>`:`<h2 style="margin:16px 0 4px">○ Noch kein Buzzer</h2><p>${isOpen()?'Frage läuft, Buzzer ist für alle freigegeben.':'Buzzer derzeit nicht aktiv.'}</p>`}<p class="small muted">Gesperrt für diese Runde: ${locks.length?locks.map(x=>e(x.name||x.uid||'Spieler')).join(' · '):'niemand'}${teamLocks.length?' · Teams: '+teamLocks.map(id=>e(teamName(id))).join(', '):''}</p>${canHost()?`<div class="row">${btn('Buzzer zurücksetzen','reset-buzz','small',b?'':'disabled')}${btn('Alle Sperren lösen','unlock-buzz-all','small',locks.length?'':'disabled')}</div>`:''}</div>`;}
 function hostVisibilityCard(){const b=winner(),locks=Object.values(buzzLocks()),covered=buzzerCoverActive(publicState,buzzers);return `<section class="glass panel bq-host-visibility"><div class="panelhead"><h3>Zuschauerzustand</h3><span class="pill good">${e(covered?'Frage verdeckt':viewerStateLabel())}</span></div><div class="bq-visibility-grid"><div><div class="sub">Sichtbar für Zuschauer</div><strong>${e(publicState?.phase==='board'?'Quizbrett':publicState?.phase==='review'?'Antwortübersicht':covered||publicState?.phase==='ready'?'Verdeckte Frage':hasLiveQuestion()?'Aktuelle Frage':'Warteansicht')}</strong><p class="small muted">${publicState?.phase==='reveal'?'Die Lösung ist sichtbar.':covered?'Die Frage ist bis zur Buzzerbewertung verdeckt.':publicState?.phase==='question'?'Die Frage ist geöffnet, die Lösung noch verborgen.':publicState?.phase==='review'?'Nur die freigegebenen Antworten sind sichtbar.':'Noch keine offene Frage.'}</p></div><div><div class="sub">Buzzerstatus</div><strong>${b?e(b.name)+' · '+e(teamName(b.team)):'Noch frei'}</strong><p class="small muted">${locks.length?locks.length+' gesperrt in dieser Runde':'Niemand gesperrt in dieser Runde'}</p></div></div></section>`;}
 function toleranceText(q,tolerance){
@@ -1109,7 +1121,7 @@ function buzzerReleaseControls(){
 }
 function oralBuzzerControls(){
  const people=Object.entries(roster||{});
- if(isOffline()||winner()||!people.length||!['question','paused'].includes(publicState.phase)||
+ if(isOffline()||winner()||publicState.current?.firstAnswerPending||!people.length||!['question','paused'].includes(publicState.phase)||
     roundMode(activeQuestion())!=='buzzer'||publicState.buzzerResolved?.[roundKey()])return '';
  return `<details class="bq-inline-controls" data-bq-persist="oral-grading"><summary>Antwort ohne Buzzer bewerten</summary>
   <div class="row"><label class="field">Person<select id="oral-person">${people.map(([id,p])=>`<option value="${e(id)}" ${scoreTarget===id?'selected':''}>${e(p.name)} · ${e(teamName(p.team))}</option>`).join('')}</select></label>
@@ -1117,6 +1129,13 @@ function oralBuzzerControls(){
 }
 function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=publicState?.buzzerResolved?.[roundKey()];
  if(q?.type==='map')return '';
+ if(q?.firstAnswerPending){
+  const team=teamName(q.firstAnswerTeam);
+  return `<div class="bq-buzzer-winner bq-first-answer" role="status">
+   <div><span>AUSGLEICHS-BOARD · ERSTANTWORT</span><strong>${e(team)}</strong><small>Dieses Team darf zuerst antworten. Der Host bewertet die Antwort. Bei „Falsch“ werden die anderen Teams zum Buzzern freigegeben.</small></div>
+   <div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'first-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'first-wrong','danger')}</div>
+  </div>`;
+ }
  const players=Object.entries(roster||{});
  const noBuzzerRights=players.length>0&&players.every(([uid,p])=>buzzerLocked(publicState,uid,p.team));
  if(roundMode(q)==='written')return `<div class="bq-host-main-status">✍️ Alle Teilnehmer schreiben selbst. ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).submitted} von ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).total} Antworten eingegangen.</div>`;
@@ -1126,7 +1145,7 @@ function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=public
   return `<div class="bq-host-main-status"><span>Die Frage ist offen. Der Buzzer wartet auf deine Freigabe.</span>${btn('Buzzer freigeben','arm-buzzer','primary','data-armed="true"')}</div>`;
  }
  if(!b&&noBuzzerRights&&isOpen())return `<div class="bq-host-main-status" role="status"><strong>Keine Buzzer mehr möglich.</strong> Alle Teams bzw. Spieler sind für diese Frage gesperrt. Der Host kann die Lösung zeigen oder bewusst alle Sperren aufheben. ${btn('Buzzer-Sperren aufheben','unlock-buzz-all','small')}</div>`;
- if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer frei · Das erste Signal zählt.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
+ if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(last.firstAnswer?teamName(last.team):publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer frei · Das erste Signal zählt.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
  return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}${btn('Irrtümlichen Buzzer zurücksetzen','reset-buzz','small')}</div></div>`;
 }
 function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(isTeamChallenge(activeQuestion()?.type)||publicState.settings.lockOnBuzz&&winner())));}
@@ -1155,7 +1174,7 @@ function renderFinalResults(host=false){
    ${showNext?btn('Nächsten Platz zeigen','finale-next','primary',`data-step="${step+1}"`):''}
    ${rank?btn('Gesamtrangliste zeigen','finale-all',showNext?'small':'primary'):''}
    ${btn('Quizbrett erneut öffnen','resume-final','small')}${btn('Vollbild','fullscreen','small')}${btn('Endstand exportieren','export-final-results','small')}
-  </div>`:''}</section>`;
+  </div>`:''}${host&&scoreMode(publicState)==='team'?scoreControls():''}</section>`;
 }
 
 const emojiPhases={
@@ -1550,16 +1569,16 @@ function renderHostLive(){
  if(publicState?.phase==='ready')return readyQuestionScene();
  if(isTeamChallenge(activeQuestion()?.type)&&publicState.teamEmoji)return teamEmojiScene();
  if(!hasLiveQuestion()){
-  const roundTwoPending=boardRoundOf(publicState)===1&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===2);
-  return boardScene(true)+(mayFinishGame(publicState)&&!roundTwoPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
+  const nextBoardPending=boardRoundOf(publicState)<3&&Object.values(publicState?.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1);
+  return boardScene(true)+(mayFinishGame(publicState)&&!nextBoardPending?`<div class="bq-finale-entry">${btn('Quiz beenden & Siegerehrung anzeigen','finish-game','primary')}</div>`:'');
  }
  if(reviewIsCurrent(publicState))return renderReviewView();
  const p=publicState,q=activeQuestion(),hasQuestion=!!q;
- const awaitingVerdict=!!winner()&&['question','paused'].includes(p.phase)&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()];
+ const awaitingVerdict=(!!winner()&&['question','paused'].includes(p.phase)&&roundMode(q)==='buzzer'&&!p.buzzerResolved?.[roundKey()])||!!q?.firstAnswerPending;
  const canCancelQuestion=['question','paused'].includes(p.phase)&&!winner()&&!Object.keys(responses?.[roundKey()]||{}).length&&!p.buzzerJudgements?.[roundKey()]&&!p.buzzerResolved?.[roundKey()];
  return `<section class="bq-session-scene bq-question-scene" data-scene="question"><div class="bq-scene-heading"><div><span class="bq-eyebrow">FRAGE ${e(p.round)}</span><h2>${e(q.category)} · ${e(q.points)} Punkte</h2></div><span class="pill ${isOpen()?'good':''}">${p.phase==='paused'?'Pausiert':isOpen()?'Frage offen':'Auflösung'}</span>${roundTimerMarkup()}</div>
   ${hostPrivateSolution()}${p.phase==='reveal'?'':hostBuzzerControl()}${q.type==='map'&&p.phase!=='reveal'?mapPinLog():''}<section class="glass panel bq-question-panel"><div class="bq-scene-content">${renderStage()}</div></section>
- <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&['question','paused'].includes(p.phase)&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase==='reveal'?(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small')):btn(awaitingVerdict?'Erst Buzzer bewerten':'Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion&&!awaitingVerdict?'':'disabled title="Erst den offenen Buzzer bewerten"')}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Frage als gespielt beenden','back',p.phase==='reveal'?'primary':'small',awaitingVerdict?'disabled title="Buzzerentscheidung ausstehend"':'')}${canCancelQuestion?btn('Ungespielt zurücklegen','cancel-question','small'):''}
+ <div class="bq-action-bar bq-host-action-bar" aria-label="Host-Steuerung"><span class="bq-action-step">Spiel steuern</span>${roundMode(q)==='written'&&!isOffline()&&['question','paused'].includes(p.phase)&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?btn('Antwortübersicht öffnen','start-review','primary'):' ' }${p.phase==='reveal'?(p.solutionVisible===false?btn('Lösung erneut zeigen','solution-forward','primary'):btn('Schritt zurück · Frage ansehen','reveal-prev','small')):btn(q?.firstAnswerPending?'Erst Erstantwort bewerten':awaitingVerdict?'Erst Buzzer bewerten':'Lösung zeigen','reveal',!isOffline()&&isOpen()&&answerProgress(p.answerParticipants,responses?.[roundKey()]).total?'small':'primary',hasQuestion&&!awaitingVerdict?'':'disabled title="Erst den offenen Buzzer bewerten"')}${btn(p.phase==='reveal'?'Weiter zum Quizbrett':'Frage als gespielt beenden','back',p.phase==='reveal'?'primary':'small',awaitingVerdict?'disabled title="Buzzerentscheidung ausstehend"':'')}${canCancelQuestion?btn('Ungespielt zurücklegen','cancel-question','small'):''}
  ${canHost()&&isOpen()&&(Number(q?.scene?.step||0)>0||Number(q?.hintStep||0)>0||Number(q?.visualStep||0)>0)?btn('Schritt zurück','reveal-prev','small'):''}${q?.scene&&isOpen()&&sceneHasStep(quiz.questions.find(x=>x.id===q.id),Number(q.scene?.step||0))?btn('Inhalt weiter aufdecken','scene-next','small'):''}${q?.type==='splash'&&isOpen()&&Number(q.visualStep||0)<2?btn('Bild weiter aufdecken','splash-next','small'):''}${isOpen()&&quiz.questions.find(x=>x.id===q?.id)?.hints?.slice(Number(q.hintStep||0)).some(Boolean)?btn('Tipp '+Math.min(4,Number(q.hintStep||0)+1)+' freigeben','hint-next','primary'):''}
  <details class="bq-auxiliary" data-bq-persist="hostmore"><summary>Mehr · Timer, Chat, Buzzer & Punkte</summary><div class="bq-host-detail"><section><h3>Timer und Buzzer</h3>${buzzerStatus()}<div class="row">${btn(p.settings?.buzzerEnabled?'Buzzer deaktivieren':'Buzzer aktivieren','toggle-buzz','small')}${btn(p.settings?.chatOpen?'Chat sperren':'Chat öffnen','toggle-chat','small')}</div><div class="row">${liveTimerControls()}</div>${buzzerReleaseControls()}${oralBuzzerControls()}</section><section><h3>Antworten</h3>${renderResponses()}${renderChat()}</section><section class="bq-host-info-wrap">${hostVisibilityCard()}</section>${scorePanel()}</div></details></div>
  ${sessionFooter()}</section>`;
@@ -1624,11 +1643,12 @@ function renderGuestLive(){
  const resolved=publicState?.buzzerResolved?.[roundKey()],lastJudgement=publicState?.buzzerJudgements?.[roundKey()];
   const covered=buzzerCoverActive(publicState,buzzers);
   const resultNotice=resolved&&publicState.phase==='reveal'
-   ?`<div class="bq-quiz-verdict is-right" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(roster?.[resolved.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(resolved.team))} · +${e(q.points)} Punkte</span><small>${publicState.solutionVisible===false?'Der Host zeigt noch einmal die Frage. Die Wertung bleibt bestehen.':'Die richtige Lösung ist jetzt für alle sichtbar. Der Host öffnet das nächste Feld.'}</small></div>`
+   ?`<div class="bq-quiz-verdict is-right" role="status"><strong>✓ Richtig beantwortet!</strong><span>${e(resolved.firstAnswer?'Erstantwort':roster?.[resolved.uid]?.name||winner()?.name||'Teilnehmer')} · ${e(teamName(resolved.team))} · +${e(q.points)} Punkte</span><small>${publicState.solutionVisible===false?'Der Host zeigt noch einmal die Frage. Die Wertung bleibt bestehen.':'Die richtige Lösung ist jetzt für alle sichtbar. Der Host öffnet das nächste Feld.'}</small></div>`
    :lastJudgement?.result==='wrong'&&!b&&open
    ?`<div class="bq-quiz-verdict is-wrong" role="status"><strong>✕ Leider falsch · ${e(lastJudgement.delta)} Punkte</strong><span>Andere Spieler können jetzt buzzern. Die Lösung bleibt verborgen.</span></div>`
    :'';
- const buzzUI=`${resultNotice}<div class="bq-buzzer-quickstatus" role="status">${b?e(b.name)+' antwortet gerade':waitingForBuzz?'Warte auf Freigabe durch den Host':lockedOut?'Buzzer für diese Runde gesperrt':'Wer zuerst buzzert, darf antworten'}</div><div class="bq-guest-mode"><h3>🎙️ Buzzerfrage</h3><p>${resolved&&publicState.phase==='reveal'?'Diese Runde ist beendet.':b?`<b>${e(b.name)} (${e(teamName(b.team))})</b> darf jetzt antworten.`:'Sobald du bereit bist, auf den Buzzer drücken. Das erste gültige Signal gewinnt – unabhängig davon, wer die Frage ausgewählt hat.'}</p><p class="small muted">Antworte mündlich. Der Host bewertet direkt im Quiz.</p></div><button type="button" class="btn primary bq-big-buzzer" data-action="buzz" ${allowedBuzz?'':'disabled'}>${resolved?'Richtig beantwortet · Runde beendet':!open?'Runde beendet':lockedOut?'Für diese Runde gesperrt':b?'Buzzer belegt':waitingForBuzz?'Warte auf Buzzer-Freigabe':timeUp?'Zeit abgelaufen':'◉ JETZT BUZZERN (B)'}</button>${lockedOut?'<p class="small bad">Du bzw. dein Team seid nach einer falschen Antwort bis zur Host-Freigabe gesperrt.</p>':''}`;
+ const firstAnswerInfo=q.firstAnswerPending?`<div class="bq-quiz-verdict" role="status"><strong>Ausgleichs-Board · Erstantwort</strong><span>${e(teamName(q.firstAnswerTeam))} hat das erste Antwortrecht. Der Host bewertet diese Antwort, danach wird gegebenenfalls der Buzzer für andere Teams freigegeben.</span></div>`:'';
+  const buzzUI=`${firstAnswerInfo}${resultNotice}<div class="bq-buzzer-quickstatus" role="status">${b?e(b.name)+' antwortet gerade':waitingForBuzz?'Warte auf Freigabe durch den Host':lockedOut?'Buzzer für diese Runde gesperrt':'Wer zuerst buzzert, darf antworten'}</div><div class="bq-guest-mode"><h3>🎙️ Buzzerfrage</h3><p>${resolved&&publicState.phase==='reveal'?'Diese Runde ist beendet.':b?`<b>${e(b.name)} (${e(teamName(b.team))})</b> darf jetzt antworten.`:'Sobald du bereit bist, auf den Buzzer drücken. Das erste gültige Signal gewinnt – unabhängig davon, wer die Frage ausgewählt hat.'}</p><p class="small muted">Antworte mündlich. Der Host bewertet direkt im Quiz.</p></div><button type="button" class="btn primary bq-big-buzzer" data-action="buzz" ${allowedBuzz?'':'disabled'}>${resolved?'Richtig beantwortet · Runde beendet':!open?'Runde beendet':lockedOut?'Für diese Runde gesperrt':b?'Buzzer belegt':waitingForBuzz?'Warte auf Buzzer-Freigabe':timeUp?'Zeit abgelaufen':'◉ JETZT BUZZERN (B)'}</button>${lockedOut?'<p class="small bad">Du bzw. dein Team seid nach einer falschen Antwort bis zur Host-Freigabe gesperrt.</p>':''}`;
  const compose=revealed?`<div class="bq-guest-reveal-status">${resultNotice}</div>`:
   `<section class="glass panel bq-guest-compose ${written?'bq-guest-written':'bq-guest-buzzer'}${answerDock?' bq-answer-dock':''}">
     ${answerDock?'':`<div class="panelhead"><h3>${q.type==='map'?'Kartenrunde':written?'Schriftliche Runde':'Dein Buzzer'}</h3></div>`}
@@ -1721,7 +1741,7 @@ function beginRehearsal(){
  if(rehearsal)endRehearsal();
  rehearsal={rounds:new Map(),compact:false,media:null,checking:false,previous:{publicState,questionHistory,buzzers,responses,roster,selected}};
  publicState={title:quiz.title,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,boardSequence:true,
-  board:buildPublicBoard(quiz),teams:{t1:'Probeteam 1',t2:'Probeteam 2'},scores:{t1:0,t2:0},
+  board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),
   used:{},playerScores:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:false},manualPlayers:{}};
  roster=structuredClone(REHEARSAL_PLAYERS);publicState.selectionTurn=makeSelectionTurn(publicState,roster);buzzers={};responses={};questionHistory={};
  view='present';boardPage=0;previewRevealed=false;schedule();
@@ -2044,9 +2064,9 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const early=action==='skip-board';
   if(!canHost()||!canAdvanceBoard(publicState,{force:early}))return;
   if(early){
-   const remaining=remainingBoardQuestions(publicState,1).length;
-   if(!remaining)throw Error('Alle Fragen der ersten Runde sind bereits gespielt.');
-   if(!confirm('ACHTUNG: '+remaining+' offene Frage(n) werden beim Wechsel zu Runde 2 übersprungen. Diese Felder sind danach im laufenden Spiel nicht mehr erreichbar. Nur fortfahren, wenn dies mit allen Teams abgestimmt ist.'))return;
+   const currentBoard=boardRoundOf(publicState),remaining=remainingBoardQuestions(publicState,currentBoard).length;
+   if(!remaining)throw Error('Alle Fragen des aktuellen Boards sind gespielt.');
+   if(!confirm('ACHTUNG: '+remaining+' offene Frage(n) werden beim Wechsel zu Board '+(currentBoard+1)+' übersprungen. Diese Felder sind danach im laufenden Spiel nicht mehr erreichbar. Nur fortfahren, wenn dies mit allen Teams abgestimmt ist.'))return;
   }
   if(isOffline()){
    publicState=advanceBoardState(publicState,{force:early});boardPage=0;
@@ -2150,7 +2170,29 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   notice(id?'Buzzer für '+(roster[id]?.name||'die Person')+' freigegeben.':'Buzzer für alle freigegeben.');
   return;
  }
- case 'buzz-correct':case 'buzz-wrong':case 'oral-correct':case 'oral-wrong':{
+ case 'first-correct':case 'first-wrong':{
+   if(!canHost()||!activeQuestion()?.firstAnswerPending||!['question','paused'].includes(publicState.phase))throw Error('Keine offene Erstantwort.');
+   const q=activeQuestion(),team=q.firstAnswerTeam,result=action==='first-correct'?'correct':'wrong';
+   const source=quiz.questions.find(x=>x.id===q.id);
+   const patch=result==='correct'?buildRevealPatch(source):null;
+   if(isOffline()){
+      if(scoreMode(publicState)!=='team')throw Error('Ausgleichs-Board erfordert Teamwertung.');
+      const after=(Number(publicState.scores?.[team])||0)+(result==='correct'?Number(q.points):-Number(q.points)/2);
+      if(!Number.isFinite(after)||Math.abs(after)>999999)throw Error('Punktelimit überschritten.');
+      const scores={...(publicState.scores||{}),[team]:after},key=roundKey(),at=now();
+      if(result==='correct'){
+        publicState={...publicState,...patch,scores,buzzerResolved:{...(publicState.buzzerResolved||{}),[key]:{team,uid:'',result,at,firstAnswer:true}}};
+      }else{
+        publicState={...publicState,scores,current:{...q,firstAnswerPending:false,firstAnswerResult:result},buzzerArmed:true,deadline:0,
+          buzzerBlockedTeams:{...(publicState.buzzerBlockedTeams||{}),[key]:{...(publicState.buzzerBlockedTeams?.[key]||{}),[team]:{team,at}}},
+          buzzerJudgements:{...(publicState.buzzerJudgements||{}),[key]:{team,uid:'',result,delta:-Number(q.points)/2,at,firstAnswer:true}}};
+      }
+      if(!rehearsal)saveOfflineSession();schedule();
+    }else await game.judgeFirstAnswer(room,roundKey(),team,result,patch);
+   notice(result==='correct'?teamName(team)+' richtig: volle Punkte, Lösung aufgedeckt.':teamName(team)+' falsch: halbe Punkte abgezogen. Buzzer für andere Teams frei.');
+   return;
+  }
+  case 'buzz-correct':case 'buzz-wrong':case 'oral-correct':case 'oral-wrong':{
    const oral=action.startsWith('oral-'),b=winner();
    const uid=oral?$('oral-person')?.value:b?.uid;
    if(!canHost()||!['question','paused'].includes(publicState?.phase)||roundMode(activeQuestion())!=='buzzer'||!uid)throw Error('Keine aktive Antwort zu bewerten.');
@@ -2360,7 +2402,19 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export':studio.flush();safeDownload(backupFilename(),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quizbrett als privates Backup exportiert. Nicht an Teilnehmer weitergeben!');return;
  case 'publish':await publish();return;
  case 'select-choice':{if(guestCanAnswer()){guestAnswerDraft=guestChoice=button.dataset.choice||'';const target=$('answer-text');if(target)target.value=guestChoice;schedule();}return;}
- case 'custom-score':{const team=$('custom-team')?.value,amount=Number($('custom-points')?.value);if(!canHost()||!publicState.teams[team]||!Number.isInteger(amount)||Math.abs(amount)>10000||!amount)throw Error('Bitte gültige Punktkorrektur zwischen -10.000 und +10.000 eingeben.');if(isOffline()){publicState.scores[team]=(Number(publicState.scores[team])||0)+amount;schedule();}else await game.score(room,team,amount);notice('Punkte korrigiert.');return;}
+ case 'score-team-custom':case 'custom-score':{
+   const team=$('manual-score-team')?.value,raw=$('manual-score-amount')?.value,delta=Number(raw);
+   if(!canHost()||scoreMode(publicState)!=='team'||!Object.hasOwn(publicState.teams||{},team)||
+     raw===''||!Number.isFinite(delta)||!delta||Math.abs(delta)>10000||Math.round(delta*2)!==delta*2)
+    throw Error('Team und gültige Punkte zwischen −10.000 und +10.000 (0,5-Schritte) wählen.');
+   if(Math.abs((Number(publicState.scores?.[team])||0)+delta)>999999)throw Error('Punktelimit überschritten.');
+   if(isOffline()){
+    publicState.scores={...(publicState.scores||{}),[team]:(Number(publicState.scores?.[team])||0)+delta};
+    saveOfflineSession();schedule();
+   }else await game.score(room,team,delta);
+   notice(teamName(team)+': '+(delta>0?'+':'')+delta.toLocaleString('de-DE')+' Punkte gebucht.');
+   return;
+  }
  case 'open':if(!canHost())return;await hostOpen(button.dataset.qid);return;
  case 'clear-pick':{
   if(!canHost()||isOffline()||publicState?.phase!=='board'||!publicState?.questionPick)return;
@@ -2402,12 +2456,13 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   if(!play||!isOpen()||!soundPlayer||soundPlayer.seq!==play.seq||!soundPlayer.blocked||soundPlayer.ended)throw Error('Der Host hat keinen neuen Sound freigegeben.');
   await attemptSoundPlayback(soundPlayer,play);return;
  }
- case 'reveal':if(!canHost()||!activeQuestion()||publicState.phase==='ready')return;if(isOffline()){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);publicState={...publicState,...buildRevealPatch(q)};schedule();}else await hostReveal();return;
+ case 'reveal':if(!canHost()||!activeQuestion()||publicState.phase==='ready')return;if(activeQuestion()?.firstAnswerPending)throw Error('Zuerst die Erstantwort bewerten.');if(isOffline()){const q=quiz.questions.find(x=>x.id===activeQuestion()?.id);publicState={...publicState,...buildRevealPatch(q)};schedule();}else await hostReveal();return;
  case 'pause':if(isOffline()){publicState.pausedRemaining=publicState.deadline?Math.max(0,publicState.deadline-now()):0;publicState.deadline=0;publicState.phase='paused';schedule();}else await hostPause();return;
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
  case 'back':{
   if(!canHost()||!activeQuestion())return;
-  if(winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
+  if(activeQuestion()?.firstAnswerPending)throw Error('Das auswählende Team muss zuerst antworten und bewertet werden. Nutze Ungespielt zurücklegen, falls die Frage abgebrochen werden soll.');
+   if(winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
   const changed=publicState.phase!=='reveal';
   if(changed&&!confirm('Die Frage wird als GESPIELT markiert, auch wenn sie nicht richtig beantwortet wurde.\n\nUngespielt zurücklegen geht stattdessen über die separate Schaltfläche. Trotzdem beenden?'))return;
   if(isOffline()){publicState=returnToBoardState(publicState)||publicState;if(!rehearsal)saveOfflineSession();schedule();}
@@ -2472,8 +2527,8 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export-history':{if(!canHost())return;const players=Object.fromEntries(participantList().map(([id,name])=>[id,{name}]));const rows=historyRows(questionHistory,responses,publicState?.playerScores,players);if(!rows.length)throw Error('Noch keine Fragerunden im Verlauf.');const solutions=Object.fromEntries(quiz.questions.map(q=>[q.id,answerViewContent(q).text]));const metadata=Object.fromEntries(quiz.questions.map(q=>[q.id,q]));const blob=new Blob([historyCsv(rows,solutions,metadata)],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const link=document.createElement('a');link.href=href;link.download='BrainQuiz_Fragenverlauf.csv';link.click();setTimeout(()=>URL.revokeObjectURL(href),500);return;}
  case 'finish-game':{
   if(!canHost()||isOffline()||!mayFinishGame(publicState))throw Error('Quiz kann nur zwischen Fragen oder nach einer Auflösung beendet werden.');
-  if(boardRoundOf(publicState)===1&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===2))
-   throw Error('Vor der Siegerehrung muss Runde 2 gestartet oder ausdrücklich übersprungen werden.');
+  if(boardRoundOf(publicState)<3&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1))
+   throw Error('Vor der Siegerehrung muss das nächste Spielbrett gestartet werden.');
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
   const left=remainingBoardQuestions(publicState).length;

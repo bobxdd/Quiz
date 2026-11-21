@@ -26,7 +26,7 @@ export function collectCategories(stored,questions=[]){
  return entries;
 }
 export function questionsInCategory(questions,category){return (questions||[]).filter(q=>categoryKey(q?.category)===categoryKey(category));}
-export const boardRoundOf=question=>Number(question?.boardRound)===2?2:1;
+export const boardRoundOf=question=>[2,3].includes(Number(question?.boardRound))?Number(question.boardRound):1;
 export const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(question=>boardRoundOf(question)===Number(round));
 export function roundCategories(quiz,round=1){
  const stored=quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]);
@@ -34,12 +34,22 @@ export function roundCategories(quiz,round=1){
 }
 export function boardLayoutIssues(quiz){
  const issues=[];
- for(const round of [1,2]){
+ for(const round of [1,2,...(quiz?.balanceBoard?[3]:[])]){
   const categories=roundCategories(quiz,round),questions=roundQuestions(quiz,round);
   if(categories.length>6)issues.push({id:null,label:'Runde '+round,reason:'Maximal sechs Kategorien pro Spielbrett. Kategorien ins andere Brett verschieben.'});
   for(const category of categories){
    const list=questionsInCategory(questions,category);
    if(list.length>6)issues.push({id:list[6].id,label:'Runde '+round+' · '+category,reason:'Maximal sechs Fragen je Kategorie. Fragen ins andere Brett verschieben.'});
+  }
+ }
+ if(quiz?.balanceBoard){
+  const third=roundQuestions(quiz,3),teamCount=(quiz?.teams||[]).length;
+  if(quiz.scoreMode==='individual')issues.push({id:null,label:'Ausgleichs-Board',reason:'Das Ausgleichs-Board benötigt die Teamwertung.'});
+  if(!roundQuestions(quiz,2).length)issues.push({id:null,label:'Ausgleichs-Board',reason:'Zuerst Fragen in Runde 2 anlegen.'});
+  if(third.length!==teamCount)issues.push({id:null,label:'Ausgleichs-Board',reason:'Genau eine Frage je Team: '+teamCount+' Fragen für '+teamCount+' Teams erforderlich.'});
+  for(const question of third){
+   if(['map','order','team-emoji','team-draw'].includes(question.type)||question.roundMode==='written')
+    issues.push({id:question.id,label:'Ausgleichs-Board · '+question.category,reason:'Für das Erst-Antwortrecht ist eine Buzzerfrage erforderlich.'});
   }
  }
  if(roundQuestions(quiz,2).length&&!roundQuestions(quiz,1).length)issues.push({id:null,label:'Runde 1',reason:'Zuerst mindestens eine Frage in Runde 1 anlegen.'});

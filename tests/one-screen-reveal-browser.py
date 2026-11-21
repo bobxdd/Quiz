@@ -107,6 +107,7 @@ async def run(browser, origin):
             await expect(page.locator('.se-imposter-image')).to_have_count(1)
 
         await host.set_viewport_size({'width':1280,'height':720})
+        await expect(host.locator('.bq-question-panel .se-scene')).to_be_visible(timeout=7000)
         await assert_fits(host,'host solved laptop')
         await host.locator('[data-action="back"]').click()
         await expect(guest.locator('.bq-board-scene')).to_be_visible()

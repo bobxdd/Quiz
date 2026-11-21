@@ -767,3 +767,51 @@ test('One official TEAM score per doubled written question; extra teammates cann
   await assert.rejects(host.scorePerson(room,guest1.uid,{kind:'manual',delta:100}),/gemeinsamen Punktestand/);
  }finally{guest3.shutdown();guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
+
+
+test('host manual score corrections remain auditable before, during and after questions',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const original=host.data.public.scores.t1;
+  assert.equal(await host.score(room,'t1',125),original+125);
+  assert.equal(await host.score(room,'t1',-25),original+100);
+  assert.equal(host.data.public.scores.t1,original+100);
+  assert.equal(host.data.scoreEvents.length,2);
+  assert.deepEqual(host.data.scoreEvents.map(event=>event.kind),['manual-team','manual-team']);
+  await host.hostUndoScore(room,host.data.scoreEvents.at(-1).id);
+  assert.equal(host.data.public.scores.t1,original+125);
+  await assert.rejects(host.score(room,'t1',1000000),/Ungültige Punkteänderung/);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('round-three first answer is reserved to lowest-scoring team and wrong unlocks other guests',async()=>{
+ const {host,guest1,guest2}=await setup();
+ try{
+  const q=host.hostQuiz.questions[0],previous=host.hostQuiz.questions[1];
+  q.boardRound=3;q.roundMode='buzzer';previous.boardRound=2;
+  host.data.public.board[q.id].boardRound=3;
+  host.data.public.board[previous.id].boardRound=2;
+  host.data.public.scoreMode='team';host.data.public.phase='board';
+  host.data.public.boardRound=2;host.data.public.round=0;host.data.public.scores.t1=600;host.data.public.scores.t2=-100;
+  await host.advanceBoard(room,0,{force:true});
+  assert.equal(selectingTeam(host.data.public),'t2');
+  await host.openQuestion(room,0,q,publicQuestion(q),null,0,{covered:true});
+  await host.uncoverQuestion(room,1,q.id,0);
+  assert.equal(host.data.public.current.firstAnswerTeam,'t2');
+  assert.equal(host.data.public.current.firstAnswerPending,true);
+  assert.equal(host.data.public.buzzerArmed,false);
+  const points=host.data.public.current.points;
+  await assert.rejects(host.releaseBuzzers(room,1),/Erst das auswählende Team/);
+  await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'wrong',null,{oral:true}),/reserviert/);
+  assert.equal(host.data.public.scores.t2,-100);
+  await host.judgeFirstAnswer(room,1,'t2','wrong');
+  assert.equal(host.data.public.scores.t2,-100-points/2);
+  assert.equal(host.data.public.current.firstAnswerPending,false);
+  assert.equal(host.data.public.buzzerArmed,true);
+  assert.ok(host.data.public.buzzerBlockedTeams['1'].t2);
+  await sleep(60);
+  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
+  assert.equal(host.data.buzzers['1'].team,'t1');
+  assert.equal(host.data.public.scores.t1,600,'other buzzer must still be graded by the host');
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
