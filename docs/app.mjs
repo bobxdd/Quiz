@@ -1055,7 +1055,7 @@ function renderStage(readOnly=false,previewQuestion=null){let q=previewQuestion|
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label])=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${teamColor(id)}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
 function scoreControls(){
  const teams=Object.entries(publicState?.teams||{});
- return `<details class="bq-host-manual-score bq-auxiliary" data-bq-persist="manual-score">
+ return `<details class="bq-host-manual-score" data-bq-persist="manual-score">
   <summary>✎ Punkte ändern</summary>
   <div class="bq-manual-score-form"><label class="field">Team<select id="manual-score-team">${teams.map(([id,name])=>`<option value="${e(id)}">${e(name)}</option>`).join('')}</select></label>
   <label class="field">Punkte (+ oder −)<input id="manual-score-amount" type="number" step="0.5" min="-10000" max="10000" value="100" aria-label="Punktekorrektur" /></label>
