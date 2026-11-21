@@ -1064,7 +1064,7 @@ export class PeerGame{
   if(d.public.round!==Number(round))throw Error('Das Spielbrett hat sich geändert.');
   if(force!==true&&force!==false)throw Error('Ungültige Rundenfreigabe.');
   const next=advanceBoardState(d.public,{force});
-  if(!next)throw Error('Das nächste Brett kann nur von der Übersicht aus gestartet werden.');
+  if(!next)throw Error('Runde '+(Number(d.public.boardRound||1)+1)+' kann nur von der Übersicht aus gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
  async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
