@@ -255,7 +255,7 @@ function projectorFrame(){
     <div class="glass panel bq-question-panel"><div class="bq-scene-content">${publicQuestionStage()}</div></div>
    ${reviewIsCurrent(p)?`<section class="glass panel bq-answers-panel"><h2>Antworten</h2>${renderReviewGallery(true)}</section>`:''}</section>`;
  }else{
-  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>Runde ${boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
+  stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board · ':''}Runde ${boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
  return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}`;
@@ -2063,9 +2063,9 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   const early=action==='skip-board';
   if(!canHost()||!canAdvanceBoard(publicState,{force:early}))return;
   if(early){
-   const remaining=remainingBoardQuestions(publicState,1).length;
-   if(!remaining)throw Error('Alle Fragen der ersten Runde sind bereits gespielt.');
-   if(!confirm('ACHTUNG: '+remaining+' offene Frage(n) werden beim Wechsel zu Runde 2 übersprungen. Diese Felder sind danach im laufenden Spiel nicht mehr erreichbar. Nur fortfahren, wenn dies mit allen Teams abgestimmt ist.'))return;
+   const currentBoard=boardRoundOf(publicState),remaining=remainingBoardQuestions(publicState,currentBoard).length;
+   if(!remaining)throw Error('Alle Fragen des aktuellen Boards sind gespielt.');
+   if(!confirm('ACHTUNG: '+remaining+' offene Frage(n) werden beim Wechsel zu Board '+(currentBoard+1)+' übersprungen. Diese Felder sind danach im laufenden Spiel nicht mehr erreichbar. Nur fortfahren, wenn dies mit allen Teams abgestimmt ist.'))return;
   }
   if(isOffline()){
    publicState=advanceBoardState(publicState,{force:early});boardPage=0;
@@ -2512,8 +2512,8 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export-history':{if(!canHost())return;const players=Object.fromEntries(participantList().map(([id,name])=>[id,{name}]));const rows=historyRows(questionHistory,responses,publicState?.playerScores,players);if(!rows.length)throw Error('Noch keine Fragerunden im Verlauf.');const solutions=Object.fromEntries(quiz.questions.map(q=>[q.id,answerViewContent(q).text]));const metadata=Object.fromEntries(quiz.questions.map(q=>[q.id,q]));const blob=new Blob([historyCsv(rows,solutions,metadata)],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const link=document.createElement('a');link.href=href;link.download='BrainQuiz_Fragenverlauf.csv';link.click();setTimeout(()=>URL.revokeObjectURL(href),500);return;}
  case 'finish-game':{
   if(!canHost()||isOffline()||!mayFinishGame(publicState))throw Error('Quiz kann nur zwischen Fragen oder nach einer Auflösung beendet werden.');
-  if(boardRoundOf(publicState)===1&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===2))
-   throw Error('Vor der Siegerehrung muss Runde 2 gestartet oder ausdrücklich übersprungen werden.');
+  if(boardRoundOf(publicState)<3&&Object.values(publicState.board||{}).some(cell=>boardRoundOf(cell)===boardRoundOf(publicState)+1))
+   throw Error('Vor der Siegerehrung muss das nächste Spielbrett gestartet werden.');
   const ranking=finalStandings(publicState,roster);
   const summary=ranking.map(row=>row.rank+'. '+row.name+' · '+row.points.toLocaleString('de-DE')+' Punkte').join('\n');
   const left=remainingBoardQuestions(publicState).length;
