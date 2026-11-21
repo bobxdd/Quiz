@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion} from '../docs/core.mjs';
 import {roundQuestions,boardLayoutIssues} from '../docs/category-model.mjs';
-import {advanceBoardState,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn} from '../docs/question-flow.mjs';
+import {advanceBoardState,nextBoardRound,canAdvanceBoard,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn} from '../docs/question-flow.mjs';
 import {canBuzz,applyBuzzerJudgement} from '../docs/round-rules.mjs';
 
 const source=[
@@ -33,10 +33,11 @@ test('round three is optional, survives a JSON round trip and has exactly one qu
 
 test('balance-round selection starts with lowest score and breaks ties by stable team ID',()=>{
  const p=publicState();
- const second=advanceBoardState(p,{force:true});
- assert.equal(second.boardRound,2);
- const third=advanceBoardState(second,{force:true});
- assert.equal(third.boardRound,3);
+ const third=advanceBoardState(p,{force:true});
+ assert.equal(third.boardRound,3,'balance comes directly after Board 1');
+ const second=advanceBoardState(third,{force:true});
+ assert.equal(second.boardRound,2,'regular Board 2 is played after the balance round');
+ assert.equal(advanceBoardState(second,{force:true}),null,'the finale cannot loop back to balance');
  assert.deepEqual(third.selectionTurn.order,['t2','t1','t3']);
  assert.equal(selectingTeam(third),'t2');
  assert.equal(skipSelectionTurn(third),null,'host cannot casually skip a guaranteed team choice');
@@ -51,8 +52,27 @@ test('balance-round selection starts with lowest score and breaks ties by stable
  assert.equal(selectingTeam(finished),'t1','the next lowest team is next after a played question');
 });
 
+test('the intermediate board cannot be skipped and an absent intermediate board preserves Board 1 → Board 2',()=>{
+ const p=publicState();
+ assert.equal(nextBoardRound(p),3);
+ assert.equal(canAdvanceBoard(p),false,'Board 1 must be completed first');
+ const finishedFirst={...p,used:{one:true},board:{...p.board,one:{...p.board.one,used:true}}};
+ assert.equal(canAdvanceBoard(finishedFirst),true);
+ const balance=advanceBoardState(finishedFirst);
+ assert.equal(balance.boardRound,3);
+ assert.equal(canAdvanceBoard(balance),false,'balance questions must be played before Board 2');
+ const finishedBalance={...balance,used:{...balance.used,a:true,b:true,c:true},
+  board:Object.fromEntries(Object.entries(balance.board).map(([id,cell])=>[id,['a','b','c'].includes(id)?{...cell,used:true}:cell]))};
+ const final=advanceBoardState(finishedBalance);
+ assert.equal(final.boardRound,2);
+ assert.equal(nextBoardRound(final),null);
+ const withoutBalance=structuredClone(p);
+ for(const id of ['a','b','c'])delete withoutBalance.board[id];
+ assert.equal(nextBoardRound(withoutBalance),2,'a normal two-board quiz is unchanged');
+});
+
 test('the first-answer reservation blocks all buzzers even when the buzzer is forced armed',()=>{
- const third=advanceBoardState(advanceBoardState(publicState(),{force:true}),{force:true});
+ const third=advanceBoardState(publicState(),{force:true});
  const q=create().questions.find(item=>item.id==='a');
  const open=openQuestionState(third,{expectedRound:0,question:q,playerQuestion:publicQuestion(q)});
  const pending={...open,phase:'question',buzzerArmed:true};
