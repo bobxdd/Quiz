@@ -34,7 +34,7 @@ export function roundCategories(quiz,round=1){
 }
 export function boardLayoutIssues(quiz){
  const issues=[];
- for(const round of [1,2,...(quiz?.balanceBoard?[3]:[])]){
+ for(const round of [1,...(quiz?.balanceBoard?[3]:[]),2]){
   const categories=roundCategories(quiz,round),questions=roundQuestions(quiz,round);
   if(categories.length>6)issues.push({id:null,label:'Runde '+round,reason:'Maximal sechs Kategorien pro Spielbrett. Kategorien ins andere Brett verschieben.'});
   for(const category of categories){

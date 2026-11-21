@@ -784,7 +784,7 @@ test('host manual score corrections remain auditable before, during and after qu
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
 
-test('round-three first answer is reserved to lowest-scoring team and wrong unlocks other guests',async()=>{
+test('intermediate balance board reserves first answer to lowest-scoring team and unlocks other guests on wrong',async()=>{
  const {host,guest1,guest2}=await setup();
  try{
   const q=host.hostQuiz.questions[0],previous=host.hostQuiz.questions[1];
@@ -792,8 +792,9 @@ test('round-three first answer is reserved to lowest-scoring team and wrong unlo
   host.data.public.board[q.id].boardRound=3;
   host.data.public.board[previous.id].boardRound=2;
   host.data.public.scoreMode='team';host.data.public.phase='board';
-  host.data.public.boardRound=2;host.data.public.round=0;host.data.public.scores.t1=600;host.data.public.scores.t2=-100;
+  host.data.public.boardRound=1;host.data.public.round=0;host.data.public.scores.t1=600;host.data.public.scores.t2=-100;
   await host.advanceBoard(room,0,{force:true});
+  assert.equal(host.data.public.boardRound,3,'balance occurs immediately after the first board');
   assert.equal(selectingTeam(host.data.public),'t2');
   await host.openQuestion(room,0,q,publicQuestion(q),null,0,{covered:true});
   await host.uncoverQuestion(room,1,q.id,0);

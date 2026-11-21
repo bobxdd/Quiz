@@ -47,17 +47,30 @@ export function boardQuestionPoints(state,cell){
  if(!cell||boardRound(cell)!==boardRound(state)||cell.used||state?.used?.[cell.id])return base;
  return base*(finalSixActive(state)?2:1);
 }
+/** Keep persisted board IDs stable (1 and 2 = regular, 3 = balance),
+ * while playing the optional balance board BETWEEN the regular boards. */
+export function nextBoardRound(state){
+ const present=new Set(Object.values(state?.board||{}).filter(cell=>cell?.id).map(boardRound));
+ const current=boardRound(state);
+ if(current===1)return present.has(3)?3:present.has(2)?2:null;
+ if(current===3)return present.has(2)?2:null;
+ return null;
+}
 export function canAdvanceBoard(state,{force=false}={}){
- const current=boardRound(state),next=current+1;
- return state?.phase==='board'&&current<3&&
-  Object.values(state.board||{}).some(cell=>boardRound(cell)===next)&&
-  (force===true||remainingBoardQuestions(state,current).length===0);
+ return state?.phase==='board'&&nextBoardRound(state)!==null&&
+  (force===true||remainingBoardQuestions(state).length===0);
 }
 export function advanceBoardState(state,{force=false}={}){
  if(!canAdvanceBoard(state,{force}))return null;
- const nextRound=boardRound(state)+1;
+ const nextRound=nextBoardRound(state),previousRound=boardRound(state);
  const next={...state,boardRound:nextRound,current:null,deadline:0,pausedRemaining:0,presentation:null};
- if(nextRound===3)next.selectionTurn=balanceSelectionTurn(next);
+ if(nextRound===3){
+  next.preBalanceSelectionTurn=state.selectionTurn?structuredClone(state.selectionTurn):null;
+  next.selectionTurn=balanceSelectionTurn(next);
+ }else if(previousRound===3){
+  next.selectionTurn=state.preBalanceSelectionTurn??makeSelectionTurn(next);
+  delete next.preBalanceSelectionTurn;
+ }
  return next;
 }
 export function returnToBoardState(state){
