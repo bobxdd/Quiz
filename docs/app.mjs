@@ -2166,7 +2166,16 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
   notice(id?'Buzzer für '+(roster[id]?.name||'die Person')+' freigegeben.':'Buzzer für alle freigegeben.');
   return;
  }
- case 'buzz-correct':case 'buzz-wrong':case 'oral-correct':case 'oral-wrong':{
+ case 'first-correct':case 'first-wrong':{
+   if(!canHost()||isOffline()||!activeQuestion()?.firstAnswerPending)throw Error('Keine offene Erstantwort.');
+   const q=activeQuestion(),team=q.firstAnswerTeam,result=action==='first-correct'?'correct':'wrong';
+   const source=quiz.questions.find(x=>x.id===q.id);
+   const patch=result==='correct'?buildRevealPatch(source):null;
+   await game.judgeFirstAnswer(room,roundKey(),team,result,patch);
+   notice(result==='correct'?teamName(team)+' richtig: volle Punkte, Lösung aufgedeckt.':teamName(team)+' falsch: halbe Punkte abgezogen. Buzzer für andere Teams frei.');
+   return;
+  }
+  case 'buzz-correct':case 'buzz-wrong':case 'oral-correct':case 'oral-wrong':{
    const oral=action.startsWith('oral-'),b=winner();
    const uid=oral?$('oral-person')?.value:b?.uid;
    if(!canHost()||!['question','paused'].includes(publicState?.phase)||roundMode(activeQuestion())!=='buzzer'||!uid)throw Error('Keine aktive Antwort zu bewerten.');
@@ -2376,7 +2385,19 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'export':studio.flush();safeDownload(backupFilename(),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quizbrett als privates Backup exportiert. Nicht an Teilnehmer weitergeben!');return;
  case 'publish':await publish();return;
  case 'select-choice':{if(guestCanAnswer()){guestAnswerDraft=guestChoice=button.dataset.choice||'';const target=$('answer-text');if(target)target.value=guestChoice;schedule();}return;}
- case 'custom-score':{const team=$('custom-team')?.value,amount=Number($('custom-points')?.value);if(!canHost()||!publicState.teams[team]||!Number.isInteger(amount)||Math.abs(amount)>10000||!amount)throw Error('Bitte gültige Punktkorrektur zwischen -10.000 und +10.000 eingeben.');if(isOffline()){publicState.scores[team]=(Number(publicState.scores[team])||0)+amount;schedule();}else await game.score(room,team,amount);notice('Punkte korrigiert.');return;}
+ case 'score-team-custom':case 'custom-score':{
+   const team=$('manual-score-team')?.value,raw=$('manual-score-amount')?.value,delta=Number(raw);
+   if(!canHost()||scoreMode(publicState)!=='team'||!Object.hasOwn(publicState.teams||{},team)||
+     raw===''||!Number.isFinite(delta)||!delta||Math.abs(delta)>10000||Math.round(delta*2)!==delta*2)
+    throw Error('Team und gültige Punkte zwischen −10.000 und +10.000 (0,5-Schritte) wählen.');
+   if(Math.abs((Number(publicState.scores?.[team])||0)+delta)>999999)throw Error('Punktelimit überschritten.');
+   if(isOffline()){
+    publicState.scores={...(publicState.scores||{}),[team]:(Number(publicState.scores?.[team])||0)+delta};
+    saveOfflineSession();schedule();
+   }else await game.score(room,team,delta);
+   notice(teamName(team)+': '+(delta>0?'+':'')+delta.toLocaleString('de-DE')+' Punkte gebucht.');
+   return;
+  }
  case 'open':if(!canHost())return;await hostOpen(button.dataset.qid);return;
  case 'clear-pick':{
   if(!canHost()||isOffline()||publicState?.phase!=='board'||!publicState?.questionPick)return;
