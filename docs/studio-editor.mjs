@@ -562,10 +562,12 @@ export function createStudioEditor(api){
   const item=current();if(!item||!files?.length)return;
   const questionId=item.id,scene=item.scene;
   if(kind==='answer-image'){
+   // Preserve the live answer text while image optimization awaits in WebKit.
+   const pendingAnswer=document.querySelector('#se-root #se-answer-text')?.value;
    if(files.length!==1)throw Error('Für die Antwort bitte genau eine Bilddatei auswählen.');
    const converted=await api.optimizeImage(files[0],1200,260000);
    if(current()?.id!==questionId||current()?.scene!==scene)throw Error('Die Frage wurde während des Bild-Uploads gewechselt.');
-   flushDraft();snapshot();current().answerImage=converted;if(!current().answerImageAlt?.trim())current().answerImageAlt=String(files[0].name||'Antwortbild').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').slice(0,140);persist(true);return;
+   flushDraft();snapshot();if(typeof pendingAnswer==='string'){current().answerText=pendingAnswer;if(!['multiple','order','estimate','map','imposter'].includes(current().type))current().answer=pendingAnswer;}current().answerImage=converted;if(!current().answerImageAlt?.trim())current().answerImageAlt=String(files[0].name||'Antwortbild').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').slice(0,140);persist(true);return;
   }
   if(kind==='correct-icon'){
    if(files.length!==1)throw Error('Für das Originalbild bitte genau eine Datei ablegen.');
