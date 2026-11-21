@@ -52,6 +52,17 @@ test('balance-round selection starts with lowest score and breaks ties by stable
  assert.equal(selectingTeam(finished),'t1','the next lowest team is next after a played question');
 });
 
+test('normal team choice rotation is restored after the temporary balance order',()=>{
+ const p={...publicState(),selectionTurn:{order:['t1','t2','t3'],index:2}};
+ const balance=advanceBoardState(p,{force:true});
+ assert.deepEqual(balance.selectionTurn.order,['t2','t1','t3']);
+ assert.deepEqual(balance.preBalanceSelectionTurn,p.selectionTurn);
+ const normal=advanceBoardState(balance,{force:true});
+ assert.equal(normal.boardRound,2);
+ assert.deepEqual(normal.selectionTurn,p.selectionTurn);
+ assert.equal(Object.hasOwn(normal,'preBalanceSelectionTurn'),false);
+});
+
 test('the intermediate board cannot be skipped and an absent intermediate board preserves Board 1 → Board 2',()=>{
  const p=publicState();
  assert.equal(nextBoardRound(p),3);
