@@ -5,7 +5,7 @@
  */
 import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
 import {decodePoint} from './map-tools.mjs';
-import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
+import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
@@ -979,7 +979,7 @@ export class PeerGame{
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
    d.pendingQuestion={round:next.round,id:question.id,
-     current:{...clone(playerQuestion),roundMode:next.current.roundMode,points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints},
+     current:{...clone(playerQuestion),roundMode:next.current.roundMode,points:next.current.points,basePoints:next.current.basePoints,doublePoints:next.current.doublePoints,...(next.current.firstAnswerTeam?{firstAnswerTeam:next.current.firstAnswerTeam,firstAnswerPending:true}:{})},
      duration:deadline?(questionSeconds(question.seconds)*1000||Math.max(0,deadline-Date.now())):0};
   }
   else if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
@@ -995,6 +995,7 @@ export class PeerGame{
   const d=this._getHostData(room),p=d.public,key=String(round);
   if(key!==String(p.round)||!['question','paused'].includes(p.phase)||roundMode(p.current)!=='buzzer'||p.buzzerResolved?.[key])
    throw Error('Die Buzzerfrage ist nicht mehr aktiv.');
+  if(p.current?.firstAnswerPending)throw Error('Erst das auswählende Team bewerten.');
   if(uid){
    if(!Object.hasOwn(d.roster,uid))throw Error('Person ist nicht im Spiel.');
    (p.buzzerReleased??={})[key]??={};
@@ -1020,7 +1021,7 @@ export class PeerGame{
    const mode=roundMode(question);
    d.public={...d.public,phase:'question',current:{...clone(pending.current),roundMode:mode},
     answerParticipants:mode==='written'?writtenParticipants(d):null,
-    deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.settings?.manualBuzzer};
+    deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.current?.firstAnswerPending&&!d.public.settings?.manualBuzzer};
   if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
   delete d.pendingQuestion;
   this._changed();return clone(d.public);
@@ -1062,10 +1063,11 @@ export class PeerGame{
   if(d.public.round!==Number(round))throw Error('Das Spielbrett hat sich geändert.');
   if(force!==true&&force!==false)throw Error('Ungültige Rundenfreigabe.');
   const next=advanceBoardState(d.public,{force});
-  if(!next)throw Error('Runde 2 kann nur von der Übersicht aus gestartet werden.');
+  if(!next)throw Error('Das nächste Brett kann nur von der Übersicht aus gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
  async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
+  if(changes?.phase==='reveal'&&d.public?.current?.firstAnswerPending)throw Error('Erst die Erstantwort bewerten.');
   if(changes?.phase==='reveal'&&['question','paused','review','answered'].includes(d.public?.phase)&&
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Ein Buzzer ist noch offen. Zuerst Richtig oder Falsch bestätigen oder den Buzzer zurücksetzen.');
@@ -1162,8 +1164,10 @@ export class PeerGame{
   this._auditScore(d,before,{kind:'manual-person',person:personId,round:d.public.round});this._changed();return clone(result)}
  async score(room,team,delta){const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Team unbekannt.');
   if(!Number.isFinite(Number(delta))||!Number(delta)||Math.abs(Number(delta))>10000)throw Error('Ungültige Punkteänderung.');
-  const before=clone(d.public);d.public.scores[team]=Math.max(-999999,Math.min(999999,(Number(d.public.scores?.[team])||0)+Number(delta)));
-  this._auditScore(d,before,{kind:'manual-team',team,round:d.public.round});this._changed()}
+  const after=(Number(d.public.scores?.[team])||0)+Number(delta);
+  if(!Number.isFinite(after)||Math.abs(after)>999999)throw Error('Punktelimit von ±999.999 überschritten.');
+  const before=clone(d.public);d.public.scores={...(d.public.scores||{}),[team]:after};
+  this._auditScore(d,before,{kind:'manual-team',team,round:d.public.round});this._changed();return after;}
  async judgeWritten(room,round,uid,result){
   const d=this._getHostData(room),p=d.public,key=String(round);
    const entry=p?.answerReview?.entries?.[uid];
@@ -1196,7 +1200,41 @@ export class PeerGame{
    questionId:nextPublic.current.id,verdict:result});
   this._changed();return clone(nextScore);
  }
- async judgeBuzzer(room,round,uid,result,revealPatch=null,{oral=false}={}){
+ async judgeFirstAnswer(room,round,team,result,revealPatch=null){
+   const d=this._getHostData(room),p=d.public,key=String(round);
+   if(Number(p.round)!==Number(round)||!['question','paused'].includes(p.phase)||
+      p.boardRound!==3||p.scoreMode!=='team'||p.current?.roundMode!=='buzzer'||
+      p.current?.firstAnswerPending!==true||p.current.firstAnswerTeam!==team||
+      p.selectionTurn?.order?.[p.selectionTurn.index]!==team||
+      d.buzzers?.[key]||p.buzzerResolved?.[key]||!['correct','wrong'].includes(result))
+    throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
+   if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
+   const before=clone(p),next=clone(p),delta=judgementDelta(p.current.points,result);
+   const total=(Number(next.scores?.[team])||0)+delta,at=Date.now();
+   if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
+   next.scores={...(next.scores||{}),[team]:total};
+   next.current={...next.current,firstAnswerPending:false,firstAnswerResult:result};
+   let finalState=next;
+   if(result==='correct'){
+    if(!revealPatch||revealPatch.phase!=='reveal'||revealPatch.deadline!==0||
+       revealPatch.current?.id!==p.current.id||revealPatch.current?.roundMode!=='buzzer'||
+       !Object.hasOwn(revealPatch.current,'answer'))
+     throw Error('Für die richtige Erstantwort fehlt die vollständige Lösungsfreigabe.');
+    next.buzzerResolved={...(next.buzzerResolved||{}),[key]:{team,uid:'',result,at,firstAnswer:true}};
+    finalState=applyQuestionChanges(next,round,p.current.id,revealPatch,['question','paused']);
+    if(!finalState)throw Error('Erstantwort und Lösung konnten nicht gemeinsam übernommen werden.');
+   }else{
+    next.buzzerArmed=true;
+    next.buzzerBlockedTeams={...(next.buzzerBlockedTeams||{}),
+      [key]:{...(next.buzzerBlockedTeams?.[key]||{}),[team]:{team,name:p.teams[team],at}}};
+    next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid:'',team,result,delta,at,firstAnswer:true}};
+   }
+   d.public=finalState;
+   this._auditScore(d,before,{kind:'balance-first-answer',team,actor:team,round:key,questionId:p.current.id,verdict:result});
+   this._changed();
+   return {delta,team,result};
+  }
+  async judgeBuzzer(room,round,uid,result,revealPatch=null,{oral=false}={}){
    const d=this._getHostData(room),before=clone(d.public),key=String(round);
    let judgedBuzzers=d.buzzers;
    if(oral){
