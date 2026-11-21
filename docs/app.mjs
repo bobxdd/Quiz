@@ -1174,7 +1174,7 @@ function renderFinalResults(host=false){
    ${showNext?btn('Nächsten Platz zeigen','finale-next','primary',`data-step="${step+1}"`):''}
    ${rank?btn('Gesamtrangliste zeigen','finale-all',showNext?'small':'primary'):''}
    ${btn('Quizbrett erneut öffnen','resume-final','small')}${btn('Vollbild','fullscreen','small')}${btn('Endstand exportieren','export-final-results','small')}
-  </div>`:''}</section>`;
+  </div>`:''}${host&&scoreMode(publicState)==='team'?scoreControls():''}</section>`;
 }
 
 const emojiPhases={
