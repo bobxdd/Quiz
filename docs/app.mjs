@@ -900,7 +900,7 @@ function scorePanel(){
  const teamAlreadyJudged=scoreMode(publicState)==='team'&&!!official&&official!==choice?.id;
  const judgeDisabled=teamAlreadyJudged?'disabled title="Pro Team wird nur eine offizielle Antwort je Frage gewertet"':question?'':'disabled';
  return `<section class="glass panel scoring-panel"><div class="panelhead"><h3>${teamMode?'Teams & Antworten':'Teilnehmer & Punkte'}</h3><div class="row"><span class="pill">${people.length}</span>${!teamMode?btn('+ Person','add-person','small'):''}</div></div>
- ${teamMode?`<div class="bq-team-only-scoreboard" aria-label="Ein gemeinsamer Punktestand pro Team"><p class="small muted">Teamwertung: Jedes Team hat genau EINEN Punktestand. Beiträge einzelner Mitglieder zählen nur zur gemeinsamen Teamwertung.</p>${scores()}${!isOffline()?scoreControls():''}</div>`:''}
+ ${teamMode?`<div class="bq-team-only-scoreboard" aria-label="Ein gemeinsamer Punktestand pro Team"><p class="small muted">Teamwertung: Jedes Team hat genau EINEN Punktestand. Beiträge einzelner Mitglieder zählen nur zur gemeinsamen Teamwertung.</p>${scores()}</div>`:''}
  ${people.length?`<div class="score-people">${people.map(p=>`<button type="button" class="score-person ${p.id===scoreTarget?'selected':''} ${locks[p.id]?'is-locked':''}" data-action="select-player" data-person="${e(p.id)}"><span><b>${e(p.name)}</b><small>${e(p.team)}${locks[p.id]?' · Buzzer gesperrt':''}</small></span>${teamMode?'<span class="small muted">Teammitglied</span>':`<strong>${p.points.toLocaleString('de-DE')}</strong>`}</button>`).join('')}</div>`:'<div class="empty">Noch keine Spieler. Im Editor unter „Quiz-Einstellungen“ manuelle Teilnehmer eintragen oder Online-Spieler freigeben.</div>'}
  ${choice?`<div class="score-actions"><div class="small muted">Ausgewählt: ${e(choice.name)}${locks[choice.id]?' · aktuell für diese Frage gesperrt':''}</div><div class="row">${roundMode(question)==='written'?`${teamAlreadyJudged?'<span class="small muted">Eine andere Person dieses Teams wurde bereits offiziell bewertet.</span>':''}${btn('Richtig · +'+pts,'judge-correct','primary',judgeDisabled)}${btn('Falsch · −'+(pts/2),'judge-wrong','danger',judgeDisabled)}`:'<p class="small muted">Buzzer direkt in der Hauptleiste bewerten.</p>'}${btn('Buzzer freigeben','unlock-buzz-player','small',locks[choice.id]?'':'disabled')}</div>${teamMode?'<p class="small muted">Manuelle Punktekorrekturen erfolgen ausschließlich beim gemeinsamen Teampunktestand oben.</p>':`<div class="manual-points"><label class="field">Punkte manuell ändern<input id="person-adjust" type="number" step="0.5" min="-10000" max="10000" value="50"></label>${btn('Hinzufügen / Abziehen','adjust-player','small')}</div>`}<div class="small muted">Bei „Falsch“ verliert der aktuelle Buzzer automatisch die Hälfte der Fragepunkte. Danach wird der Buzzer wieder freigegeben; dieselbe Person bleibt bis zur manuellen Freigabe gesperrt.</div></div>`:''}</section>`;
 }
@@ -954,7 +954,7 @@ function sessionFooter(){
  const unit=scoreMode(publicState)==='team'?'Teams':'Personen';
  return `<footer class="bq-score-footer" aria-label="Aktueller Punktestand"><div class="bq-score-heading"><strong>Punktestand</strong><span>${list.length?list.length+' '+unit:'Noch keine '+unit}</span>${pages>1?`<div class="bq-score-pager"><button type="button" data-action="score-page" data-delta="-1" aria-label="Vorherige Punktestände" ${scorePage===0?'disabled':''}>‹</button><span aria-live="polite">${scorePage+1}/${pages}</span><button type="button" data-action="score-page" data-delta="1" aria-label="Weitere Punktestände" ${scorePage===pages-1?'disabled':''}>›</button></div>`:''}</div>
  <div class="bq-score-items">${visible.length?visible.map(p=>`<span class="bq-score-item" title="${e(p.label)}: ${Number(p.points).toLocaleString('de-DE')} Punkte"><span>${e(p.label)}</span><b>${Number(p.points).toLocaleString('de-DE')}</b></span>`).join(''):'<span class="muted">–</span>'}</div>
- </footer>`;
+ </footer>${canHost()&&scoreMode(publicState)==='team'?scoreControls():''}`;
 }
 function boardScene(host=false){
  const p=publicState;
@@ -1050,7 +1050,16 @@ function renderStage(readOnly=false,previewQuestion=null){let q=previewQuestion|
  if(q.type==='splash'&&!showAnswer)html+=`<p class="small muted">Bildstufe ${Number(q.visualStep||0)+1} von 3 · Der Originalausschnitt bleibt bis zur Auflösung beim Host.</p>`;
  html+=showAnswer?'</section></div>':'</div>';return html;}
 function scores(){const teams=Object.entries(publicState?.teams||{}).sort((a,b)=>(publicState?.scores?.[b[0]]||0)-(publicState?.scores?.[a[0]]||0));return teams.map(([id,label])=>`<div class="scoreline"><span class="team"><span class="marker" style="background:${teamColor(id)}"></span><span>${e(label)}</span></span><b>${Number(publicState?.scores?.[id]||0).toLocaleString('de-DE')}</b></div>`).join('')||'<div class="empty">Keine Teams</div>';}
-function scoreControls(){const pts=activeQuestion()?.points??100;return Object.entries(publicState?.teams||{}).map(([id,label])=>`<div class="scoreline"><b>${e(label)}</b><div class="row">${btn('−'+pts,'score','small danger',`data-team="${id}" data-amount="-${pts}"`)}${btn('+'+pts,'score','small primary',`data-team="${id}" data-amount="${pts}"`)}</div></div>`).join('');}
+function scoreControls(){
+ const teams=Object.entries(publicState?.teams||{});
+ return `<details class="bq-host-manual-score bq-auxiliary" data-bq-persist="manual-score">
+  <summary>✎ Punkte manuell hinzufügen / abziehen</summary>
+  <div class="bq-manual-score-form"><label class="field">Team<select id="manual-score-team">${teams.map(([id,name])=>`<option value="${e(id)}">${e(name)}</option>`).join('')}</select></label>
+  <label class="field">Punkte (+ oder −)<input id="manual-score-amount" type="number" step="0.5" min="-10000" max="10000" value="100" aria-label="Punktekorrektur" /></label>
+  ${btn('Punkte buchen','score-team-custom','small primary')}</div>
+  <p class="small muted">Auch während einer Frage möglich. Beispiel: +100 oder -50. Im Online-Spiel mit Punkteprotokoll und Rückgängig.</p>
+ </details>`;
+}
 function buzzerStatus(){const b=winner(),locks=Object.values(buzzLocks()),teamLocks=Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{});return `<div class="buzzerbox"><div class="sub">BUZZER / SERVERENTSCHEIDUNG</div>${b?`<h2 style="margin:16px 0 4px">◉ ${e(b.name)}</h2><p>${e(teamName(b.team))} ist zuerst eingegangen und darf antworten.</p>`:`<h2 style="margin:16px 0 4px">○ Noch kein Buzzer</h2><p>${isOpen()?'Frage läuft, Buzzer ist für alle freigegeben.':'Buzzer derzeit nicht aktiv.'}</p>`}<p class="small muted">Gesperrt für diese Runde: ${locks.length?locks.map(x=>e(x.name||x.uid||'Spieler')).join(' · '):'niemand'}${teamLocks.length?' · Teams: '+teamLocks.map(id=>e(teamName(id))).join(', '):''}</p>${canHost()?`<div class="row">${btn('Buzzer zurücksetzen','reset-buzz','small',b?'':'disabled')}${btn('Alle Sperren lösen','unlock-buzz-all','small',locks.length?'':'disabled')}</div>`:''}</div>`;}
 function hostVisibilityCard(){const b=winner(),locks=Object.values(buzzLocks()),covered=buzzerCoverActive(publicState,buzzers);return `<section class="glass panel bq-host-visibility"><div class="panelhead"><h3>Zuschauerzustand</h3><span class="pill good">${e(covered?'Frage verdeckt':viewerStateLabel())}</span></div><div class="bq-visibility-grid"><div><div class="sub">Sichtbar für Zuschauer</div><strong>${e(publicState?.phase==='board'?'Quizbrett':publicState?.phase==='review'?'Antwortübersicht':covered||publicState?.phase==='ready'?'Verdeckte Frage':hasLiveQuestion()?'Aktuelle Frage':'Warteansicht')}</strong><p class="small muted">${publicState?.phase==='reveal'?'Die Lösung ist sichtbar.':covered?'Die Frage ist bis zur Buzzerbewertung verdeckt.':publicState?.phase==='question'?'Die Frage ist geöffnet, die Lösung noch verborgen.':publicState?.phase==='review'?'Nur die freigegebenen Antworten sind sichtbar.':'Noch keine offene Frage.'}</p></div><div><div class="sub">Buzzerstatus</div><strong>${b?e(b.name)+' · '+e(teamName(b.team)):'Noch frei'}</strong><p class="small muted">${locks.length?locks.length+' gesperrt in dieser Runde':'Niemand gesperrt in dieser Runde'}</p></div></div></section>`;}
 function toleranceText(q,tolerance){
@@ -1109,7 +1118,7 @@ function buzzerReleaseControls(){
 }
 function oralBuzzerControls(){
  const people=Object.entries(roster||{});
- if(isOffline()||winner()||!people.length||!['question','paused'].includes(publicState.phase)||
+ if(isOffline()||winner()||publicState.current?.firstAnswerPending||!people.length||!['question','paused'].includes(publicState.phase)||
     roundMode(activeQuestion())!=='buzzer'||publicState.buzzerResolved?.[roundKey()])return '';
  return `<details class="bq-inline-controls" data-bq-persist="oral-grading"><summary>Antwort ohne Buzzer bewerten</summary>
   <div class="row"><label class="field">Person<select id="oral-person">${people.map(([id,p])=>`<option value="${e(id)}" ${scoreTarget===id?'selected':''}>${e(p.name)} · ${e(teamName(p.team))}</option>`).join('')}</select></label>
@@ -1117,6 +1126,13 @@ function oralBuzzerControls(){
 }
 function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=publicState?.buzzerResolved?.[roundKey()];
  if(q?.type==='map')return '';
+ if(q?.firstAnswerPending){
+  const team=teamName(q.firstAnswerTeam);
+  return `<div class="bq-buzzer-winner bq-first-answer" role="status">
+   <div><span>AUSGLEICHS-BOARD · ERSTANTWORT</span><strong>${e(team)}</strong><small>Dieses Team darf zuerst antworten. Der Host bewertet die Antwort. Bei „Falsch“ werden die anderen Teams zum Buzzern freigegeben.</small></div>
+   <div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'first-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'first-wrong','danger')}</div>
+  </div>`;
+ }
  const players=Object.entries(roster||{});
  const noBuzzerRights=players.length>0&&players.every(([uid,p])=>buzzerLocked(publicState,uid,p.team));
  if(roundMode(q)==='written')return `<div class="bq-host-main-status">✍️ Alle Teilnehmer schreiben selbst. ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).submitted} von ${answerProgress(publicState?.answerParticipants,responses?.[roundKey()]).total} Antworten eingegangen.</div>`;
