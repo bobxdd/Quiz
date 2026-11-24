@@ -876,12 +876,12 @@ function renderBoard(readOnly=false){
  const hostCanSelect=canHost();
  return `<div class="bq-board-full" aria-label="Fragenübersicht">
  <div class="board-scroll"><div class="board jeopardy-board ${page.rows<4?'bq-board-sparse':''}" style="--board-cols:${page.columns.length};--board-rows:${page.rows}">${page.columns.map(col=>`<div class="column"><div class="coltitle" title="${e(col.category)}">${e(col.category)}</div>${col.items.map(q=>{
- const used=isBoardCellPlayed(q,publicState),points=used?Number(q.points):boardQuestionPoints(publicState,q);
+ const used=isBoardCellPlayed(q,publicState),rerollBlocked=!used&&publicState?.jokerRerollExclude===q.id,points=used?Number(q.points):boardQuestionPoints(publicState,q);
  const doubled=!used&&points===Number(q.points)*2&&finalSixActive(publicState);
  const bonusText=doubled?' · doppelte Punkte (×2)':'';
  if(readOnly)return `<div class="tile ${used?'used is-played':''} ${doubled?'bq-double-points':''}" aria-label="${e(points)} Punkte${bonusText}${used?', bereits gespielt':''}"><span class="tile-points">${used?'✓':e(points)}</span></div>`;
  if(!hostCanSelect)return `<div class="tile bq-tile-view-only ${used?'used is-played':''} ${doubled?'bq-double-points':''}" aria-label="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?', bereits gespielt':', Auswahl durch den Host'}"><span class="tile-points">${used?'✓':e(points)}</span></div>`;
-  return `<button type="button" class="tile ${used?'used is-played':''} ${doubled?'bq-double-points':''}" data-action="open" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gespielt':''}" aria-label="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gespielt':''}" ${used?'disabled':''}><span class="tile-points">${used?'✓':e(points)}</span></button>`;
+  return `<button type="button" class="tile ${used?'used is-played':''} ${doubled?'bq-double-points':''}" data-action="open" data-qid="${e(q.id)}" title="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gespielt':rerollBlocked?' · gerade rerollt':''}" aria-label="${e(col.category)} · ${e(points)} Punkte${bonusText}${used?' · bereits gespielt':rerollBlocked?' · gerade rerollt':''}" ${used||rerollBlocked?'disabled':''}><span class="tile-points">${used?'✓':e(points)}</span></button>`;
  }).join('')}</div>`).join('')}</div></div>
  ${pages.length>1?`<nav class="bq-board-pages" aria-label="Weitere Fragen anzeigen">${btn('← Zurück','board-page','small',boardPage<=0?'disabled':'data-delta="-1"')}<span class="small muted">Seite ${Math.min(boardPage+1,pages.length)} / ${pages.length}</span>${btn('Weiter →','board-page','small',boardPage>=pages.length-1?'disabled':'data-delta="1"')}</nav>`:''}
  </div>`;
