@@ -121,3 +121,24 @@ test('Chronobreak is only for the current winning buzzer and blocks grading for 
  assert.equal(g.hostChronoAnswer(room,1),'Neue Antwort');
  assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/Aufladung/);
 });
+
+test('game reset removes previous private hints and corrections before round numbers are reused',async()=>{
+ const g=fixture();opened(g);
+ g.data.jokerPrivateHints={'1':{t1:'old private hint'}};
+ g.data.chronoCorrections={'1':'old answer'};
+ g._scheduleTeamEmojiDeadline=()=>{};
+ await g.clearRoomEvents(room);
+ assert.deepEqual(g.data.jokerPrivateHints,{});
+ assert.deepEqual(g.data.chronoCorrections,{});
+ assert.ok(Object.keys(g.data.jokerDrops).length>0);
+});
+test('active Chronobreak prevents bypass through the buzzer reset endpoint',async()=>{
+ const g=fixture();opened(g);
+ g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
+ g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1});
+ await assert.rejects(g.clearBuzzer(room,1),/Chronobreak/);
+ assert.equal(g.data.buzzers['1'].uid,'alice');
+ g.data.public.chronoBreak.until=Date.now()-1;
+ await g.clearBuzzer(room,1);
+ assert.equal(g.data.buzzers['1'],undefined);
+});
