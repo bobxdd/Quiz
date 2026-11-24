@@ -18,10 +18,8 @@ async def join(ctx,host,room,name,team):
  await page.locator('#join-room').fill(room)
  await page.locator('#join-name').fill(name)
  await page.locator('#join-form button[type="submit"]').click()
- await page.locator('.bq-lobby-notice').wait_for(timeout=15000)
- uid=await host.evaluate("(name)=>Object.entries(window.__probe.getGame().data.members).find(([,m])=>m.name===name)[0]",name)
- await host.locator('#team-'+uid).select_option(team)
- await host.locator('[data-action="approve"][data-uid="'+uid+'"]').click()
+ await page.locator('[data-action="lobby-join"][data-team="'+team+'"]').click()
+ await host.locator('.bq-host-join-request').filter(has_text=name).locator('[data-action="approve"]').click()
  await page.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=15000)
  return page
 
@@ -31,6 +29,7 @@ async def main():
   ctx=await browser.new_context(viewport={'width':1366,'height':850},reduced_motion='reduce')
   errors=[]
   host=await ctx.new_page();host.on('pageerror',lambda e:errors.append('host '+str(e)))
+  host.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
   await fixture.install(host)
   await host.locator('.bq-legacy-options>summary').click()
   await host.get_by_role('button',name='Online-Raum erstellen').click()
@@ -48,7 +47,9 @@ async def main():
   bob=await join(ctx,host,room,'Bob','t2')
   alice.on('pageerror',lambda e:errors.append('alice '+str(e)))
   bob.on('pageerror',lambda e:errors.append('bob '+str(e)))
-  await host.locator('.top-nav [data-view="live"]').click()
+  await host.locator('[data-action="start-game"]').click()
+  await expect(host.locator('.bq-board-scene')).to_be_visible()
+  await host.wait_for_function('()=>window.__probe.info().publicState.started===true')
   for page in (host,alice,bob):
    await expect(page.locator('.bq-joker-panel')).to_have_count(1,timeout=15000)
    await expect(page.locator('.bq-joker-token')).to_have_count(8)
@@ -64,7 +65,7 @@ async def main():
   await expect(host.locator('.bq-board-scene')).to_be_visible()
   await expect(host.locator('[data-action="open"][data-qid="a"]')).to_be_disabled()
   await expect(host.locator('[data-action="open"][data-qid="b"]')).to_be_enabled()
-  assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.reroll")==0
+  await alice.wait_for_function("()=>window.__probe.info().publicState.jokers.t1.reroll===0")
   print('PASS: covered question rerolls via host approval; no early drop disclosure',flush=True)
 
   # Reveal guarantees one of the four secret drops, but only after uncovering.
@@ -82,11 +83,13 @@ async def main():
   # The protective Joker is armed first, charged only when the wrong answer is judged.
   await alice.locator('[data-action="joker-use"][data-type="shield"]').click()
   await alice.locator('[data-action="buzz"]').click()
+  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Alice')
   await host.locator('[data-action="buzz-wrong"]').click()
   await alice.wait_for_function("()=>window.__probe.info().publicState?.jokers?.t1?.shield===0",timeout=15000)
   assert await host.evaluate("window.__probe.info().publicState.scores.t1")==0
   await expect(bob.locator('[data-action="buzz"]')).to_be_enabled(timeout=15000)
   await bob.locator('[data-action="buzz"]').click()
+  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Bob')
   await host.locator('[data-action="buzz-correct"]').click()
   await expect(host.locator('.bq-joker-event')).to_contain_text('Aufladung erhalten',timeout=15000)
   assert await host.evaluate("window.__probe.info().publicState.jokerEvent.team")=='t2'
@@ -105,6 +108,7 @@ async def main():
   await alice.locator('[data-action="joker-chrono-answer"]').click()
   await host.wait_for_function("()=>window.__probe.getGame().hostChronoAnswer(window.__probe.room(),3)==='Korrigierte Antwort'",timeout=15000)
   await expect(host.locator('.bq-chrono-overlay')).to_have_count(0,timeout=15000)
+  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Korrigierte Antwort',timeout=15000)
   assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.chrono")==0
   assert not errors,errors
   await ctx.close();await browser.close()
