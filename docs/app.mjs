@@ -987,7 +987,7 @@ function chronoOverlay(){
  const isHost=canHost(),actor=role==='guest'&&game?.uid===event.uid,corrected=isHost&&!isOffline()?game?.hostChronoAnswer(room,event.round):'';
  return '<section class="bq-chrono-overlay '+(isHost?'is-host-lock':'is-notice')+'" role="status" aria-live="polite"><div class="bq-chrono-card"><strong>⏪ CHRONOBREAK</strong><p>'+e(event.name)+' · '+e(teamName(event.team))+' darf seine Antwort korrigieren.</p><b data-chrono-seconds>8</b><small>Sekunden verbleibend · Host-Bewertung gesperrt</small>'+
   (isHost?'<p class="bq-chrono-correction">'+(corrected?'Korrigierte Antwort: '+e(corrected):'Warte auf die Korrektur …')+'</p>':'')+
-  (actor?'<form id="chrono-correction-form"><label class="field">Korrigierte Antwort<input id="chrono-correction" maxlength="160" placeholder="Neue Antwort eingeben"></label>'+btn('Neue Antwort senden','joker-chrono-answer','primary')+'</form>':'')+'</div></section>';
+  (actor?'<div id="chrono-correction-form"><label class="field">Korrigierte Antwort<input id="chrono-correction" maxlength="160" placeholder="Neue Antwort eingeben"></label>'+btn('Neue Antwort senden','joker-chrono-answer','primary')+'</div>':'')+'</div></section>';
 }
 
 function sessionFooter(){
