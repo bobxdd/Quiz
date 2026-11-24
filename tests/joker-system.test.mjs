@@ -56,7 +56,7 @@ test('settings are backwards compatible and each configured type uses at most tw
  const fields=placeJokerDrops(quiz,()=>0);
  assert.equal(Object.keys(fields).length,4,'not more than number of ordinary questions');
  assert.equal(Object.hasOwn(fields,'e'),false,'balance board never contains drops');
- assert.deepEqual(JOKER_TYPES.sort?.()||[],JOKER_TYPES);
+ assert.equal(JOKER_TYPES.length,4);
 });
 test('starter stock, cap and one-time drop awards',()=>{
  let p=fixture().data.public;
