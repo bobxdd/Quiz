@@ -877,6 +877,7 @@ export class PeerGame{
     this._syncTeamEmoji();
     return true;
    }
+   case 'joker':return this._handleGuestJoker(ctx,member,payload,now);
    case 'pick':throw Error('Nur der Host darf Fragen auswählen.');
    case 'buzz':{
     if(round!==String(payload.round))throw Error('Die Buzzer-Runde ist nicht mehr offen.');
@@ -905,6 +906,71 @@ export class PeerGame{
    default:throw Error('Aktion nicht erlaubt.');
   }
  }
+ _handleGuestJoker(ctx,member,payload,at){
+  const d=this.data,p=d.public,team=member.team,type=payload?.type,round=Number(payload?.round);
+  if(p.scoreMode!=='team'||p.jokerConfig?.enabled!==true||round!==p.round||
+     !Object.hasOwn(p.teams||{},team))throw Error('Joker sind in dieser Runde nicht verfügbar.');
+  if(type==='chrono-answer'){
+   if(!activeChronobreak(p,at)||p.chronoBreak.uid!==ctx.uid)throw Error('Chronobreak ist nicht mehr aktiv.');
+   const value=safeText(payload.text,160);
+   if(!value)throw Error('Bitte eine korrigierte Antwort eingeben.');
+   d.chronoCorrections??={};d.chronoCorrections[String(round)]=value;
+   return true;
+  }
+  if(!JOKER_TYPES.includes(type)||jokerCount(p,team,type)<=0)throw Error('Für diesen Joker ist keine Aufladung verfügbar.');
+  if(type==='reroll'){
+   if(p.phase!=='ready'||!p.current?.id||selectingTeam(p)!==team||p.jokerRerollRequest)
+    throw Error('Reroll nur vor dem Aufdecken für das auswählende Team verfügbar.');
+   p.jokerRerollRequest={round,id:p.current.id,team,uid:ctx.uid,name:member.name};
+   return true;
+  }
+  if(type==='shield'){
+   if(!['question','review'].includes(p.phase)||!p.current?.id||p.jokerShields?.[team]===round)
+    throw Error('Schutz kann für diese Frage nicht mehr aktiviert werden.');
+   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   p.jokerShields={...(p.jokerShields||{}),[team]:round};
+  }else if(type==='oracle'){
+   if(p.phase!=='question'||!p.current?.id)throw Error('Der Hinweis ist nur während einer offenen Frage verfügbar.');
+   if(d.jokerPrivateHints?.[String(round)]?.[team])throw Error('Das Team hat den Orakel-Hinweis schon erhalten.');
+   const source=this.hostQuiz?.questions.find(q=>q.id===p.current.id);
+   const hint=String(source?.oracleHint||source?.hints?.find(h=>String(h||'').trim())||'').trim().slice(0,220);
+   if(!hint)throw Error('Der Host hat für diese Frage noch keinen Orakel-Hinweis hinterlegt.');
+   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   d.jokerPrivateHints??={};d.jokerPrivateHints[String(round)]??={};d.jokerPrivateHints[String(round)][team]=hint;
+  }else if(type==='chrono'){
+   const buzz=d.buzzers?.[String(round)];
+   if(p.phase!=='question'||roundMode(p.current)!=='buzzer'||!buzz||buzz.uid!==ctx.uid||
+      p.current?.firstAnswerPending||p.buzzerResolved?.[String(round)]||p.chronoBreak?.round===round)
+    throw Error('Chronobreak ist nur für die Person möglich, die gerade gebuzzert hat.');
+   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   p.chronoBreak={round,uid:ctx.uid,team,name:member.name,until:at+CHRONOBREAK_MS};
+   if(p.deadline)p.deadline+=CHRONOBREAK_MS;
+  }
+  p.jokerNotice={round,team,type,at};
+  return true;
+ }
+ async guestJoker(room,type,extra={}){this._ensureGuest(room);return this._rpc('joker',{type,round:Number(this.guestData?.public?.round||0),...extra});}
+ async hostAdjustJoker(room,team,type,delta){
+  const d=this._getHostData(room),p=d.public;
+  if(!p.jokerConfig?.enabled)throw Error('Joker sind nicht aktiviert.');
+  const next=changeJokerCharge(p,team,type,delta);
+  if(!next)throw Error('Jokerstand muss zwischen 0 und 3 liegen.');
+  d.public=next;this._changed();return next.jokers[team][type];
+ }
+ async hostResolveReroll(room,accept){
+  const d=this._getHostData(room),p=d.public,request=p.jokerRerollRequest;
+  if(p.phase!=='ready'||!request||request.id!==p.current?.id||request.round!==p.round)
+   throw Error('Es gibt keine aktuelle Reroll-Anfrage.');
+  if(accept!==true){p.jokerRerollRequest=null;this._changed();return false;}
+  const charged=changeJokerCharge(p,request.team,'reroll',-1);
+  if(!charged)throw Error('Reroll-Aufladung nicht verfügbar.');
+  const next=cancelQuestionState(charged);
+  if(!next)throw Error('Frage konnte nicht zurückgelegt werden.');
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerShields:{},chronoBreak:null};
+  delete d.pendingQuestion;delete d.teamEmoji;delete d.questionHistory[String(request.round)];
+  d.picks={};this._changed();return true;
+ }
+ hostChronoAnswer(room,round){const d=this._getHostData(room);return String(d.chronoCorrections?.[String(round)]||'');}
  _sendRequest(pending){try{this.conn.send(pending.packet);}catch{this._guestLost();}}
  _rpc(action,payload={}){
   const key=JSON.stringify([action,payload]);
