@@ -1187,7 +1187,9 @@ export class PeerGame{
    const question=this.hostQuiz?.questions.find(item=>item.id===p.current.id);
    p.current=question?{...publicQuestion(question,true),points:p.current.points,basePoints:p.current.basePoints,doublePoints:p.current.doublePoints}:{...p.current,answerText:round.target};
    p.phase='reveal';
-   const entry=d.questionHistory?.[String(p.round)];
+    const earningTeam=round.results.find(row=>Number(row.points)>0)?.id;
+    if(earningTeam)d.public=awardJokerForCorrectAnswer(p,earningTeam);
+    const entry=d.questionHistory?.[String(p.round)];
    if(entry)entry.emojiResults=round.results.map(result=>({...result,name:p.teams[result.id]}));
   }
   this._syncTeamEmoji();
@@ -1210,7 +1212,8 @@ export class PeerGame{
   const before=clone(p),points=verdict==='correct'?round.points:0;
   p.scores[team]=(Number(p.scores[team])||0)+points-row.points;
   row.status=verdict;row.points=points;
-  this._auditScore(d,before,{kind:TEAM_EMOJI,team,round:p.round,questionId:p.current.id});
+   if(verdict==='correct')d.public=awardJokerForCorrectAnswer(p,team);
+   this._auditScore(d,before,{kind:TEAM_EMOJI,team,round:p.round,questionId:p.current.id});
   const entry=d.questionHistory?.[String(p.round)];
   if(entry)entry.emojiResults=round.results.map(result=>({...result,name:p.teams[result.id]}));
   this._syncTeamEmoji();this._changed();
@@ -1269,6 +1272,10 @@ export class PeerGame{
   const nextScore=updatePlayerScore(nextPublic.playerScores?.[uid],{
    kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()
   });
+  if(teamMode&&result==='wrong'&&shieldApplies(p,team)){
+   const blocked=Number(nextScore.rounds[key].delta)||0;
+   nextScore.rounds[key].delta=0;nextScore.total-=blocked;
+  }
   nextPublic.playerScores={...(nextPublic.playerScores||{}),[uid]:nextScore};
   if(teamMode){
    nextPublic.writtenTeamRepresentatives={...(nextPublic.writtenTeamRepresentatives||{}),
@@ -1276,7 +1283,7 @@ export class PeerGame{
    nextPublic.scores={...(nextPublic.scores||{}),
     [team]:(Number(nextPublic.scores?.[team])||0)+(Number(nextScore.rounds[key].delta)||0)-previous};
   }
-  d.public=nextPublic;
+  d.public=result==='correct'&&teamMode?awardJokerForCorrectAnswer(nextPublic,team):nextPublic;
   this._auditScore(d,before,{kind:'written-judgement',person:uid,team,round:key,
    questionId:nextPublic.current.id,verdict:result});
   this._changed();return clone(nextScore);
@@ -1290,7 +1297,7 @@ export class PeerGame{
       d.buzzers?.[key]||p.buzzerResolved?.[key]||!['correct','wrong'].includes(result))
     throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
    if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
-   const before=clone(p),next=clone(p),delta=judgementDelta(p.current.points,result);
+   const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
    const total=(Number(next.scores?.[team])||0)+delta,at=Date.now();
    if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
    next.scores={...(next.scores||{}),[team]:total};
@@ -1310,13 +1317,14 @@ export class PeerGame{
       [key]:{...(next.buzzerBlockedTeams?.[key]||{}),[team]:{team,name:p.teams[team],at}}};
     next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid:'',team,result,delta,at,firstAnswer:true}};
    }
-   d.public=finalState;
+   d.public=result==='correct'?awardJokerForCorrectAnswer(finalState,team):finalState;
    this._auditScore(d,before,{kind:'balance-first-answer',team,actor:team,round:key,questionId:p.current.id,verdict:result});
    this._changed();
    return {delta,team,result};
   }
   async judgeBuzzer(room,round,uid,result,revealPatch=null,{oral=false}={}){
    const d=this._getHostData(room),before=clone(d.public),key=String(round);
+   if(activeChronobreak(d.public))throw Error('Chronobreak läuft: erst nach dem Countdown bewerten.');
    let judgedBuzzers=d.buzzers;
    if(oral){
     const person=d.roster?.[uid];
@@ -1337,7 +1345,7 @@ export class PeerGame{
     finalState=applyQuestionChanges(next.state,round,d.public.current.id,revealPatch,['question','paused']);
    if(!finalState)throw Error('Lösung und Punkte konnten nicht gemeinsam übernommen werden.');
   }
-  d.public=finalState;d.buzzers=next.buzzers;
+  d.public=result==='correct'?awardJokerForCorrectAnswer(finalState,next.winner.team):finalState;d.buzzers=next.buzzers;
   this._auditScore(d,before,{kind:'buzzer-judgement',team:d.public.scoreMode==='individual'?'':next.winner.team,
     person:d.public.scoreMode==='individual'?uid:'',actor:uid,round,questionId:d.public.current?.id||'',verdict:result});
   this._changed();
