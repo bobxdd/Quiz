@@ -103,7 +103,7 @@ export function skipSelectionTurn(state){
 }
 export function validQuestionPair(state,question){
   const id=question?.id;
-  if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id))return false;
+  if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id)||state?.jokerRerollExclude===id)return false;
   const cell=state.board[id];
   return !!cell&&boardRound(cell)===boardRound(state)&&boardRound(question)===boardRound(state)&&cell.category===question.category&&Number(cell.points)===Number(question.points)&&!cell.used&&!state?.used?.[id];
 }
