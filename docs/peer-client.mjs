@@ -919,7 +919,8 @@ export class PeerGame{
   }
   if(!JOKER_TYPES.includes(type)||jokerCount(p,team,type)<=0)throw Error('Für diesen Joker ist keine Aufladung verfügbar.');
   if(type==='reroll'){
-   if(p.phase!=='ready'||!p.current?.id||selectingTeam(p)!==team||p.jokerRerollRequest)
+   if(p.phase!=='ready'||!p.current?.id||selectingTeam(p)!==team||p.jokerRerollRequest||
+      !Object.values(p.board||{}).some(cell=>cell.id!==p.current.id&&cell.boardRound===p.boardRound&&!cell.used&&!p.used?.[cell.id]))
     throw Error('Reroll nur vor dem Aufdecken für das auswählende Team verfügbar.');
    p.jokerRerollRequest={round,id:p.current.id,team,uid:ctx.uid,name:member.name};
    return true;
@@ -966,7 +967,7 @@ export class PeerGame{
   if(!charged)throw Error('Reroll-Aufladung nicht verfügbar.');
   const next=cancelQuestionState(charged);
   if(!next)throw Error('Frage konnte nicht zurückgelegt werden.');
-  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerShields:{},chronoBreak:null};
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerRerollExclude:request.id,jokerShields:{},chronoBreak:null};
   delete d.pendingQuestion;delete d.teamEmoji;delete d.questionHistory[String(request.round)];
   d.picks={};this._changed();return true;
  }
@@ -1053,7 +1054,7 @@ export class PeerGame{
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
    participants:expected,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
-  d.public={...next,jokerEvent:null,jokerRerollRequest:null,chronoBreak:null,jokerShields:{}};
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,jokerShields:{}};
   if(emoji)emoji.points=next.current.points;
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
