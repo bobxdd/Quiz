@@ -1244,7 +1244,7 @@ function readyQuestionContent(host){
   <p class="bq-eyebrow">RUNDE ${boardRoundOf(publicState)}</p><h2>${e(q.category)} · ${e(q.points)} Punkte</h2>
   <p>${host?'Nur für dich sichtbar. Lies die Frage vor und decke sie dann für alle auf.':'Die Frage ist ausgewählt. Der Host deckt sie für alle auf.'}</p>
   ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control')}${btn('Zurück zur Übersicht','back','small')}${isTeamChallenge(q.type)?'':`<label class="field">Antwortzeit in Sekunden (0 = aus)<input id="ready-time" type="number" min="0" max="${MAX_QUESTION_SECONDS}" step="1" value="${questionSeconds(quiz.questions.find(item=>item.id===q.id)?.seconds)}"></label>`}</div>`:''}
- </section>${preview?.id===q.id?`<section class="glass panel bq-question-panel bq-private-preview" aria-label="Fragenvorschau nur für den Host"><div class="bq-scene-content">${renderStage(true,preview)}</div></section>${hostPrivateSolution()}`:''}`;
+ ${host&&publicState?.jokerRerollRequest?`<div class="bq-reroll-request" role="status"><strong>↻ Reroll angefragt · ${e(teamName(publicState.jokerRerollRequest.team))}</strong><p>Frage ungespielt zurücklegen und eine andere wählen?</p><div class="row">${btn('Reroll annehmen','joker-reroll-accept','primary')}${btn('Ablehnen','joker-reroll-reject','small')}</div></div>`:''}</section>${preview?.id===q.id?`<section class="glass panel bq-question-panel bq-private-preview" aria-label="Fragenvorschau nur für den Host"><div class="bq-scene-content">${renderStage(true,preview)}</div></section>${hostPrivateSolution()}`:''}`;
 }
 function readyQuestionScene(){
  return `<section class="bq-session-scene bq-ready-scene" data-scene="ready">${readyQuestionContent(canHost())}${sessionFooter()}</section>`;
@@ -2107,6 +2107,10 @@ const studio=createStudioEditor({
 });
 async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(action))throw Error('Das veröffentlichte Quiz ist gesperrt. Erstelle für weitere Fragen ein neues Quiz.');switch(action){
  case 'uncover-question':await uncoverSelectedQuestion();return;
+ case 'joker-use':{if(canHost()||role!=='guest'||!connected)return;const type=button.dataset.type;if(!JOKER_TYPES.includes(type))return;await sendGuestAction('Joker',()=>game.guestJoker(room,type));notice(JOKER_META[type].name+' eingesetzt oder angefragt.');return;}
+ case 'joker-chrono-answer':{if(canHost()||role!=='guest')return;const answer=String($('chrono-correction')?.value||'').trim();if(!answer)throw Error('Bitte eine neue Antwort eingeben.');await sendGuestAction('Antwortkorrektur',()=>game.guestJoker(room,'chrono-answer',{text:answer}));notice('Antwortkorrektur an den Host gesendet.');return;}
+ case 'joker-reroll-accept':case 'joker-reroll-reject':{if(!canHost()||isOffline())return;await game.hostResolveReroll(room,action==='joker-reroll-accept');notice(action==='joker-reroll-accept'?'Reroll eingelöst: anderes Fragefeld auswählen.':'Reroll abgelehnt, Frage bleibt geöffnet.');return;}
+ case 'host-joker-adjust':{if(!canHost()||isOffline())return;await game.hostAdjustJoker(room,button.dataset.team,button.dataset.type,Number(button.dataset.delta));return;}
  case 'next-board':case 'skip-board':{
   const early=action==='skip-board';
   if(!canHost()||!canAdvanceBoard(publicState,{force:early}))return;
@@ -2508,6 +2512,11 @@ async function doAction(action,button){if(isPublished()&&editorOnlyActions.has(a
  case 'resume-round':if(isOffline()){publicState.deadline=publicState.pausedRemaining?now()+publicState.pausedRemaining:0;publicState.pausedRemaining=0;publicState.phase='question';schedule();}else await hostResume();return;
  case 'back':{
   if(!canHost()||!activeQuestion())return;
+  if(publicState.phase==='ready'){
+   if(isOffline()){publicState=cancelQuestionState(publicState)||publicState;saveOfflineSession();schedule();}
+   else await game.cancelQuestion(room,Number(publicState.round),activeQuestion().id);
+   notice('Frage ungespielt zurückgelegt. Jetzt eine andere Frage wählen.');return;
+  }
   if(activeQuestion()?.firstAnswerPending)throw Error('Das auswählende Team muss zuerst antworten und bewertet werden. Nutze Ungespielt zurücklegen, falls die Frage abgebrochen werden soll.');
    if(winner()&&!publicState.buzzerResolved?.[roundKey()])throw Error('Offener Buzzer: zuerst richtig oder falsch bewerten oder den Buzzer zurücksetzen.');
   const changed=publicState.phase!=='reveal';
@@ -2690,6 +2699,12 @@ function updateBuzzerAnnouncement(){
 }
 function tickLiveState(){
  updateClock();
+ const chronoTimer=document.querySelector('[data-chrono-seconds]');
+ if(chronoTimer&&publicState?.chronoBreak){
+  const remaining=Math.max(0,Math.ceil((publicState.chronoBreak.until-now())/1000));
+  chronoTimer.textContent=String(remaining);
+  if(!remaining)schedule();
+ }
  updateBuzzerAnnouncement();
  const p=publicState;
  const expired=p?.phase==='question'&&p.deadline&&now()>=p.deadline?`${room}:${p.round}:${p.deadline}`:'';
