@@ -3,7 +3,7 @@
 export const JOKER_TYPES=Object.freeze(['shield','oracle','reroll','chrono']);
 export const JOKER_META=Object.freeze({
  shield:{name:'Banshees Schleier',symbol:'🛡',description:'Einmal keinen Punktabzug für eine falsche Buzzer-Antwort.'},
- oracle:{name:'Oracle Lens',symbol:'◉',description:'Einen privaten, vorbereiteten Hinweis für dein Team anzeigen.'},
+ oracle:{name:'Oracle Lens',symbol:'🔍',description:'Einen privaten, vorbereiteten Hinweis für dein Team anzeigen.'},
  reroll:{name:'Reroll',symbol:'↻',description:'Vor dem Aufdecken einen anderen Fragenplatz wählen lassen.'},
  chrono:{name:'Chronobreak',symbol:'⏪',description:'Nach eigenem Buzz 8 Sekunden Zeit für eine Antwortkorrektur.'}
 });
