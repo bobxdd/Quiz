@@ -926,7 +926,8 @@ export class PeerGame{
    return true;
   }
   if(type==='shield'){
-   if(p.phase!=='question'||!p.current?.id||p.jokerShields?.[team]===round)
+   if(p.phase!=='question'||!p.current?.id||p.jokerShields?.[team]===round||
+      p.buzzerBlockedTeams?.[String(round)]?.[team]||p.writtenTeamRepresentatives?.[String(round)]?.[team])
     throw Error('Schutz kann für diese Frage nicht mehr aktiviert werden.');
    // Arming is free; consume the charge only if the team actually loses points.
    p.jokerShields={...(p.jokerShields||{}),[team]:round};
@@ -1093,6 +1094,7 @@ export class PeerGame{
  async uncoverQuestion(room,round,id,seconds){
   const d=this._getHostData(room),pending=d.pendingQuestion;
   if(d.public.phase!=='ready'||d.public.round!==Number(round)||d.public.current?.id!==id||pending?.round!==Number(round)||pending.id!==id)throw Error('Die ausgewählte Frage hat sich geändert.');
+  if(d.public.jokerRerollRequest)throw Error('Zuerst die offene Reroll-Anfrage annehmen oder ablehnen.');
   const question=this.hostQuiz?.questions.find(item=>item.id===id);
   if(!question)throw Error('Die Originalfrage fehlt im Host-Quiz.');
   const emoji=isTeamChallenge(question.type)?newTeamEmojiRound(question,d.public,d.roster,randomHex(12)):null;
@@ -1129,6 +1131,7 @@ export class PeerGame{
  }
  async returnToBoard(room,round,id){
   const d=this._getHostData(room);
+  if(activeChronobreak(d.public))throw Error('Chronobreak ist noch aktiv.');
   if(d.public.round!==Number(round)||d.public.current?.id!==id)throw Error('Diese Frage ist nicht mehr aktiv.');
   if(d.public?.current?.firstAnswerPending&&!['ready'].includes(d.public.phase))throw Error('Das Ausgleichs-Team muss zuerst bewertet werden.');
   if(d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
@@ -1148,7 +1151,7 @@ export class PeerGame{
   if(!next)throw Error('Runde 2 bzw. das Ausgleichs-Board kann nur aus der Übersicht bei freien Fragen gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
- async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
+ async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(activeChronobreak(d.public)&&changes?.phase==='reveal')throw Error('Chronobreak läuft noch.');if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
   if(changes?.phase==='reveal'&&d.public?.current?.firstAnswerPending)throw Error('Erst die Erstantwort bewerten.');
   if(changes?.phase==='reveal'&&['question','paused','review','answered'].includes(d.public?.phase)&&
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
