@@ -1,4 +1,5 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement,buzzerCoverActive,buzzerLocked} from './round-rules.mjs';
+import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak} from './joker-system.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,DRAW_WIDTH,DRAW_HEIGHT,DRAW_COLORS,DRAW_SIZES,MAX_DRAW_STROKES,MAX_DRAW_POINTS,emojisFromText,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,normalizeTeamDraw,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
@@ -755,7 +756,7 @@ function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';c
  const waiting=Object.values(members||{}).filter(p=>p?.status==='pending').length;
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen bearbeiten'],['live','▦','Vorschau']]:!isPublished()?[['editor','✎','Fragen bearbeiten'],['teams','♙','Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:waitingInLobby()?[['teams','♙',waiting?'Lobby · '+waiting+' Anfrage'+(waiting===1?'':'n'):'Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:[['live','◈','Quiz'],['teams','♙',waiting?'Teilnehmer · '+waiting+' offen':'Teilnehmer'],['present','▣','Präsentation'],['history','▤','Verlauf'],['setup','⚙','Optionen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:rehearsal?'Generalprobe':'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${role==='guest'&&member?.status==='approved'?btn('Wiedereinstieg','copy-guest-rejoin','small'):''}${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${liveView?'page-live bq-session-page':''}">${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}</main>${liveView?watcherMarkup():''}</section></div>`;
+ app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass"><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${role==='guest'&&member?.status==='approved'?btn('Wiedereinstieg','copy-guest-rejoin','small'):''}${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header><main class="page ${liveView?'page-live bq-session-page':''}">${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}${liveView?jokerPanel():''}</main>${liveView?jokerEventNotice()+chronoOverlay()+watcherMarkup():''}</section></div>`;
  updateClock();
  updateBuzzerAnnouncement();
  maybeAnimateQuestion();
@@ -944,6 +945,51 @@ function renderReviewGallery(readOnly=false){
   }).join('')}</div>
  </div>`;
 }
+
+function jokerPanel(){
+ const p=publicState;
+ if(!p?.jokerConfig?.enabled||scoreMode(p)!=='team')return '';
+ const own=role==='guest'&&member?.status==='approved'?member.team:'';
+ let html='<section class="bq-joker-panel" aria-label="Teamjoker"><div class="bq-joker-heading"><strong>Teamjoker</strong><span>Aufladungen je Team</span></div><div class="bq-joker-teams">';
+ for(const [team,name] of Object.entries(p.teams||{})){
+  html+='<div class="bq-joker-team"><strong>'+e(name)+'</strong><div class="bq-joker-list">';
+  for(const type of JOKER_TYPES){
+   const meta=JOKER_META[type],count=jokerCount(p,team,type),selected=team===own,phase=p.phase;
+   const canUse=selected&&connected&&count>0&&(type==='reroll'?phase==='ready'&&!p.jokerRerollRequest&&selectingTeam(p)===team:
+    type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
+    type==='oracle'?phase==='question':
+    ['question','review'].includes(phase)&&p.jokerShields?.[team]!==p.round);
+   const armed=type==='shield'&&p.jokerShields?.[team]===p.round;
+   html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+e(meta.symbol)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
+   if(armed)html+='<small>Aktiv</small>';
+   if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" '+(canUse?'':'disabled'));
+   if(canHost()&&!isOffline())html+='<span class="bq-joker-host-tools">'+btn('−','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="-1" '+(count?'':'disabled'))+btn('+','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="1" '+(count<3?'':'disabled'))+'</span>';
+   html+='</div>';
+  }
+  html+='</div></div>';
+ }
+ html+='</div>';
+ const privateHint=own&&p.current?String(game?.guestData?.jokerPrivateHint||''):'';
+ if(privateHint)html+='<div class="bq-oracle-private" role="status"><strong>◉ Dein privater Oracle-Lens-Hinweis</strong><p>'+e(privateHint)+'</p></div>';
+ if(own&&p.jokerRerollRequest?.team===own)html+='<p class="small muted" role="status">Reroll angefragt · Der Host entscheidet.</p>';
+ return html+'</section>';
+}
+function jokerEventNotice(){
+ const p=publicState,drop=p?.jokerEvent;
+ if(!p?.jokerConfig?.enabled||!drop||!p.current||!['question','review','reveal','paused'].includes(p.phase)||
+    drop.id!==p.current.id||drop.round!==p.round)return '';
+ const meta=JOKER_META[drop.type];if(!meta)return '';
+ return '<div class="bq-joker-event" role="status"><span>✦ JOKERFUND</span><strong>'+e(meta.symbol)+' '+e(meta.name)+'</strong><small>'+(drop.awarded?(drop.full?'Inventar voll · ':'Aufladung erhalten · ')+e(teamName(drop.team)):'Bei richtiger Antwort erhält das erfolgreiche Team eine Aufladung.')+'</small></div>';
+}
+function chronoOverlay(){
+ const p=publicState,event=p?.chronoBreak;
+ if(!activeChronobreak(p,now())||!event)return '';
+ const isHost=canHost(),actor=role==='guest'&&game?.uid===event.uid,corrected=isHost&&!isOffline()?game?.hostChronoAnswer(room,event.round):'';
+ return '<section class="bq-chrono-overlay '+(isHost?'is-host-lock':'is-notice')+'" role="status" aria-live="polite"><div class="bq-chrono-card"><strong>⏪ CHRONOBREAK</strong><p>'+e(event.name)+' · '+e(teamName(event.team))+' darf seine Antwort korrigieren.</p><b data-chrono-seconds>8</b><small>Sekunden verbleibend · Host-Bewertung gesperrt</small>'+
+  (isHost?'<p class="bq-chrono-correction">'+(corrected?'Korrigierte Antwort: '+e(corrected):'Warte auf die Korrektur …')+'</p>':'')+
+  (actor?'<form id="chrono-correction-form"><label class="field">Korrigierte Antwort<input id="chrono-correction" maxlength="160" placeholder="Neue Antwort eingeben"></label>'+btn('Neue Antwort senden','joker-chrono-answer','primary')+'</form>':'')+'</div></section>';
+}
+
 function sessionFooter(){
  const teams=Object.entries(publicState?.teams||{});
  const players=personScores();
