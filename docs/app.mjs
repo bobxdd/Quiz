@@ -1,5 +1,5 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement,buzzerCoverActive,buzzerLocked} from './round-rules.mjs';
-import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak} from './joker-system.mjs';
+import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak,normalizeJokerConfig,initialJokers,shieldApplies} from './joker-system.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,DRAW_WIDTH,DRAW_HEIGHT,DRAW_COLORS,DRAW_SIZES,MAX_DRAW_STROKES,MAX_DRAW_POINTS,emojisFromText,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,normalizeTeamDraw,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
@@ -195,7 +195,7 @@ function preserveForm(draw){
   'button'+[...focused.attributes].filter(attr=>attr.name.startsWith('data-'))
    .map(({name,value})=>`[${name}="${CSS.escape(value)}"]`).join(''):'';
  const expanded=[...document.querySelectorAll('#app details[data-bq-persist][open]')].map(el=>el.dataset.bqPersist);
- const scrollable=['.questionlist','.studio-list','.studio-tools','.workspace','.chatfeed','.bq-scene-content','.bq-guest-compose','.bq-answer-question','.bq-team-emoji','.bq-answers-panel .answer-review','.bq-emoji-palette','.bq-host-solution-body'];
+ const scrollable=['.bq-joker-panel','.questionlist','.studio-list','.studio-tools','.workspace','.chatfeed','.bq-scene-content','.bq-guest-compose','.bq-answer-question','.bq-team-emoji','.bq-answers-panel .answer-review','.bq-emoji-palette','.bq-host-solution-body'];
  const saved=[...document.querySelectorAll(scrollable.join(','))].map(el=>({selector:el.id?'#'+CSS.escape(el.id):scrollable.find(selector=>el.matches(selector)),top:el.scrollTop,left:el.scrollLeft,nearBottom:el.classList.contains('chatfeed')&&el.scrollHeight-el.scrollTop-el.clientHeight<60}));
  draw();
  const nextScene=document.querySelector('#app .bq-session-scene')?.dataset.scene||'';
@@ -959,7 +959,7 @@ function jokerPanel(){
    const meta=JOKER_META[type],count=jokerCount(p,team,type),selected=team===own,phase=p.phase;
    const canUse=selected&&connected&&count>0&&(type==='reroll'?phase==='ready'&&!p.jokerRerollRequest&&selectingTeam(p)===team:
     type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
-    type==='oracle'?phase==='question':
+    type==='oracle'?phase==='question'&&!game?.guestData?.jokerPrivateHint:
     phase==='question'&&p.jokerShields?.[team]!==p.round);
    const armed=type==='shield'&&p.jokerShields?.[team]===p.round;
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+e(meta.symbol)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
@@ -1202,7 +1202,8 @@ function hostBuzzerControl(){const q=activeQuestion(),b=winner(),resolved=public
  }
  if(!b&&noBuzzerRights&&isOpen())return `<div class="bq-host-main-status" role="status"><strong>Keine Buzzer mehr möglich.</strong> Alle Teams bzw. Spieler sind für diese Frage gesperrt. Der Host kann die Lösung zeigen oder bewusst alle Sperren aufheben. ${btn('Buzzer-Sperren aufheben','unlock-buzz-all','small')}</div>`;
  if(!b){const last=publicState?.buzzerJudgements?.[roundKey()],lastName=last?.result==='wrong'?(last.firstAnswer?teamName(last.team):publicState?.buzzerBlocked?.[roundKey()]?.[last.uid]?.name||roster?.[last.uid]?.name||'Teilnehmer'):'';return `<div class="bq-host-main-status" role="status"><span>${last?.result==='wrong'?`✕ ${e(lastName)} lag falsch (${e(last.delta)} Punkte). Die Lösung bleibt verborgen, die übrigen Teams können buzzern.`:'🎙️ Buzzer frei · Das erste Signal zählt.'} ${Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{}).length?'Gesperrte Teams bleiben ausgeschlossen.':''}</span>${Object.keys(publicState?.buzzerBlocked?.[roundKey()]||{}).length?btn('Buzzer-Sperren aufheben','unlock-buzz-all','small'):''}</div>`;}
- return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>Antwort jetzt mündlich entgegennehmen und bewerten.</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary')}${btn('✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger')}${btn('Irrtümlichen Buzzer zurücksetzen','reset-buzz','small')}</div></div>`;
+ const locked=activeChronobreak(publicState,now()),corrected=publicState.chronoBreak?.uid===b.uid&&!isOffline()?game?.hostChronoAnswer(room,publicState.round):'',protectedTeam=shieldApplies(publicState,b.team);
+ return `<div class="bq-buzzer-winner"><div><span>AM BUZZER</span><strong>${e(b.name)} · ${e(teamName(b.team))}</strong><small>${corrected?'Korrigierte Antwort: '+e(corrected):'Antwort jetzt mündlich entgegennehmen und bewerten.'}</small></div><div class="bq-judge-actions">${btn('✓ Richtig · +'+e(q.points),'buzz-correct','primary',locked?'disabled':'')}${btn(protectedTeam?'✕ Falsch · Schild schützt':'✕ Falsch · −'+e(q.points/2),'buzz-wrong','danger',locked?'disabled':'')}${btn('Irrtümlichen Buzzer zurücksetzen','reset-buzz','small',locked?'disabled':'')}</div></div>`;
 }
 function chatAllowed(){return !!(publicState?.settings?.chatOpen&&!(isOpen()&&(isTeamChallenge(activeQuestion()?.type)||publicState.settings.lockOnBuzz&&winner())));}
 function renderChat(){const teams=Object.entries(publicState?.teams||{});const host=canHost(),selected=host?chatTeam:member?.team;if(host&&selected!=='ALL'&&!publicState?.teams?.[selected])chatTeam='ALL';let all=[];
@@ -1957,7 +1958,8 @@ async function publish(){if(!canHost()||isOffline())throw Error('Zum Live-Veröf
  if(Object.keys(roster).length&&!confirm('Das Live-Quizbrett wird neu veröffentlicht: aktuelle Frage, Punkte und bisherige gespielte Kacheln werden zurückgesetzt. Fortfahren?'))return;
  clearTimeout(cloudTimer);cloudTimer=null;await serializedCloudWrite(room,normalizedQuiz(quiz));cloudDirty=false;saveState='Im Host-Browser gesichert';
  const teams={...(publicState?.teams||{}),...buildTeams(quiz)};const teamScores=Object.fromEntries(Object.keys(teams).map(id=>[id,0]));
- const p={title:quiz.title,published:true,scoreMode:quiz.scoreMode||'team',phase:'board',current:null,round:0,boardRound:1,boardSequence:true,deadline:0,pausedRemaining:0,teams,scores:teamScores,manualPlayers:manualPlayerLabels(quiz),playerScores:{_empty:true},writtenTeamRepresentatives:{},board:buildPublicBoard(quiz),used:{_empty:true},answerReview:null,answerParticipants:null,buzzerBlocked:{_empty:true},settings:publicState?.settings||{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60}};
+ const jokerConfig=normalizeJokerConfig(quiz.jokerConfig);
+ const p={title:quiz.title,published:true,jokerConfig,jokers:initialJokers(teams,jokerConfig),scoreMode:quiz.scoreMode||'team',phase:'board',current:null,round:0,boardRound:1,boardSequence:true,deadline:0,pausedRemaining:0,teams,scores:teamScores,manualPlayers:manualPlayerLabels(quiz),playerScores:{_empty:true},writtenTeamRepresentatives:{},board:buildPublicBoard(quiz),used:{_empty:true},answerReview:null,answerParticipants:null,buzzerBlocked:{_empty:true},settings:publicState?.settings||{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60}};
  await game.clearRoomEvents(room);await game.replacePublic(room,p);
  const existing=Object.entries(members||{}).filter(([,m])=>m.status==='approved'&&!p.teams[m.team]);for(const [id,m] of existing){await game.hostAssign(room,id,m,'t1');}
  try{localStorage.setItem('bq-published-'+room,'1')}catch{}scoreTarget='';saveLocal();notice('Quizbrett live veröffentlicht. Alle Clients erhalten die neuen Fragenkacheln.');view='live';schedule();}
