@@ -958,7 +958,7 @@ function jokerPanel(){
    const canUse=selected&&connected&&count>0&&(type==='reroll'?phase==='ready'&&!p.jokerRerollRequest&&selectingTeam(p)===team:
     type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
     type==='oracle'?phase==='question':
-    ['question','review'].includes(phase)&&p.jokerShields?.[team]!==p.round);
+    phase==='question'&&p.jokerShields?.[team]!==p.round);
    const armed=type==='shield'&&p.jokerShields?.[team]===p.round;
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+e(meta.symbol)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
    if(armed)html+='<small>Aktiv</small>';
