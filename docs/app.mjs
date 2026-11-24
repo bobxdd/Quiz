@@ -947,11 +947,12 @@ function renderReviewGallery(readOnly=false){
  </div>`;
 }
 
+let jokerPanelOpen=typeof window!=='undefined'&&window.innerWidth>640;
 function jokerPanel(){
  const p=publicState;
  if(!p?.jokerConfig?.enabled||scoreMode(p)!=='team')return '';
  const own=role==='guest'&&member?.status==='approved'?member.team:'';
- let html='<details class="bq-joker-panel" data-bq-persist="team-jokers" aria-label="Teamjoker" '+(window.innerWidth>640?'open':'')+'><summary class="bq-joker-heading"><strong>Teamjoker</strong><span>Aufladungen je Team</span></summary><div class="bq-joker-teams">';
+ let html='<details class="bq-joker-panel" data-bq-persist="team-jokers" aria-label="Teamjoker" '+(jokerPanelOpen?'open':'')+'><summary class="bq-joker-heading"><strong>Teamjoker</strong><span>Aufladungen je Team</span></summary><div class="bq-joker-teams">';
  for(const [team,name] of Object.entries(p.teams||{})){
   html+='<div class="bq-joker-team"><strong>'+e(name)+'</strong><div class="bq-joker-list">';
   for(const type of JOKER_TYPES){
@@ -2790,6 +2791,7 @@ window.addEventListener('beforeunload',event=>{
  }
 });
 document.addEventListener('change',async ev=>{const target=ev.target;try{if(target.id==='import-quiz')await withBoardAction(()=>handleImport(target));else if(target.dataset.blockimage)await handleBlockUpload(target);else if(target.dataset.blockfield){blockPropertyUpdate(target);schedule();}else if(target.dataset.image)await handleUpload(target);else if(target.dataset.audio)await handleAudioUpload(target);else if(target.id==='q-type'){updateDraftField(target);schedule();}else if(target.id?.startsWith('team-')){pendingTeamChoices.set(target.id.slice(5),target.value);}else if(target.id==='chat-team'){chatTeam=target.value;schedule();}else if(target.id?.startsWith('q-'))updateDraftField(target);}catch(err){error(err);}});
+document.addEventListener('toggle',ev=>{if(ev.target?.matches?.('details[data-bq-persist="team-jokers"]'))jokerPanelOpen=ev.target.open;},true);
 document.addEventListener('keydown',ev=>{if(ev.defaultPrevented)return;if((ev.key==='Enter'||ev.key===' ')&&document.activeElement?.classList.contains('bq-selectable')){ev.preventDefault();document.activeElement.click();return;}const input=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((ev.ctrlKey||ev.metaKey)&&ev.code==='KeyS'&&canHost()){ev.preventDefault();studio.flush();safeDownload(backupFilename('BrainQuiz_Autosicherung'),JSON.stringify(normalizedQuiz(quiz),null,2));notice('Quiz-Backup heruntergeladen.');return;}if((ev.ctrlKey||ev.metaKey)&&!input&&canHost()&&!boardActionPending&&ev.code==='KeyZ'){ev.preventDefault();undoLayout(ev.shiftKey?'redo':'undo');return;}});
 
 document.addEventListener('keydown',ev=>{if(ev.code!=='KeyB'||ev.ctrlKey||ev.altKey||ev.metaKey||canHost()||role!=='guest')return;const el=document.activeElement;if(el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName))return;ev.preventDefault();const b=document.querySelector('[data-action="buzz"]');if(b&&!b.disabled)b.click();});
