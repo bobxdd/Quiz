@@ -35,6 +35,7 @@ jobs:
           # Run the newest visual-UX guard first so a viewport regression fails
           # promptly rather than after the entire legacy browser suite.
           timeout -k 10s 120s python tests/visual-answer-usability-browser.py
+          timeout -k 10s 120s python tests/joker-browser.py || failed=1
           timeout -k 10s 120s python tests/board-workspace-browser.py || failed=1
           timeout -k 10s 120s python tests/written-deadline-fairness-browser.py || failed=1
           timeout -k 10s 120s python tests/map-step3-browser.py || failed=1
