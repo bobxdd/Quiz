@@ -928,7 +928,7 @@ export class PeerGame{
   if(type==='shield'){
    if(!['question','review'].includes(p.phase)||!p.current?.id||p.jokerShields?.[team]===round)
     throw Error('Schutz kann für diese Frage nicht mehr aktiviert werden.');
-   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   // Arming is free; consume the charge only if the team actually loses points.
    p.jokerShields={...(p.jokerShields||{}),[team]:round};
   }else if(type==='oracle'){
    if(p.phase!=='question'||!p.current?.id)throw Error('Der Hinweis ist nur während einer offenen Frage verfügbar.');
@@ -1276,6 +1276,8 @@ export class PeerGame{
   if(teamMode&&result==='wrong'&&shieldApplies(p,team)){
    const blocked=Number(nextScore.rounds[key].delta)||0;
    nextScore.rounds[key].delta=0;nextScore.total-=blocked;
+   const charged=changeJokerCharge(nextPublic,team,'shield',-1);
+   if(charged){nextPublic.jokers=charged.jokers;delete nextPublic.jokerShields?.[team];}
   }
   nextPublic.playerScores={...(nextPublic.playerScores||{}),[uid]:nextScore};
   if(teamMode){
@@ -1299,6 +1301,10 @@ export class PeerGame{
     throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
    if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
    const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
+   if(result==='wrong'&&shieldApplies(p,team)){
+    const after=changeJokerCharge(next,team,'shield',-1);
+    if(after){next.jokers=after.jokers;delete next.jokerShields?.[team];}
+   }
    const total=(Number(next.scores?.[team])||0)+delta,at=Date.now();
    if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
    next.scores={...(next.scores||{}),[team]:total};
