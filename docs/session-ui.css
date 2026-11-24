@@ -782,3 +782,57 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
  .bq-host-manual-score{bottom:calc(61px + env(safe-area-inset-bottom));}
  .bq-host-manual-score>summary{font-size:11px;padding:7px 9px}
 }
+
+
+/* Optional Joker inventory and event overlays. Never alter the question canvas. */
+.bq-joker-panel{
+ position:fixed;z-index:70;right:12px;bottom:82px;
+ width:min(460px,calc(100vw - 24px));max-height:34dvh;overflow:auto;
+ padding:12px;border:1px solid rgba(164,188,205,.38);border-radius:14px;
+ background:rgba(15,24,37,.96);color:#eaf1fa;
+ box-shadow:0 12px 34px rgba(0,0,0,.38);font-size:13px;
+}
+.bq-joker-heading{display:flex;justify-content:space-between;align-items:baseline;gap:9px;margin-bottom:8px}
+.bq-joker-heading>span{font-size:11px;color:#b7c5d5}
+.bq-joker-teams{display:grid;gap:7px}
+.bq-joker-team{display:flex;align-items:center;gap:10px;border-top:1px solid rgba(180,197,217,.12);padding-top:5px}
+.bq-joker-team>strong{width:100px;flex:0 0 100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bq-joker-list{display:flex;flex:1;flex-wrap:wrap;gap:4px;min-width:0}
+.bq-joker-token{display:inline-flex;align-items:center;gap:4px;padding:3px 5px;background:rgba(113,147,182,.16);border:1px solid rgba(161,186,209,.18);border-radius:7px;min-height:32px}
+.bq-joker-token.is-empty{opacity:.57}
+.bq-joker-token.is-armed{border-color:rgba(127,228,156,.8)}
+.bq-joker-symbol{font-size:17px;line-height:1}
+.bq-joker-name{font-size:11px;max-width:65px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bq-joker-token b{font-variant-numeric:tabular-nums}
+.bq-joker-token .btn{min-width:25px;padding:4px 7px;font-size:11px}
+.bq-joker-host-tools{display:inline-flex;gap:2px}
+.bq-oracle-private{margin-top:9px;padding:10px;background:rgba(25,53,67,.95);border-left:3px solid #75cce3;border-radius:7px}
+.bq-oracle-private p{margin:4px 0 0}
+.bq-joker-event{position:fixed;top:92px;left:50%;transform:translateX(-50%);z-index:89;max-width:min(92vw,450px);text-align:center;pointer-events:none;padding:11px 20px;border:1px solid #b3bb8c;border-radius:12px;background:#19262d;color:#f6f7e1;box-shadow:0 8px 28px rgba(0,0,0,.45)}
+.bq-joker-event span{display:block;font-size:11px;letter-spacing:.1em;opacity:.8}
+.bq-joker-event strong{display:block;margin:4px 0}
+.bq-joker-event small{display:block;font-size:12px}
+.bq-reroll-request{padding:14px;border:1px solid rgba(155,213,229,.48);border-radius:10px;background:rgba(25,57,67,.74)}
+.bq-reroll-request p{margin:4px 0 8px}
+.bq-chrono-overlay{position:fixed;z-index:160;display:flex;align-items:center;justify-content:center;pointer-events:none;color:#f0f5ff}
+.bq-chrono-overlay.is-host-lock{inset:0;background:rgba(8,14,25,.87);pointer-events:auto}
+.bq-chrono-overlay.is-notice{inset:auto 10px 30px;z-index:90}
+.bq-chrono-card{width:min(500px,95vw);background:#1b2635;border:2px solid #9caed6;border-radius:16px;padding:22px;text-align:center;box-shadow:0 12px 45px rgba(0,0,0,.65);pointer-events:auto}
+.bq-chrono-overlay.is-notice .bq-chrono-card{padding:12px 14px;width:min(440px,100%)}
+.bq-chrono-card>strong{font-size:22px;letter-spacing:.06em}
+.bq-chrono-card p{margin:8px 0}
+.bq-chrono-card>[data-chrono-seconds]{display:block;font-size:42px;font-variant-numeric:tabular-nums}
+.bq-chrono-card>small{font-size:12px;color:#b6c8e0}
+.bq-chrono-correction{border-radius:8px;padding:8px;background:rgba(125,151,184,.13)}
+.bq-chrono-card form{margin-top:10px;display:grid;gap:8px;text-align:left}
+.bq-chrono-card form input{width:100%;max-width:100%;box-sizing:border-box}
+@media(max-width:640px){
+ .bq-joker-panel{right:6px;bottom:70px;width:calc(100vw - 12px);max-height:23dvh;padding:8px}
+ .bq-joker-team>strong{width:70px;flex-basis:70px;font-size:11px}
+ .bq-joker-token{padding:2px 4px;min-height:27px}
+ .bq-joker-name{max-width:52px}
+ .bq-joker-event{top:65px}
+ .bq-chrono-overlay.is-notice{bottom:4px}
+ .bq-chrono-card{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){.bq-chrono-overlay,.bq-joker-event{animation:none!important;transition:none!important}}
