@@ -5,7 +5,7 @@ import asyncio,base64,shutil,json
 from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
-files=['app.mjs','answer-view.mjs','score-ledger.mjs','backup-store.mjs','final-results.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','team-emoji.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
+files=['app.mjs','answer-view.mjs','score-ledger.mjs','backup-store.mjs','final-results.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','team-emoji.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','joker-system.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
 sources={name:(root/'docs'/name).read_text() for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
@@ -46,6 +46,10 @@ async def install(page):
   window.history.replaceState=()=>{};
   const blob=body=>URL.createObjectURL(new Blob([body],{type:'text/javascript'}));
   const emoji=blob(src['team-emoji.mjs']);
+  const joker=blob(src['joker-system.mjs']);
+  for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs','question-flow.mjs','round-rules.mjs','editor-workflows.mjs']){
+   src[path]=src[path].replace("from './joker-system.mjs'",`from '${joker}'`);
+  }
   for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs']){
    src[path]=src[path].replace("from './team-emoji.mjs'",`from '${emoji}'`);
   }
