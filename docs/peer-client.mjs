@@ -640,7 +640,7 @@ export class PeerGame{
    this.guestData={
   public:payload.public||null,lobby:payload.lobby||null,roster:payload.roster||{},presence:payload.presence||{},buzzers:payload.buzzers||{},
   members:payload.member?{[this.uid]:payload.member}:{},responses:payload.ownResponse?{[String(payload.public?.round||0)]:{[this.uid]:payload.ownResponse}}:{},
-  messages:payload.messages||{},teamEmoji:payload.teamEmoji||null
+  messages:payload.messages||{},teamEmoji:payload.teamEmoji||null,jokerPrivateHint:typeof payload.jokerPrivateHint==='string'?payload.jokerPrivateHint:''
   };return true;}
  _ackSnapshot(version){
   if(!Number.isSafeInteger(version)||version<1)return;
