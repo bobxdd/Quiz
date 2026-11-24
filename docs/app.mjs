@@ -950,7 +950,7 @@ function jokerPanel(){
  const p=publicState;
  if(!p?.jokerConfig?.enabled||scoreMode(p)!=='team')return '';
  const own=role==='guest'&&member?.status==='approved'?member.team:'';
- let html='<section class="bq-joker-panel" aria-label="Teamjoker"><div class="bq-joker-heading"><strong>Teamjoker</strong><span>Aufladungen je Team</span></div><div class="bq-joker-teams">';
+ let html='<details class="bq-joker-panel" data-bq-persist="team-jokers" aria-label="Teamjoker" '+(window.innerWidth>640?'open':'')+'><summary class="bq-joker-heading"><strong>Teamjoker</strong><span>Aufladungen je Team</span></summary><div class="bq-joker-teams">';
  for(const [team,name] of Object.entries(p.teams||{})){
   html+='<div class="bq-joker-team"><strong>'+e(name)+'</strong><div class="bq-joker-list">';
   for(const type of JOKER_TYPES){
@@ -972,7 +972,7 @@ function jokerPanel(){
  const privateHint=own&&p.current?String(game?.guestData?.jokerPrivateHint||''):'';
  if(privateHint)html+='<div class="bq-oracle-private" role="status"><strong>◉ Dein privater Oracle-Lens-Hinweis</strong><p>'+e(privateHint)+'</p></div>';
  if(own&&p.jokerRerollRequest?.team===own)html+='<p class="small muted" role="status">Reroll angefragt · Der Host entscheidet.</p>';
- return html+'</section>';
+ return html+'</details>';
 }
 function jokerEventNotice(){
  const p=publicState,drop=p?.jokerEvent;
