@@ -78,11 +78,12 @@ test('shield consumes a charge and prevents a wrong buzzer penalty without openi
  const g=fixture(),p=opened(g,'b');
  g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
  assert.equal(shieldApplies(p,'t1'),true);
- assert.equal(jokerCount(p,'t1','shield'),0);
+ assert.equal(jokerCount(p,'t1','shield'),1,'arming protection does not spend it until a wrong verdict');
  g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
  const result=applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
  assert.equal(result.delta,0);
  assert.equal(result.state.scores.t1,0);
+ assert.equal(jokerCount(result.state,'t1','shield'),0,'shield is spent once when the negative score is prevented');
  assert.equal(result.buzzers['1'],undefined);
  assert.ok(result.state.buzzerBlockedTeams['1'].t1);
 });
