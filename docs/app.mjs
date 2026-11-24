@@ -259,7 +259,8 @@ function projectorFrame(){
   stage=`<section class="bq-session-scene bq-board-scene" data-scene="board"><h1>${boardRoundOf(p)===3?'Ausgleichs-Board':'Runde '+boardRoundOf(p)} · Fragenübersicht</h1><p>Der Host wählt die nächste Frage.</p>
    <div class="glass panel bq-board-panel">${renderBoard(true)}</div></section>`;
  }
- return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}`;
+ const projectorChrono=activeChronobreak(p,now())?`<div class="bq-joker-event" role="status"><span>⏪ CHRONOBREAK</span><strong>${e(p.chronoBreak.name)} · ${e(teamName(p.chronoBreak.team))}</strong><small>Antwort wird korrigiert · Host-Bewertung pausiert</small></div>`:'';
+ return `<div class="bq-projector-scene">${stage}${projectorScoreboard()}</div>${buzzerAnnouncementMarkup(currentBuzzerAnnouncement())}${jokerEventNotice()}${projectorChrono}`;
 }
 let lastProjectorFrame=null;
 function pushProjector(force=false){
