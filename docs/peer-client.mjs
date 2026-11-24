@@ -460,7 +460,12 @@ export class PeerGame{
   });
   return localSaved?Promise.resolve(true):this.checkpointWrites;
  }
- _changed(){const saved=this._persist();this._emit();if(!this.snapshotTimer)this.snapshotTimer=setTimeout(()=>{this.snapshotTimer=null;for(const ctx of this.guestConnections.values())this._sendSnapshot(ctx)},25);return saved;}
+ _changed(){if(this.mode==='host'&&this.data?.public?.jokerConfig?.enabled){
+  const p=this.data.public;
+  for(const team of Object.keys(p.teams||{}))if(!p.jokers?.[team]){
+   p.jokers??={};p.jokers[team]=initialJokers({[team]:p.teams[team]},p.jokerConfig)[team];
+  }
+ }const saved=this._persist();this._emit();if(!this.snapshotTimer)this.snapshotTimer=setTimeout(()=>{this.snapshotTimer=null;for(const ctx of this.guestConnections.values())this._sendSnapshot(ctx)},25);return saved;}
  async create(room,quiz,options={}){if(this.mode!=='idle')this.shutdown();if(!/^[A-HJ-NP-Z2-9]{16}$/.test(room))throw Error('Ungültiger Raumcode.');
   this.uid='h_'+randomHex(12);this.hostQuiz=clone(quiz);this.data=roomData(this.uid,quiz,options);this.memberSecrets={};
   await this._openHostPeer(room);this._persist();return room;
@@ -488,6 +493,12 @@ export class PeerGame{
  }
  async saveHostQuiz(room,quiz){this._assertHost(room);if(!quiz||!Array.isArray(quiz.questions)||quiz.questions.length>180)throw Error('Ungültiges Host-Quiz.');
   this.hostQuiz=clone(quiz);
+  if(!this.data.public?.started&&Number(this.data.public?.round||0)===0){
+   const cfg=normalizeJokerConfig(quiz.jokerConfig);
+   this.data.jokerDrops=placeJokerDrops(quiz);
+   this.data.public.jokerConfig=cfg;
+   this.data.public.jokers=initialJokers(this.data.public.teams,cfg);
+  }
   const savedAt=this.quizSavedAt=Math.max(Date.now(),(this.quizSavedAt||0)+1);
   const localSaved=saveLocalHostQuiz(room,quiz,savedAt);
   const extraSaved=await saveHostCheckpoint('quiz-'+room,{quiz:this.hostQuiz,savedAt}).catch(()=>false);
@@ -1058,7 +1069,7 @@ export class PeerGame{
   const previous=d.public,next=returnToBoardState(previous);
   if(!next)throw Error('Keine aktive Frage.');
   if(previous.phase==='ready')delete d.questionHistory[String(previous.round)];
-  d.public=next;d.picks={};delete d.pendingQuestion;delete d.teamEmoji;
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,chronoBreak:null,jokerShields:{}};d.picks={};delete d.pendingQuestion;delete d.teamEmoji;
   this._scheduleTeamEmojiDeadline();this._changed();
   return clone(next);
  }
