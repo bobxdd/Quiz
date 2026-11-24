@@ -670,8 +670,8 @@ export class PeerGame{
   const privateEmoji=approved?teamEmojiForPlayer(this.data.teamEmoji,member.team,ctx.uid):null;
   const emojiClock=publicState?.teamEmoji&&publicState.deadline?Date.now():null;
    const display=clone(publicState);
-   const jokerPrivateHint=approved?this.data.jokerPrivateHints?.[round]?.[member?.team]||'':'';
    const waiting=waitsForNextQuestion(publicState,member);
+   const jokerPrivateHint=approved&&!waiting&&publicState?.current?this.data.jokerPrivateHints?.[round]?.[member?.team]||'':'';
    if(waiting){
     display.current=null;display.answerParticipants=null;display.answerReview=null;display.teamEmoji=null;
     display.preRevealDisplay=null;display.buzzerAnnouncement=null;display.audioPlayback=null;
@@ -1385,9 +1385,9 @@ export class PeerGame{
   const done=regradeScoreEvent(d.public,d.scoreEvents,id,{newId:randomHex(8),questionPoints});
   d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);
  }
- async clearBuzzer(room,round){const d=this._getHostData(room);delete d.buzzers[String(round)];this._changed()}
+ async clearBuzzer(room,round){const d=this._getHostData(room);if(activeChronobreak(d.public))throw Error('Chronobreak läuft noch.');delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}
- async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];d.public.questionPick=null;delete d.pendingQuestion;delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
+ async clearRoomEvents(room){const d=this._getHostData(room);d.buzzers={};d.responses={};d.picks={};d.questionHistory={};d.scoreEvents=[];d.jokerPrivateHints={};d.chronoCorrections={};d.jokerDrops=placeJokerDrops(this.hostQuiz);d.public.questionPick=null;delete d.pendingQuestion;delete d.teamEmoji;delete d.public.teamEmoji;this._scheduleTeamEmojiDeadline();this._changed()}
  async deleteRoom(room){this._assertHost(room);for(const ctx of this.guestConnections.values()){try{ctx.conn.send({t:'shutdown'});ctx.conn.close()}catch{}}
   for(const ctx of this.projectorConnections){try{ctx.conn.send({t:'closed'});}catch{}}
   this.data=null;this.shutdown();await (this.checkpointWrites||Promise.resolve()).catch(()=>null);
