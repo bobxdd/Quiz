@@ -792,6 +792,9 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
  background:rgba(15,24,37,.96);color:#eaf1fa;
  box-shadow:0 12px 34px rgba(0,0,0,.38);font-size:13px;
 }
+.bq-joker-panel>summary{cursor:pointer;user-select:none;list-style:none}
+.bq-joker-panel>summary::-webkit-details-marker{display:none}
+.bq-joker-panel:not([open]){overflow:hidden;max-height:none}
 .bq-joker-heading{display:flex;justify-content:space-between;align-items:baseline;gap:9px;margin-bottom:8px}
 .bq-joker-heading>span{font-size:11px;color:#b7c5d5}
 .bq-joker-teams{display:grid;gap:7px}
