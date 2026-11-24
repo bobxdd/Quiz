@@ -1279,6 +1279,7 @@ export class PeerGame{
   if(teamMode&&result==='wrong'&&shieldApplies(p,team)){
    const blocked=Number(nextScore.rounds[key].delta)||0;
    nextScore.rounds[key].delta=0;nextScore.total-=blocked;
+   if(nextScore.history?.at(-1)?.round===key&&nextScore.history.at(-1).delta===blocked)nextScore.history.pop();
    const charged=changeJokerCharge(nextPublic,team,'shield',-1);
    if(charged){nextPublic.jokers=charged.jokers;delete nextPublic.jokerShields?.[team];}
   }
