@@ -4,6 +4,7 @@
  * No Firebase, cloud database, or public hosting of private quiz solutions.
  */
 import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
+import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,CHRONOBREAK_MS} from './joker-system.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot} from './lobby-model.mjs';
@@ -241,7 +242,7 @@ function guestIdentity(room,restoreCode=''){
  }
  return item;
 }
-function roomData(owner,quiz,{published=false}={}){return {owner,access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams:buildTeams(quiz),scores:buildScores(quiz),manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
+function roomData(owner,quiz,{published=false}={}){const jokerConfig=normalizeJokerConfig(quiz.jokerConfig),teams=buildTeams(quiz);return {owner,jokerDrops:placeJokerDrops(quiz),jokerPrivateHints:{},access:{title:quiz.title,createdAt:Date.now()},public:{title:quiz.title,published:published===true,started:false,scoreMode:quiz.scoreMode||'team',phase:'board',round:0,boardRound:1,board:buildPublicBoard(quiz),teams,scores:buildScores(quiz),jokers:initialJokers(teams,jokerConfig),jokerConfig,manualPlayers:manualPlayerLabels(quiz),playerScores:{},buzzerBlocked:{},writtenTeamRepresentatives:{},settings:{buzzerEnabled:true,chatOpen:true,lockOnBuzz:false,timerSeconds:60},used:{}},members:{},roster:{},presence:{},buzzers:{},responses:{},messages:{},picks:{},questionHistory:{}};}
 
 function writtenParticipants(data,round=data.public.round){
  const eligible=Object.entries(data.roster||{}).filter(([uid])=>!waitsForNextQuestion({round},data.members?.[uid]));
@@ -658,6 +659,7 @@ export class PeerGame{
   const privateEmoji=approved?teamEmojiForPlayer(this.data.teamEmoji,member.team,ctx.uid):null;
   const emojiClock=publicState?.teamEmoji&&publicState.deadline?Date.now():null;
    const display=clone(publicState);
+   const jokerPrivateHint=approved?this.data.jokerPrivateHints?.[round]?.[member?.team]||'':'';
    const waiting=waitsForNextQuestion(publicState,member);
    if(waiting){
     display.current=null;display.answerParticipants=null;display.answerReview=null;display.teamEmoji=null;
@@ -667,7 +669,7 @@ export class PeerGame{
     display.current={id,category,type,points,roundMode,basePoints,doublePoints};
     display.audioPlayback=null;
    }
-   return {member:clone(member),lobby:lobbySnapshot(this.data),public:display,roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved&&!waiting?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs),teamEmoji:waiting?null:clone(privateEmoji),emojiClock,hostTime:Date.now()};
+   return {member:clone(member),lobby:lobbySnapshot(this.data),jokerPrivateHint,public:display,roster:approved?clone(this.data.roster):{},presence:approved?clone(this.data.presence):{},buzzers:approved&&!waiting?clone(this.data.buzzers):{},ownResponse:clone(ownResponse),messages:clone(msgs),teamEmoji:waiting?null:clone(privateEmoji),emojiClock,hostTime:Date.now()};
  }
  async _sendHostMessage(ctx,message){
   if(!ctx.conn?.open)return;
@@ -974,7 +976,7 @@ export class PeerGame{
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
    participants:expected,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
-  d.public=next;
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,chronoBreak:null,jokerShields:{}};
   if(emoji)emoji.points=next.current.points;
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
@@ -1019,10 +1021,11 @@ export class PeerGame{
   if(emoji)emoji.points=d.public.current.points;
    const duration=seconds===undefined?pending.duration:questionSeconds(seconds)*1000;
    const mode=roundMode(question);
-   d.public={...d.public,phase:'question',current:{...clone(pending.current),roundMode:mode},
+   d.public={...d.public,phase:'question',current:{...clone(pending.current),roundMode:mode},jokerShields:{},chronoBreak:null,
     answerParticipants:mode==='written'?writtenParticipants(d):null,
     deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.current?.firstAnswerPending&&!d.public.settings?.manualBuzzer};
   if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
+  d.public=drawJokerForQuestion(d.public,id,d.jokerDrops);
   delete d.pendingQuestion;
   this._changed();return clone(d.public);
  }
@@ -1036,7 +1039,7 @@ export class PeerGame{
    throw Error('Bereits Antworten oder Punktwertungen vorhanden. Frage nicht ohne Wertungsverlust zurücklegen. Als gespielt beenden.');
   const next=cancelQuestionState(p);
   if(!next)throw Error('Diese Frage kann in der aktuellen Phase nicht zurückgelegt werden.');
-  d.public=next;delete d.questionHistory[key];delete d.responses[key];delete d.buzzers[key];
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,chronoBreak:null,jokerShields:{}};delete d.questionHistory[key];delete d.responses[key];delete d.buzzers[key];
   d.picks={};delete d.pendingQuestion;delete d.teamEmoji;
   this._scheduleTeamEmojiDeadline();this._changed();return clone(next);
  }
