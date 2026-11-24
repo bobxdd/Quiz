@@ -926,7 +926,7 @@ export class PeerGame{
    return true;
   }
   if(type==='shield'){
-   if(!['question','review'].includes(p.phase)||!p.current?.id||p.jokerShields?.[team]===round)
+   if(p.phase!=='question'||!p.current?.id||p.jokerShields?.[team]===round)
     throw Error('Schutz kann für diese Frage nicht mehr aktiviert werden.');
    // Arming is free; consume the charge only if the team actually loses points.
    p.jokerShields={...(p.jokerShields||{}),[team]:round};
