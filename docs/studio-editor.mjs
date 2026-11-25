@@ -1,5 +1,5 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
-import {JOKER_TYPES,JOKER_META,normalizeJokerConfig} from './joker-system.mjs';
+import {JOKER_TYPES,JOKER_META,normalizeJokerConfig,jokerSetupSummary,jokerIconMarkup} from './joker-system.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji,normalizeTeamDraw} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
@@ -263,6 +263,20 @@ export function createStudioEditor(api){
    ${presets.length?`<div class="se-overview-presets"><h3>Schnell anlegen</h3><p>Das sind Vorschläge – du kannst auch eigene Namen verwenden.</p><div class="se-category-grid">${presets.map(s=>categoryCard(s.name,false,all)).join('')}</div></div>`:''}
   </section>`;
  }
+ function jokerSettings(){
+  const {config,fields,available,missing,starters,missingHints}=jokerSetupSummary(quiz());
+  const teamMode=quiz().scoreMode!=='individual';
+  const descriptions={shield:'Verhindert einmal Punktabzug',oracle:'Privater Team-Hinweis',reroll:'Andere Frage vor Aufdecken',chrono:'8 s Antwortkorrektur nach Buzz'};
+  const status=!teamMode?'Nur mit Teamwertung verfügbar':!config.enabled?'Deaktiviert':missing?'Noch '+missing+' Fragen für Fundfelder nötig':fields+' Fundfelder · '+starters+' Startjoker je Team';
+  return `<section class="bq-joker-editor-settings" aria-labelledby="bq-joker-settings-title">
+   <div class="bq-joker-config-heading"><h3 id="bq-joker-settings-title">Teamjoker & Fundfelder</h3><span class="bq-joker-config-status ${config.enabled&&teamMode&&missing?'is-warning':''}" role="status">${escape(status)}</span><label class="bq-joker-toggle"><input id="joker-enabled" type="checkbox" data-joker-setting="enabled" ${config.enabled?'checked':''} ${teamMode||config.enabled?'':'disabled'}> Aktiv</label></div>
+   <fieldset class="bq-joker-config-controls" ${config.enabled&&teamMode?'':'disabled'}><legend class="bq-joker-sr">Joker pro Art konfigurieren</legend>
+    <div class="bq-joker-config-grid">${JOKER_TYPES.map(type=>`<fieldset class="bq-joker-config-card" data-joker-card="${type}"><legend>${jokerIconMarkup(type)}<span>${escape(JOKER_META[type].name)}</span></legend><p>${escape(descriptions[type])}</p><label class="bq-joker-drop-label" for="joker-drops-${type}">Fundfelder <select id="joker-drops-${type}" data-joker-drops="${type}"><option value="1" ${config.drops[type]===1?'selected':''}>1×</option><option value="2" ${config.drops[type]===2?'selected':''}>2×</option></select></label><label class="bq-joker-start-label"><input id="joker-start-${type}" type="checkbox" data-joker-start="${type}" ${config.startingByType[type]?'checked':''}> 1 Startladung</label></fieldset>`).join('')}</div>
+    <label class="bq-joker-all-start"><input id="joker-start-all" type="checkbox" data-joker-setting="starting" ${config.starting?'checked':''}> Alle Startladungen</label>
+   </fieldset>
+   <div class="bq-joker-config-foot"><span>${fields} zufällige Fundfelder / ${available} Fragen · Runde 1 + 2 · max. 3 Ladungen je Art</span>${config.enabled&&teamMode&&missingHints?`<span class="is-warning">${missingHints} ohne Oracle-Hinweis</span>`:''}</div>
+  </section>`;
+ }
  function html(){
   const all=visibleQuestions(),cats=categories();
   if(activeCategory&&!cats.some(c=>categoryKey(c)===categoryKey(activeCategory)))activeCategory='';
@@ -286,12 +300,13 @@ export function createStudioEditor(api){
    ${saveAlert(warning)}
    <div class="se-toolbar bq-editor-toolbar">
      <div class="bq-editor-main">
-      <div class="bq-editor-main-info"><span class="bq-editor-step">SCHRITT 1 · QUIZ ERSTELLEN</span><label class="se-field se-title"><span>Quizname</span><input data-se-quiztitle maxlength="100" value="${escape(quiz().title)}"></label></div>
+      <div class="bq-editor-quiz-column"><div class="bq-editor-main-info"><span class="bq-editor-step">SCHRITT 1 · QUIZ ERSTELLEN</span><label class="se-field se-title"><span>Quizname</span><input data-se-quiztitle maxlength="100" value="${escape(quiz().title)}"></label></div>
       <div class="bq-editor-primary-actions">
        <span class="se-save-badge${warning?' is-warning':''}" role="status" aria-live="polite">${escape(saveLabel())}</span>
        ${api.isOffline()?'<button type="button" data-action="save-board">Quiz speichern</button>':''}
        ${api.isOffline()&&api.onlineReady()?'<button type="button" class="se-primary bq-editor-host-cta" data-action="host-current-board">Lobby hosten</button>':!api.isOffline()?'<button type="button" class="se-primary" data-action="publish">Live veröffentlichen</button>':''}
-      </div>
+      </div></div>
+      ${jokerSettings()}
      </div>
      <div class="bq-editor-tools">
       ${api.isOffline()?'<button type="button" class="bq-editor-library-btn" data-action="back-to-quizzes">← Meine Quizze</button>':''}
@@ -306,7 +321,6 @@ export function createStudioEditor(api){
      </div>
     </div>
    <nav class="bq-round-picker" aria-label="Spielbrett bearbeiten">${[1,...(quiz().balanceBoard?[3]:[]),2].map(round=>`<button type="button" data-se-action="board-round" data-board-round="${round}" aria-pressed="${editorRound===round}" class="${editorRound===round?'se-primary':''}">${round===3?'Ausgleichs-Board':'Runde '+round} · ${roundQuestions(quiz(),round).length}/${round===3?quiz().teams.length:36} Fragen</button>`).join('')}<button type="button" data-se-action="balance-board-toggle" class="se-balance-toggle">${quiz().balanceBoard?'✕ Ausgleichs-Board entfernen':'+ Ausgleichs-Board hinzufügen'}</button><span>${quiz().balanceBoard&&editorRound===3?'Eine Buzzerfrage je Team · Wenigste Punkte wählen zuerst':'Maximal 6 Kategorien × 6 Fragen je Standardbrett'}</span></nav>
-   ${editorRound===1?`<details class="se-extras bq-joker-editor-settings" data-bq-persist="joker-settings"><summary>Joker & versteckte Aufladungen</summary><p class="se-muted">Jokerfelder bleiben bis zum Aufdecken geheim und erscheinen nur auf normalen Boards.</p><label class="se-check"><input type="checkbox" data-joker-setting="enabled" ${quiz().jokerConfig?.enabled?'checked':''}> Jokersystem einschalten</label><label class="se-check"><input type="checkbox" data-joker-setting="starting" ${normalizeJokerConfig(quiz().jokerConfig).starting?'checked':''}> Alle Joker mit Startaufladung</label><div class="se-two">${JOKER_TYPES.map(type=>`<label class="se-field"><span>${JOKER_META[type].symbol} ${JOKER_META[type].name} · Fundfelder</span><select data-joker-drops="${type}"><option value="1" ${normalizeJokerConfig(quiz().jokerConfig).drops[type]===1?'selected':''}>1 × insgesamt</option><option value="2" ${normalizeJokerConfig(quiz().jokerConfig).drops[type]===2?'selected':''}>2 × insgesamt</option></select><span class="se-check"><input type="checkbox" data-joker-start="${type}" ${normalizeJokerConfig(quiz().jokerConfig).startingByType[type]?'checked':''}> 1 Startaufladung</span></label>`).join('')}</div><p class="se-muted">Eine richtig gelöste Jokerfrage lädt den Joker für das erfolgreiche Team auf. Maximal 3 Aufladungen je Art.</p></details>`:''}
     ${auditOpen?`<section class="se-audit" aria-label="Quizprüfung"><div class="se-sectionhead"><h3>${audit.ready?'Quiz bereit':'Quiz noch unvollständig'} · ${audit.questionCount} Fragen</h3><button type="button" data-se-action="audit">Schließen</button></div><p>${audit.errors.length} Fehler · ${audit.warnings.length} Hinweise</p>${audit.errors.some(row=>row.id)?`<button type="button" class="se-audit-next" data-se-action="open-next-issue">Nächsten Fehler bearbeiten →</button>`:''}${[...audit.errors,...audit.warnings].slice(0,25).map(a=>`<div class="se-audit-row"><span>${escape(a.label)}: ${escape(a.reason)}</span>${a.id?`<button type="button" data-se-action="select" data-id="${escape(a.id)}">Öffnen</button>`:''}</div>`).join('')}</section>`:''}
    <div class="se-workgrid ${activeCategory?'se-category-detail se-mobile-tab-'+mobileTab:'se-category-home'}">${activeCategory?`<nav class="se-mobile-editor-tabs" aria-label="Editorbereiche">${[['categories','Bibliothek'],['canvas',editorPane==='answer'?'Antwort':'Bearbeiten'],...(editorPane==='answer'||item?.type===TEAM_EMOJI?[]:[['properties','Eigenschaften']])].map(([name,label])=>`<button type="button" data-se-action="mobile-tab" data-mobile-tab="${name}" aria-current="${mobileTab===name?'page':'false'}" class="${mobileTab===name?'active':''}">${label}</button>`).join('')}</nav>`:''}<aside class="se-list"><div class="se-sectionhead"><h3>Bibliothek</h3><button type="button" data-se-action="category-form" title="Kategorie erstellen" aria-label="Neue Kategorie">+ Kategorie</button></div>${categoryForm}${nav}
     ${activeCategory?`<div class="se-category-questions-head"><div><strong>${escape(activeCategory)}</strong><small>${within.length} ${within.length===1?'Frage':'Fragen'}</small></div><div class="se-inline"><button type="button" data-se-action="category-rename" title="Kategorie umbenennen">✎</button><button type="button" data-se-action="category-remove" title="Kategorie mit allen Fragen löschen">✕</button></div></div><button type="button" class="se-primary se-add-question" data-se-action="new">+ Frage hinzufügen</button><input class="se-search" data-se-search aria-label="Fragen dieser Kategorie suchen" placeholder="Fragen suchen …" value="${escape(search)}"><div class="se-questions">${displayed.map(x=>`<div class="se-qwrap"><label class="se-qpick" title="Frage für Sammelbearbeitung auswählen"><input type="checkbox" data-se-multi="${escape(x.id)}" aria-label="${escape(x.title)} auswählen" ${selectedQuestions.has(x.id)?'checked':''}></label><button type="button" class="se-qrow ${x.id===item?.id?'is-active':''}" data-se-library="question" data-se-action="select" data-id="${escape(x.id)}"><span><strong>${escape(x.points)} Punkte</strong><small>${escape(x.title)}</small></span><span class="se-q-status ${invalidIds.has(x.id)?'is-incomplete':'is-complete'}" title="${invalidIds.has(x.id)?'Noch unvollständig':'Zum Veröffentlichen bereit'}" aria-label="${invalidIds.has(x.id)?'Frage unvollständig':'Frage bereit'}">${invalidIds.has(x.id)?'⚠':'✓'}</span></button></div>`).join('')}${!displayed.length?'<p class="se-muted se-empty-filter">Keine Fragen gefunden.</p>':''}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div>
@@ -328,7 +342,7 @@ export function createStudioEditor(api){
    if(!root)return;
    const parent=root.parentElement;
    const active=document.activeElement;
-   const field=root.contains(active)&&active.matches('[data-se-field],[data-se-quiztitle]')?active:null;
+   const field=root.contains(active)&&active.matches('[data-se-field],[data-se-quiztitle],[data-joker-setting],[data-joker-drops],[data-joker-start]')?active:null;
    const selection=field?[field.selectionStart,field.selectionEnd,field.selectionDirection]:null;
    const scrolling=['.se-questions','.se-category-nav','.se-inspector'].map(selector=>
     [selector,root.querySelector(selector)?.scrollTop||0]);
@@ -348,7 +362,7 @@ export function createStudioEditor(api){
     if(!replacement||replacement.closest('[hidden]'))return;
     if(trackedInput===field)trackedInput=replacement;
     replacement.focus({preventScroll:true});
-    if(Number.isInteger(selection[0]))replacement.setSelectionRange(...selection);
+    if(Number.isInteger(selection[0])&&typeof replacement.setSelectionRange==='function')replacement.setSelectionRange(...selection);
    }
   }finally{redrawPending=false;}
  }

@@ -1,5 +1,5 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement,buzzerCoverActive,buzzerLocked} from './round-rules.mjs';
-import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak,normalizeJokerConfig,initialJokers,shieldApplies} from './joker-system.mjs';
+import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak,normalizeJokerConfig,initialJokers,shieldApplies,jokerIconMarkup} from './joker-system.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,DRAW_WIDTH,DRAW_HEIGHT,DRAW_COLORS,DRAW_SIZES,MAX_DRAW_STROKES,MAX_DRAW_POINTS,emojisFromText,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,normalizeTeamDraw,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
@@ -962,9 +962,9 @@ function jokerPanel(){
     type==='oracle'?phase==='question'&&!game?.guestData?.jokerPrivateHint:
     phase==='question'&&p.jokerShields?.[team]!==p.round&&!p.buzzerBlockedTeams?.[roundKey()]?.[team]&&!p.writtenTeamRepresentatives?.[roundKey()]?.[team]);
    const armed=type==='shield'&&shieldApplies(p,team);
-   html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+e(meta.symbol)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
-   if(armed)html+='<small>Aktiv</small>';
-   if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" '+(canUse?'':'disabled'));
+   html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+jokerIconMarkup(type)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
+   if(armed)html+='<small>Aktiv</small>';else if(!count)html+='<small class="bq-joker-empty-label">Leer</small>';
+   if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" aria-label="'+e(meta.name)+' einsetzen" '+(canUse?'':'disabled'));
    if(canHost()&&!isOffline())html+='<span class="bq-joker-host-tools">'+btn('−','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="-1" '+(count?'':'disabled'))+btn('+','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="1" '+(count<3?'':'disabled'))+'</span>';
    html+='</div>';
   }
@@ -982,7 +982,7 @@ function jokerEventNotice(){
  if(!p?.jokerConfig?.enabled||!drop||!p.current||!['question','review','reveal','paused'].includes(p.phase)||
     drop.id!==p.current.id||drop.round!==p.round)return '';
  const meta=JOKER_META[drop.type];if(!meta)return '';
- return '<div class="bq-joker-event" role="status"><span>✦ JOKERFUND</span><strong>'+e(meta.symbol)+' '+e(meta.name)+'</strong><small>'+(drop.awarded?(drop.full?'Inventar voll · ':'Aufladung erhalten · ')+e(teamName(drop.team)):'Bei richtiger Antwort erhält das erfolgreiche Team eine Aufladung.')+'</small></div>';
+ return '<div class="bq-joker-event" role="status"><span>✦ JOKERFUND</span><strong>'+jokerIconMarkup(drop.type)+' '+e(meta.name)+'</strong><small>'+(drop.awarded?(drop.full?'Inventar voll · ':'Aufladung erhalten · ')+e(teamName(drop.team)):'Bei richtiger Antwort erhält das erfolgreiche Team eine Aufladung.')+'</small></div>';
 }
 function chronoQuickButton(){
  const p=publicState;
