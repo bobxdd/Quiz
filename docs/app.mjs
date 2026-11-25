@@ -965,7 +965,7 @@ function jokerPanel(){
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+jokerIconMarkup(type)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
    if(armed)html+='<small>Aktiv</small>';else if(!count)html+='<small class="bq-joker-empty-label">Leer</small>';
    if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" aria-label="'+e(meta.name)+' einsetzen" '+(canUse?'':'disabled'));
-   if(canHost()&&!isOffline())html+='<span class="bq-joker-host-tools">'+btn('−','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="-1" '+(count?'':'disabled'))+btn('+','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="1" '+(count<3?'':'disabled'))+'</span>';
+   if(canHost()&&!isOffline())html+='<span class="bq-joker-host-tools">'+btn('−','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="-1" title="Aufladung als verbraucht markieren" aria-label="'+e(name+': '+meta.name+' verbrauchen')+'" '+(count?'':'disabled'))+btn('+','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="1" title="Aufladung hinzufügen" aria-label="'+e(name+': '+meta.name+' aufladen')+'" '+(count<3?'':'disabled'))+'</span>';
    html+='</div>';
   }
   html+='</div></div>';

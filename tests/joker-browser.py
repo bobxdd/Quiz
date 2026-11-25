@@ -5,6 +5,7 @@ Chronobreak. Separate native-network tests cover WebRTC itself.
 import asyncio,importlib.util,threading
 from pathlib import Path
 from playwright.async_api import async_playwright,expect
+from board_library_test_support import active_board_id,read_board,wait_board_saved
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('bq_joker_fixture',ROOT/'tests/board-rounds-browser.py')
@@ -23,9 +24,65 @@ async def join(ctx,host,room,name,team,origin):
  await page.wait_for_function("() => window.__probe.info().member?.status==='approved'",timeout=15000)
  return page
 
+async def editor_settings(browser,origin):
+ ctx=await browser.new_context(viewport={'width':1920,'height':1080},reduced_motion='reduce')
+ try:
+  page=await ctx.new_page()
+  await page.goto(origin)
+  await page.locator('[data-action="create-new-quiz"]').click()
+  panel=page.locator('.bq-editor-toolbar .bq-joker-editor-settings')
+  await expect(panel).to_be_visible()
+  await expect(panel.locator('[data-joker-card]')).to_have_count(4)
+  await expect(panel.locator('#joker-drops-shield')).to_be_disabled()
+  await expect(panel.locator('.bq-joker-config-status')).to_contain_text('Deaktiviert')
+  # The wide viewport uses the existing free space beside the quiz title.
+  geometry=await page.evaluate("""()=>{const left=document.querySelector('.bq-editor-quiz-column').getBoundingClientRect(),right=document.querySelector('.bq-joker-editor-settings').getBoundingClientRect(),tabs=document.querySelector('.bq-round-picker').getBoundingClientRect();return {left:left.right,right:right.left,bottom:right.bottom,tabs:tabs.top}}""")
+  assert geometry['right']>=geometry['left']-1 and geometry['bottom']<=geometry['tabs']+1,geometry
+  await panel.locator('#joker-enabled').check()
+  await panel.locator('#joker-drops-shield').select_option('2')
+  await panel.locator('#joker-drops-chrono').select_option('2')
+  await panel.locator('#joker-start-all').check()
+  await panel.locator('#joker-start-oracle').uncheck()
+  await expect(panel.locator('.bq-joker-config-status')).to_contain_text('6 Fragen')
+  await expect(panel.locator('#joker-start-all')).not_to_be_checked()
+  await page.locator('[data-se-action="board-round"][data-board-round="2"]').click()
+  await expect(panel).to_be_visible()
+  await expect(panel.locator('#joker-drops-shield')).to_have_value('2')
+  await expect(panel.locator('#joker-start-oracle')).not_to_be_checked()
+  await page.locator('[data-se-action="board-round"][data-board-round="1"]').click()
+  for width,height in [(1920,1080),(1366,850),(768,1024),(390,844),(320,720)]:
+   await page.set_viewport_size({'width':width,'height':height})
+   await expect(panel).to_be_visible()
+   assert await page.evaluate('()=>document.documentElement.scrollWidth<=innerWidth+8'),f'Joker editor horizontal overflow {width}'
+   for card in await panel.locator('[data-joker-card]').all():
+    assert await card.evaluate('(el)=>el.scrollWidth<=el.clientWidth+4'),f'Joker card horizontal clipping {width}'
+  await page.set_viewport_size({'width':1366,'height':850})
+  await page.locator('[data-action="save-board"]').click()
+  await wait_board_saved(page)
+  board=await active_board_id(page)
+  saved=(await read_board(page))['quiz']['jokerConfig']
+  assert saved['enabled'] and saved['drops']['shield']==2 and saved['drops']['chrono']==2
+  assert saved['startingByType']=={'shield':True,'oracle':False,'reroll':True,'chrono':True}
+  await page.reload()
+  await page.locator(f'[data-action="open-landing-board"][data-board-id="{board}"]').click()
+  await expect(panel.locator('#joker-enabled')).to_be_checked()
+  await expect(panel.locator('#joker-drops-chrono')).to_have_value('2')
+  await expect(panel.locator('#joker-start-oracle')).not_to_be_checked()
+  # Switching to individual scoring must never trap an enabled config.
+  await page.locator('[data-se-scoremode]').select_option('individual')
+  await expect(panel.locator('#joker-drops-shield')).to_be_disabled()
+  await panel.locator('#joker-enabled').uncheck()
+  await page.locator('[data-se-scoremode]').select_option('team')
+  await panel.locator('#joker-enabled').check()
+  await expect(panel.locator('#joker-drops-shield')).to_have_value('2')
+  print('PASS: upper toolbar, four per-type Joker controls, five viewport sizes, board switching and persistent settings',flush=True)
+ finally:
+  await ctx.close()
+
 async def exercise(origin):
  async with async_playwright() as p:
   browser=await p.chromium.launch(args=['--no-sandbox','--no-proxy-server'])
+  await editor_settings(browser,origin)
   ctx=await browser.new_context(viewport={'width':1366,'height':850},reduced_motion='reduce')
   await ctx.add_init_script(path=ROOT/'tests/mock-peerjs-browser.js')
   source=(ROOT/'docs/app.mjs').read_text(encoding='utf-8').replace('const studio=createStudioEditor(','''window.__probe={room:()=>room,getGame:()=>game,info:()=>({publicState,member}),setQuiz:async x=>{quiz=normalizedQuiz(x);selected=quiz.questions[0]?.id||'';const audit=quizAudit(quiz);if(!audit.ready)throw Error(JSON.stringify(audit.errors));await saveLocal();schedule();}};const studio=createStudioEditor(''',1)
