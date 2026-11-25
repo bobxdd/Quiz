@@ -4,7 +4,7 @@
  * No Firebase, cloud database, or public hosting of private quiz solutions.
  */
 import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
-import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,CHRONOBREAK_MS} from './joker-system.mjs';
+import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,CHRONOBREAK_MS,oracleHintForQuestion} from './joker-system.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot} from './lobby-model.mjs';
@@ -935,16 +935,16 @@ export class PeerGame{
    if(p.phase!=='question'||!p.current?.id)throw Error('Der Hinweis ist nur während einer offenen Frage verfügbar.');
    if(d.jokerPrivateHints?.[String(round)]?.[team])throw Error('Das Team hat den Orakel-Hinweis schon erhalten.');
    const source=this.hostQuiz?.questions.find(q=>q.id===p.current.id);
-   const hint=String(source?.oracleHint||source?.hints?.find(h=>String(h||'').trim())||'').trim().slice(0,220);
+   const hint=oracleHintForQuestion(source);
    if(!hint)throw Error('Der Host hat für diese Frage noch keinen Orakel-Hinweis hinterlegt.');
-   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   const charged=changeJokerCharge(p,team,type,-1);p.jokers=charged.jokers;p.jokerSpent=charged.jokerSpent;
    d.jokerPrivateHints??={};d.jokerPrivateHints[String(round)]??={};d.jokerPrivateHints[String(round)][team]=hint;
   }else if(type==='chrono'){
    const buzz=d.buzzers?.[String(round)];
-   if(p.phase!=='question'||roundMode(p.current)!=='buzzer'||!buzz||buzz.uid!==ctx.uid||
+   if(p.phase!=='question'||roundMode(p.current)!=='buzzer'||!buzz||buzz.oral||buzz.uid!==ctx.uid||
       p.current?.firstAnswerPending||p.buzzerResolved?.[String(round)]||p.chronoBreak?.round===round)
     throw Error('Chronobreak ist nur für die Person möglich, die gerade gebuzzert hat.');
-   p.jokers=changeJokerCharge(p,team,type,-1).jokers;
+   const charged=changeJokerCharge(p,team,type,-1);p.jokers=charged.jokers;p.jokerSpent=charged.jokerSpent;
    p.chronoBreak={round,uid:ctx.uid,team,name:member.name,until:at+CHRONOBREAK_MS};
    if(p.deadline)p.deadline+=CHRONOBREAK_MS;
   }
@@ -1056,7 +1056,7 @@ export class PeerGame{
   const next=openQuestionState(state,{expectedRound,question,playerQuestion:emoji?publicQuestion(question):playerQuestion,
    participants:expected,deadline:emoji?0:deadline,covered});
   if(!next)throw Error('Die Frage wurde nicht geöffnet: Das Quizbrett oder die Runde hat sich geändert.');
-  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,jokerShields:{}};
+  d.public={...next,jokerEvent:null,jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,jokerShields:{},oracleAvailable:!covered&&!!oracleHintForQuestion(question)};
   if(emoji)emoji.points=next.current.points;
   if(covered){
    delete d.teamEmoji;delete next.teamEmoji;
@@ -1107,7 +1107,8 @@ export class PeerGame{
     answerParticipants:mode==='written'?writtenParticipants(d):null,
     deadline:!emoji&&duration?Date.now()+duration:0,buzzerArmed:!d.public.current?.firstAnswerPending&&!d.public.settings?.manualBuzzer};
   if(emoji){d.teamEmoji=emoji;this._syncTeamEmoji();}
-  d.public=drawJokerForQuestion(d.public,id,d.jokerDrops);
+  d.public.oracleAvailable=!!oracleHintForQuestion(question);
+   d.public=drawJokerForQuestion(d.public,id,d.jokerDrops);
   delete d.pendingQuestion;
   this._changed();return clone(d.public);
  }
@@ -1283,7 +1284,7 @@ export class PeerGame{
    nextScore.rounds[key].delta=0;nextScore.total-=blocked;
    if(nextScore.history?.at(-1)?.round===key&&nextScore.history.at(-1).delta===blocked)nextScore.history.pop();
    const charged=changeJokerCharge(nextPublic,team,'shield',-1);
-   if(charged){nextPublic.jokers=charged.jokers;delete nextPublic.jokerShields?.[team];}
+   if(charged){nextPublic.jokers=charged.jokers;nextPublic.jokerSpent=charged.jokerSpent;delete nextPublic.jokerShields?.[team];}
   }
   nextPublic.playerScores={...(nextPublic.playerScores||{}),[uid]:nextScore};
   if(teamMode){
@@ -1309,7 +1310,7 @@ export class PeerGame{
    const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
    if(result==='wrong'&&shieldApplies(p,team)){
     const after=changeJokerCharge(next,team,'shield',-1);
-    if(after){next.jokers=after.jokers;delete next.jokerShields?.[team];}
+    if(after){next.jokers=after.jokers;next.jokerSpent=after.jokerSpent;delete next.jokerShields?.[team];}
    }
    const total=(Number(next.scores?.[team])||0)+delta,at=Date.now();
    if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');

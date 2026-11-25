@@ -846,3 +846,5 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-event .bq-joker-icon{display:inline-flex;vertical-align:middle}
 .bq-joker-token.is-empty .bq-joker-name{text-decoration:line-through}
 .bq-joker-empty-label{font-size:10px;color:#ccd2dc}
+
+.bq-joker-used-count{font-size:10px;color:#b5c6cd;white-space:nowrap}

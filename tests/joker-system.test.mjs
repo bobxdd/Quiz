@@ -7,7 +7,7 @@ import {applyBuzzerJudgement} from '../docs/round-rules.mjs';
 import {
  JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,
  jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,
- shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup
+ shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup,oracleHintForQuestion,jokerSpentCount
 } from '../docs/joker-system.mjs';
 
 const room='ABCDEFGHJKLM2345';
@@ -182,4 +182,31 @@ test('quiz-wide editor totals include both normal boards, exclude balance and fl
  for(const type of JOKER_TYPES)assert.equal(Object.values(drops).filter(value=>value===type).length,fit.config.drops[type]);
  assert.equal(Object.hasOwn(drops,'e'),false);
  assert.match(jokerIconMarkup('oracle'),/<svg/);
+});
+
+test('Oracle fallback skips whitespace, unused template placeholders and answer elements',()=>{
+ assert.equal(oracleHintForQuestion({oracleHint:'  ',hints:['',' Team-Tipp ']}),'Team-Tipp');
+ assert.equal(oracleHintForQuestion({scene:{template:'hints',elements:[{kind:'text',step:1,text:'Hinweis 1'},{kind:'text',step:2,text:' Echte Hilfe '},{kind:'text',step:6,text:'Geheime Antwort'}]}}),'Echte Hilfe');
+ assert.equal(oracleHintForQuestion({answer:'SECRET',scene:{template:'text',elements:[{kind:'text',step:6,text:'SECRET'}]}}),'');
+});
+test('spent count distinguishes used charge from no starting charge and survives a refill',()=>{
+ let p=fixture().data.public;
+ p=changeJokerCharge(p,'t1','shield',1);
+ p=changeJokerCharge(p,'t1','shield',-1);
+ assert.equal(jokerCount(p,'t1','shield'),1);
+ assert.equal(jokerSpentCount(p,'t1','shield'),1);
+ p=changeJokerCharge(p,'t1','shield',1);
+ assert.equal(jokerSpentCount(p,'t1','shield'),1);
+ assert.equal(jokerSpentCount(p,'t2','shield'),0);
+});
+test('Chronobreak rejects a host-created oral buzzer and stale or foreign corrections',()=>{
+ const g=fixture();opened(g);
+ g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice',oral:true};
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/gebuzzert/);
+ assert.equal(jokerCount(g.data.public,'t1','chrono'),1);
+ delete g.data.buzzers['1'].oral;
+ g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1});
+ assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'chrono-answer',round:1,text:'fremd'}),/nicht mehr aktiv/);
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono-answer',round:0,text:'alt'}),/nicht verfügbar/);
+ assert.equal(jokerSpentCount(g.data.public,'t1','chrono'),1);
 });

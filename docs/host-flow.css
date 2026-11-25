@@ -731,3 +731,8 @@ body.bq-game-mode.bq-answer-keyboard :is(.topbar,.bq-score-footer){display:none}
 .bq-joker-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @media(max-width:1190px){.bq-joker-config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bq-joker-config-card p{min-height:0}}
 @media(max-width:760px){.se-studio .bq-editor-main{grid-template-columns:minmax(0,1fr)}.bq-joker-config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bq-joker-editor-settings{padding:9px}.bq-joker-config-heading{gap:6px}.bq-joker-toggle{margin-left:auto}.bq-joker-config-foot{font-size:11px}.bq-joker-config-card legend{font-size:11px}}
+
+.bq-oracle-editor{padding:9px;margin:8px 0;border:1px solid #a5bac033;border-radius:8px;background:#151d2155}
+.bq-oracle-editor h4{margin:0 0 7px;display:flex;align-items:center;gap:6px;font-size:12px}
+.bq-oracle-editor h4 small{margin-left:auto;font-size:10px;font-weight:400;color:#b2c5bf}
+.bq-oracle-editor p{font-size:11px;margin:4px 0 0}
