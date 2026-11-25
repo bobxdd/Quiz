@@ -159,3 +159,11 @@ test('active Chronobreak prevents bypass through the buzzer reset endpoint',asyn
  await g.clearBuzzer(room,1);
  assert.equal(g.data.buzzers['1'],undefined);
 });
+
+test('late-joining player cannot use Joker charges during an ineligible question',()=>{
+ const g=fixture();opened(g);
+ g.data.members.bob.playFromRound=2;
+ assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'oracle',round:1}),/nächsten Frage/);
+ assert.equal(jokerCount(g.data.public,'t2','oracle'),1);
+ assert.deepEqual(g.data.jokerPrivateHints,{});
+});
