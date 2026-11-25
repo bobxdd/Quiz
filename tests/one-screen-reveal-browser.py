@@ -30,6 +30,14 @@ async def fit(page):
     }""")
 
 async def assert_fits(page, label):
+    # A resize schedules a full DOM redraw; a locator may briefly resolve to
+    # the detached previous scene. Wait for the replacement to be laid out,
+    # then keep all original geometry assertions below.
+    await page.wait_for_function("""() => {
+      const scene=document.querySelector('.bq-question-panel .se-scene');
+      const box=scene?.getBoundingClientRect();
+      return scene?.isConnected && box?.height >= 110;
+    }""",timeout=7000)
     metrics = await fit(page)
     assert metrics['top'] >= metrics['outerTop'] - 3, (label, metrics)
     assert metrics['bottom'] <= metrics['outerBottom'] + 3, (label, metrics)

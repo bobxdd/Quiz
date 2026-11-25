@@ -1,5 +1,6 @@
 /** Round rules kept separate from rendering and transport. */
 import {judgementDelta,updatePlayerScore,questionRoundMode as roundMode} from './core.mjs';
+import {shieldApplies,activeChronobreak,changeJokerCharge} from './joker-system.mjs';
 export {roundMode};
 export const scoreMode=state=>state?.scoreMode==='individual'?'individual':'team';
 export function buzzerCoverActive(state,buzzers){
@@ -17,13 +18,17 @@ export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  return !!uid&&!!team&&state?.phase==='question'&&roundMode(state.current)==='buzzer'&&
   (state.buzzerArmed!==false||state.buzzerReleased?.[round]?.[uid]===true)&&
   state.settings?.buzzerEnabled!==false&&!state.current?.firstAnswerPending&&(!state.deadline||state.deadline>time)&&
-  !buzzers?.[round]&&!state?.buzzerResolved?.[round]&&!buzzerLocked(state,uid,team);
+  !buzzers?.[round]&&!activeChronobreak(state,time)&&!state?.buzzerResolved?.[round]&&!buzzerLocked(state,uid,team);
 }
 export function applyBuzzerJudgement(state,buzzers,{round,uid,result,at=Date.now()}){
  const key=String(round),winner=buzzers?.[key];
  if(!['question','paused'].includes(state?.phase)||roundMode(state.current)!=='buzzer'||key!==String(state.round)||!winner||winner.uid!==uid||!['correct','wrong'].includes(result))throw Error('Buzzer nicht mehr aktuell. Bitte Spielstand aktualisieren.');
- if(state?.buzzerResolved?.[key]||state.current?.firstAnswerPending)throw Error('Der Buzzer ist noch für das zuerst antwortende Team reserviert oder wurde bereits bewertet.');
- const points=Number(state.current.points),delta=judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
+ if(state?.buzzerResolved?.[key]||state.current?.firstAnswerPending||activeChronobreak(state,at))throw Error('Der Buzzer ist noch reserviert, im Chronobreak oder wurde bereits bewertet.');
+ const points=Number(state.current.points),delta=result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)?0:judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
+ if(result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)){
+  const charged=changeJokerCharge(next,winner.team,'shield',-1);
+  if(charged){next.jokers=charged.jokers;delete next.jokerShields?.[winner.team];}
+ }
  next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid,result,delta,team:winner.team,at}};
  if(scoreMode(state)==='team'){
   if(!Object.hasOwn(state.teams||{},winner.team))throw Error('Das Team ist nicht mehr aktiv.');

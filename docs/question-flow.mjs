@@ -1,5 +1,6 @@
 // Guarded question lifecycle for host actions. Every question is identified by
 // its unique board ID, not its category/title/position.
+import {initialJokers} from './joker-system.mjs';
 const own=(obj,key)=>obj!=null&&Object.hasOwn(obj,key);
 const validBalanceQuestion=q=>q?.roundMode==='buzzer'&&!['map','order','team-emoji','team-draw'].includes(q?.type);
 const boardRound=value=>[2,3].includes(Number(value?.boardRound))?Number(value.boardRound):1;
@@ -23,6 +24,8 @@ export function selectingTeam(state){
 export function resetBoardGameState(state,board,roster={}){
  return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
+  jokers:initialJokers(state?.teams,state?.jokerConfig),jokerEvent:null,jokerNotice:null,
+  jokerShields:{},jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,
   buzzerBlocked:{},buzzerBlockedTeams:{},buzzerReleased:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
   selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
@@ -103,7 +106,7 @@ export function skipSelectionTurn(state){
 }
 export function validQuestionPair(state,question){
   const id=question?.id;
-  if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id))return false;
+  if(typeof id!=='string'||id.length<1||id.length>80||!own(state?.board,id)||state?.jokerRerollExclude===id)return false;
   const cell=state.board[id];
   return !!cell&&boardRound(cell)===boardRound(state)&&boardRound(question)===boardRound(state)&&cell.category===question.category&&Number(cell.points)===Number(question.points)&&!cell.used&&!state?.used?.[id];
 }
