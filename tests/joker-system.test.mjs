@@ -210,3 +210,27 @@ test('Chronobreak rejects a host-created oral buzzer and stale or foreign correc
  assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono-answer',round:0,text:'alt'}),/nicht verfügbar/);
  assert.equal(jokerSpentCount(g.data.public,'t1','chrono'),1);
 });
+
+test('zero-point buzzer verdict does not spend the armed loss protection',()=>{
+ const g=fixture(),p=opened(g,'b');
+ p.current.points=0;
+ g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
+ const r=applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
+ assert.equal(r.state.scores.t1,0);
+ assert.equal(jokerCount(r.state,'t1','shield'),1);
+ assert.equal(jokerSpentCount(r.state,'t1','shield'),0);
+});
+test('repeated written wrong verdict preserves a shield-protected score',async()=>{
+ const g=fixture(),p=opened(g,'b');
+ p.current.roundMode='written';p.phase='question';
+ g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ p.phase='review';p.answerReview={entries:{alice:{submitted:true,revealed:true}}};
+ await g.judgeWritten(room,1,'alice','wrong');
+ assert.equal(g.data.public.scores.t1,0);
+ assert.equal(jokerCount(g.data.public,'t1','shield'),0);
+ assert.equal(jokerSpentCount(g.data.public,'t1','shield'),1);
+ await g.judgeWritten(room,1,'alice','wrong');
+ assert.equal(g.data.public.scores.t1,0);
+ assert.equal(jokerSpentCount(g.data.public,'t1','shield'),1);
+});

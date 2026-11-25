@@ -1275,14 +1275,17 @@ export class PeerGame{
   // Work on a copy: rejecting a second team's answer must not leave partial
   // personal points or team scores behind in the host checkpoint.
   const before=clone(p),nextPublic=clone(p),pts=Number(p.current.points);
-  const previous=Number(nextPublic.playerScores?.[uid]?.rounds?.[key]?.delta)||0;
+  const prior=nextPublic.playerScores?.[uid]?.rounds?.[key];
+  const previous=Number(prior?.delta)||0;
+  if(teamMode&&pts>0&&prior?.result==='wrong'&&previous===0&&result==='wrong')return clone(nextPublic.playerScores[uid]);
   const nextScore=updatePlayerScore(nextPublic.playerScores?.[uid],{
    kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()
   });
-  if(teamMode&&result==='wrong'&&shieldApplies(p,team)){
+  if(teamMode&&pts>0&&result==='wrong'&&shieldApplies(p,team)){
    const blocked=Number(nextScore.rounds[key].delta)||0;
    nextScore.rounds[key].delta=0;nextScore.total-=blocked;
-   if(nextScore.history?.at(-1)?.round===key&&nextScore.history.at(-1).delta===blocked)nextScore.history.pop();
+   nextScore.history=(nextPublic.playerScores?.[uid]?.history||[]).slice(-29);
+   if(previous)nextScore.history.push({kind:'judgement',round:key,delta:-previous,at:Date.now()});
    const charged=changeJokerCharge(nextPublic,team,'shield',-1);
    if(charged){nextPublic.jokers=charged.jokers;nextPublic.jokerSpent=charged.jokerSpent;delete nextPublic.jokerShields?.[team];}
   }
@@ -1308,7 +1311,7 @@ export class PeerGame{
     throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
    if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
    const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
-   if(result==='wrong'&&shieldApplies(p,team)){
+   if(result==='wrong'&&Number(p.current.points)>0&&shieldApplies(p,team)){
     const after=changeJokerCharge(next,team,'shield',-1);
     if(after){next.jokers=after.jokers;next.jokerSpent=after.jokerSpent;delete next.jokerShields?.[team];}
    }
