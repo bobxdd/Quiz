@@ -22,9 +22,14 @@ async def join_guest(ctx,host,code,name,team='t1'):
  return guest
 
 async def place_pin(page,x,y):
- await page.locator('.bq-map-viewport').wait_for(timeout=12000)
- rect=await page.locator('.bq-map-viewport').bounding_box()
- await page.mouse.click(rect['x']+rect['width']*x,rect['y']+rect['height']*y)
+ viewport=page.locator('.bq-map-viewport')
+ await expect(viewport).to_be_visible(timeout=12000)
+ # A peer snapshot may replace this node between visibility and bounding_box.
+ # Measure via a retried Locator and let Playwright retry actionability on the
+ # current DOM element instead of clicking stale absolute screen coordinates.
+ size=await viewport.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+ assert size['width']>0 and size['height']>0,size
+ await viewport.click(position={'x':size['width']*x,'y':size['height']*y},timeout=12000)
  await expect(page.locator('.bq-map-pin.is-self')).to_have_count(1,timeout=12000)
  await expect(page.locator('.bq-map-result')).to_contain_text('Pin gespeichert',timeout=12000)
 

@@ -1,5 +1,5 @@
 import {canBuzz,roundMode,scoreMode,applyBuzzerJudgement,buzzerCoverActive,buzzerLocked} from './round-rules.mjs';
-import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak,normalizeJokerConfig,initialJokers,shieldApplies,jokerIconMarkup} from './joker-system.mjs';
+import {JOKER_TYPES,JOKER_META,jokerCount,activeChronobreak,normalizeJokerConfig,initialJokers,shieldApplies,jokerIconMarkup,jokerSpentCount} from './joker-system.mjs';
 import {renderAnswerView,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,DRAW_WIDTH,DRAW_HEIGHT,DRAW_COLORS,DRAW_SIZES,MAX_DRAW_STROKES,MAX_DRAW_POINTS,emojisFromText,MAX_EMOJI_CLUES,emojiName,emojiGroup,normalizeTeamEmoji,normalizeTeamDraw,parseEmojiPalette,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 import {finalStandings,mayFinishGame,podiumRanks} from './final-results.mjs';
@@ -958,12 +958,15 @@ function jokerPanel(){
   for(const type of JOKER_TYPES){
    const meta=JOKER_META[type],count=jokerCount(p,team,type),selected=team===own,phase=p.phase;
    const canUse=selected&&connected&&count>0&&(type==='reroll'?phase==='ready'&&!p.jokerRerollRequest&&selectingTeam(p)===team&&remainingBoardQuestions(p).length>0:
-    type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
-    type==='oracle'?phase==='question'&&!game?.guestData?.jokerPrivateHint:
+    type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&!winner()?.oral&&!p.buzzerResolved?.[roundKey()]&&p.chronoBreak?.round!==p.round:
+    type==='oracle'?phase==='question'&&p.oracleAvailable!==false&&!game?.guestData?.jokerPrivateHint:
     phase==='question'&&p.jokerShields?.[team]!==p.round&&!p.buzzerBlockedTeams?.[roundKey()]?.[team]&&!p.writtenTeamRepresentatives?.[roundKey()]?.[team]);
    const armed=type==='shield'&&shieldApplies(p,team);
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+jokerIconMarkup(type)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
-   if(armed)html+='<small>Aktiv</small>';else if(!count)html+='<small class="bq-joker-empty-label">Leer</small>';
+   const spent=jokerSpentCount(p,team,type);
+   if(armed)html+='<small>Aktiv</small>';else if(!count)html+='<small class="bq-joker-empty-label">'+(spent?'Verbraucht':'Leer')+'</small>';
+   if(spent)html+='<small class="bq-joker-used-count" title="Bisher verbrauchte Aufladungen">'+spent+' genutzt</small>';
+   if(selected&&type==='oracle'&&phase==='question'&&p.oracleAvailable===false)html+='<small>Kein Tipp</small>';
    if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" aria-label="'+e(meta.name)+' einsetzen" '+(canUse?'':'disabled'));
    if(canHost()&&!isOffline())html+='<span class="bq-joker-host-tools">'+btn('−','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="-1" title="Aufladung als verbraucht markieren" aria-label="'+e(name+': '+meta.name+' verbrauchen')+'" '+(count?'':'disabled'))+btn('+','host-joker-adjust','small','data-team="'+e(team)+'" data-type="'+type+'" data-delta="1" title="Aufladung hinzufügen" aria-label="'+e(name+': '+meta.name+' aufladen')+'" '+(count<3?'':'disabled'))+'</span>';
    html+='</div>';
@@ -988,7 +991,7 @@ function chronoQuickButton(){
  const p=publicState;
  if(role!=='guest'||!connected||member?.status!=='approved'||p?.jokerConfig?.enabled!==true||
     p.phase!=='question'||roundMode(p.current)!=='buzzer'||p.chronoBreak?.round===p.round||
-    winner()?.uid!==game?.uid||jokerCount(p,member.team,'chrono')<1)return '';
+    winner()?.uid!==game?.uid||winner()?.oral||p.buzzerResolved?.[roundKey()]||jokerCount(p,member.team,'chrono')<1)return '';
  return '<div class="bq-chrono-quick-wrap" role="status">'+btn('⏪ Chronobreak aktivieren','joker-use','primary','data-type="chrono"')+'</div>';
 }
 function chronoOverlay(){

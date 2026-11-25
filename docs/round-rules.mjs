@@ -25,9 +25,9 @@ export function applyBuzzerJudgement(state,buzzers,{round,uid,result,at=Date.now
  if(!['question','paused'].includes(state?.phase)||roundMode(state.current)!=='buzzer'||key!==String(state.round)||!winner||winner.uid!==uid||!['correct','wrong'].includes(result))throw Error('Buzzer nicht mehr aktuell. Bitte Spielstand aktualisieren.');
  if(state?.buzzerResolved?.[key]||state.current?.firstAnswerPending||activeChronobreak(state,at))throw Error('Der Buzzer ist noch reserviert, im Chronobreak oder wurde bereits bewertet.');
  const points=Number(state.current.points),delta=result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)?0:judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
- if(result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)){
+ if(result==='wrong'&&points>0&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)){
   const charged=changeJokerCharge(next,winner.team,'shield',-1);
-  if(charged){next.jokers=charged.jokers;delete next.jokerShields?.[winner.team];}
+  if(charged){next.jokers=charged.jokers;next.jokerSpent=charged.jokerSpent;delete next.jokerShields?.[winner.team];}
  }
  next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid,result,delta,team:winner.team,at}};
  if(scoreMode(state)==='team'){

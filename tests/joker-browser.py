@@ -32,6 +32,7 @@ async def editor_settings(browser,origin):
   await page.locator('[data-action="create-new-quiz"]').click()
   panel=page.locator('.bq-editor-toolbar .bq-joker-editor-settings')
   await expect(panel).to_be_visible()
+  await expect(page.locator('.brand small')).to_contain_text('3.6.1')
   await expect(panel.locator('[data-joker-card]')).to_have_count(4)
   await expect(panel.locator('#joker-drops-shield')).to_be_disabled()
   await expect(panel.locator('.bq-joker-config-status')).to_contain_text('Deaktiviert')
@@ -146,6 +147,7 @@ async def exercise(origin):
   assert 'VERTRAULICHER ORAKELTIPP' not in str(await bob.evaluate("window.__probe.info().publicState"))
   await alice.locator('[data-action="joker-use"][data-type="oracle"]').click()
   await expect(alice.locator('.bq-oracle-private')).to_contain_text('VERTRAULICHER ORAKELTIPP',timeout=15000)
+  await expect(alice.locator('.bq-joker-team').filter(has_text='Rot').locator('.bq-joker-token').filter(has_text='Oracle Lens')).to_contain_text('1 genutzt')
   assert await bob.locator('.bq-oracle-private').count()==0
   assert 'VERTRAULICHER ORAKELTIPP' not in str(await bob.evaluate("window.__probe.info().publicState"))
   print('PASS: Oracle Lens hint is private to the receiving team and hidden during preparation',flush=True)
@@ -173,12 +175,16 @@ async def exercise(origin):
   await expect(alice.locator('.bq-chrono-quick-wrap [data-type="chrono"]')).to_be_visible(timeout=15000)
   await alice.locator('.bq-chrono-quick-wrap [data-type="chrono"]').click()
   await expect(host.locator('.bq-chrono-overlay.is-host-lock')).to_be_visible(timeout=15000)
+  assert await host.locator('main.page').evaluate('(el)=>el.inert')
+  assert await host.locator('.topbar').evaluate('(el)=>el.inert')
+  assert await bob.locator('#chrono-correction').count()==0
   await expect(bob.locator('.bq-chrono-overlay')).to_contain_text('CHRONOBREAK',timeout=15000)
   await alice.locator('#chrono-correction').fill('Korrigierte Antwort')
   await alice.locator('[data-action="joker-chrono-answer"]').click()
   await host.wait_for_function("()=>window.__probe.getGame().hostChronoAnswer(window.__probe.room(),3)==='Korrigierte Antwort'",timeout=15000)
   await expect(host.locator('.bq-chrono-overlay')).to_have_count(0,timeout=15000)
   await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Korrigierte Antwort',timeout=15000)
+  assert not await host.locator('main.page').evaluate('(el)=>el.inert')
   assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.chrono")==0
   assert not errors,errors
   await ctx.close();await browser.close()

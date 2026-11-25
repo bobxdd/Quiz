@@ -13,13 +13,27 @@ export function jokerIconMarkup(type){
  return '<span class="bq-joker-icon" aria-hidden="true">'+(JOKER_META[type]?.symbol||'')+'</span>';
 }
 export const JOKER_MAX_CHARGES=3,CHRONOBREAK_MS=8000;
+export function oracleHintForQuestion(q){
+ const dedicated=String(q?.oracleHint||'').trim();
+ if(dedicated)return dedicated.slice(0,220);
+ const general=Array.isArray(q?.hints)?q.hints.map(h=>String(h||'').trim()).find(Boolean):'';
+ if(general)return general.slice(0,220);
+ // Only the explicit hints template may supply staged text; never use answer elements.
+ if(q?.scene?.template==='hints'){
+  const staged=(q.scene.elements||[]).filter(el=>el.kind==='text'&&el.step>=1&&el.step<=4)
+   .sort((a,b)=>a.step-b.step).map(el=>String(el.text||'').trim())
+   .find(h=>h&&!/^Hinweis [1-4]$/i.test(h));
+  if(staged)return staged.slice(0,220);
+ }
+ return '';
+}
 export function jokerSetupSummary(quiz){
  const config=normalizeJokerConfig(quiz?.jokerConfig);
  const normal=(quiz?.questions||[]).filter(q=>[1,2].includes(Number(q.boardRound||1)));
  const fields=JOKER_TYPES.reduce((sum,type)=>sum+config.drops[type],0);
  return {config,fields,available:normal.length,missing:Math.max(0,fields-normal.length),
   starters:JOKER_TYPES.filter(type=>config.startingByType[type]).length,
-  missingHints:normal.filter(q=>!String(q.oracleHint||'').trim()&&!q.hints?.some(h=>String(h||'').trim())).length};
+  missingHints:normal.filter(q=>!oracleHintForQuestion(q)).length};
 }
 export function jokerType(value){return JOKER_TYPES.includes(value)?value:'';}
 export function normalizeJokerConfig(value){
@@ -62,11 +76,18 @@ export function jokerCount(state,team,type){
  const raw=Number(state?.jokers?.[team]?.[type]);
  return Number.isSafeInteger(raw)?Math.max(0,Math.min(JOKER_MAX_CHARGES,raw)):0;
 }
+export function jokerSpentCount(state,team,type){
+ if(!jokerType(type)||!Object.hasOwn(state?.teams||{},team))return 0;
+ const n=Number(state?.jokerSpent?.[team]?.[type]);
+ return Number.isSafeInteger(n)&&n>0?n:0;
+}
 export function changeJokerCharge(state,team,type,delta){
  if(!jokerType(type)||!Object.hasOwn(state?.teams||{},team)||!Number.isInteger(delta)||![-1,1].includes(delta))return null;
  const current=jokerCount(state,team,type);
  if(current+delta<0||current+delta>JOKER_MAX_CHARGES)return null;
- return {...state,jokers:{...(state.jokers||{}),[team]:{...(state.jokers?.[team]||{}),[type]:current+delta}}};
+ const next={...state,jokers:{...(state.jokers||{}),[team]:{...(state.jokers?.[team]||{}),[type]:current+delta}}};
+ if(delta<0)next.jokerSpent={...(state.jokerSpent||{}),[team]:{...(state.jokerSpent?.[team]||{}),[type]:jokerSpentCount(state,team,type)+1}};
+ return next;
 }
 export function drawJokerForQuestion(state,id,drops){
  const type=jokerType(drops?.[id]),round=Number(state?.round);

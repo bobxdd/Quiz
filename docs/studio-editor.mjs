@@ -1,5 +1,5 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
-import {JOKER_TYPES,JOKER_META,normalizeJokerConfig,jokerSetupSummary,jokerIconMarkup} from './joker-system.mjs';
+import {JOKER_TYPES,JOKER_META,normalizeJokerConfig,jokerSetupSummary,jokerIconMarkup,oracleHintForQuestion} from './joker-system.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji,normalizeTeamDraw} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
@@ -112,6 +112,9 @@ export function createStudioEditor(api){
  };
  const mainTemplate=scene=>`<label class="se-field"><span>Vorlage</span><select data-se-template>${Object.entries(TEMPLATE_NAMES).map(([key,label])=>
   `<option value="${key}" ${scene.template===key?'selected':''}>${escape(label)}</option>`).join('')}</select></label>`;
+ function oracleEditor(item){
+  return `<section class="bq-oracle-editor"><h4>${jokerIconMarkup('oracle')} Oracle Lens <small>${oracleHintForQuestion(item)?'Hinweis vorhanden':'Kein Hinweis'}</small></h4><label class="se-field"><span>Privater Team-Hinweis</span><textarea id="se-in-oracleHint" data-se-field="oracleHint" maxlength="220" rows="2" placeholder="Optionaler Tipp, ohne die Lösung zu verraten">${escape(item.oracleHint||'')}</textarea></label><p class="se-muted">Nur das einlösende Team sieht den Hinweis. Alternativ wird ein vorhandener allgemeiner Tipp verwendet.</p></section>`;
+ }
  function teamEmojiEditor(item){
   const drawing=item.type===TEAM_DRAW;
   const settings=drawing?normalizeTeamDraw(item.teamDraw):normalizeTeamEmoji(item.teamEmoji);
@@ -126,6 +129,7 @@ export function createStudioEditor(api){
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
     ${drawing?'':`${input('emojiPalette','Emoji-Schnellauswahl',settings.palette,{rows:3})}
     <p class="se-muted">Bis zu ${MAX_EMOJI_PALETTE} Emojis für die Schnellauswahl hinterlegen. Im Spiel lässt sich zusätzlich die vollständige Emoji-Tastatur öffnen.</p>`}
+    ${oracleEditor(item)}
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
     ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],...(quiz().balanceBoard?[[3,'Ausgleichs-Board']]:[]),[2,'Runde 2']]})}${mainTemplate(item.scene)}
    </div></section>`;
@@ -156,7 +160,7 @@ export function createStudioEditor(api){
   ${scene.template==='map'?`<div class="se-subpanel bq-map-host-point"><h4>Geheimer Zielpunkt (Pflicht)</h4><p>${item.mapTargetSet?'✓ Dolch wurde auf der Karte platziert.':'⚠ Noch kein Zielpunkt gewählt. Zum Veröffentlichen ist ein Pin erforderlich.'}</p><p class="se-muted">Öffne „Bearbeiten“ und tippe auf die graue Weltkarte. Mit +, −, Mausrad oder zwei Fingern kannst du vorher heranzoomen. Der Dolch markiert deinen Antwortpunkt. Teilnehmer sehen ihn erst nach der Lösung.</p>${item.mapTargetSet?`<div class="se-inline"><strong>Position: ${Number(item.mapTargetX).toFixed(3)} / ${Number(item.mapTargetY).toFixed(3)}</strong><button type="button" data-se-action="map-clear">Pin entfernen</button></div>`:''}</div>`:''}
   ${scene.template==='map'?input('mapPrompt','Frage über der Weltkarte',item.prompt||'',{rows:2}):''}
   ${scene.template==='audio'?`${input('audioStart','Start im Original (Sekunden)',item.audioStart||0,{kind:'number',min:0,step:0.5})}${input('audioDuration','Ausschnitt (1–12 Sekunden)',item.audioDuration||8,{kind:'number',min:1,max:12})}<label class="se-field"><span>MP3 / WAV / OGG auswählen</span><input type="file" accept=".mp3,audio/mpeg,.wav,audio/wav,.ogg,audio/ogg" data-se-upload="audio"></label><p class="se-muted">MP3 wird in einen kompakten Clip umgewandelt. Im Live-Spiel startet und wiederholt nur der Host; alle können währenddessen buzzern.</p>${item.audio?`<audio controls src="${item.audio}"></audio>`:''}`:''}
-  <details class="se-extras"><summary>Weitere Angaben & Tipps (1–4)</summary>${input('oracleHint','Oracle Lens · privater Team-Hinweis',item.oracleHint||'',{rows:2})}<p class="se-muted">Nur das Team mit Oracle Lens sieht diesen Hinweis. Ohne eigenen Text wird ein vorhandener allgemeiner Tipp benutzt.</p>${scene.template==='hints'?'<p class="se-muted">Die vier Tipps bearbeitest du direkt in der Fragenfläche. Ihr Aufdeckzeitpunkt ist bei jedem Tipp einstellbar.</p>':`<p class="se-muted">Optional: bis zu vier Tipps, die der Host einzeln veröffentlicht.</p>${[0,1,2,3].map(i=>input('hint-'+i,`Tipp ${i+1}`,item.hints?.[i]||'',{rows:2})).join('')}`} ${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:900})}</details></section>`;
+  ${oracleEditor(item)}<details class="se-extras"><summary>Weitere Angaben & Tipps (1–4)</summary>${scene.template==='hints'?'<p class="se-muted">Die vier Tipps bearbeitest du direkt in der Fragenfläche. Ihr Aufdeckzeitpunkt ist bei jedem Tipp einstellbar.</p>':`<p class="se-muted">Optional: bis zu vier Tipps, die der Host einzeln veröffentlicht.</p>${[0,1,2,3].map(i=>input('hint-'+i,`Tipp ${i+1}`,item.hints?.[i]||'',{rows:2})).join('')}`} ${input('seconds','Timer in Sekunden (0 = aus)',item.seconds||0,{kind:'number',min:0,max:900})}</details></section>`;
   if(!el)return `${base}<section class="se-properties"><h3>Element</h3><p class="se-muted">Ein Element auf der Fragenfläche anklicken.</p></section>`;
   return `${base}<section class="se-properties"><div class="se-sectionhead"><h3>Ausgewähltes Element</h3><div class="se-inline"><button type="button" data-se-action="duplicate" title="Duplizieren">⧉</button><button type="button" data-se-action="remove" title="Entfernen">✕</button></div></div><div class="se-chip">${escape(el.kind.toUpperCase())} ${el.letter?`· ${escape(el.letter)}`:''}</div>
   ${el.kind!=='image'?input('text','Inhalt',el.text,{rows:3}):`<label class="se-field" data-se-upload-zone="image"><span>Bilddatei (PNG/JPG/WebP)</span><small class="se-drop-help">Bild hier ablegen oder auswählen</small><input type="file" accept="image/png,image/jpeg,image/webp" data-se-upload="image"></label>${input('alt','Bildbeschreibung',el.alt||'')}`}
