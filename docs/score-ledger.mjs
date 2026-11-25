@@ -7,7 +7,7 @@ import {judgementDelta,updatePlayerScore} from './core.mjs';
 const copy=x=>x===undefined?undefined:structuredClone(x);
 const equals=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const clean=s=>String(s??'').slice(0,110);
-export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,round='',questionId='',points,verdict='',at=Date.now()}={}){
+export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,round='',questionId='',points,verdict='',effectiveDelta,at=Date.now()}={}){
  const changes={};
  if(team){
   changes.team={id:clean(team),before:copy(before?.scores?.[team]),after:copy(after?.scores?.[team])};
@@ -16,8 +16,15 @@ export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,
   changes.person={id:clean(person),before:copy(before?.playerScores?.[person]),after:copy(after?.playerScores?.[person])};
  }
  if(!['correct','wrong'].includes(verdict)&&!Object.values(changes).some(c=>!equals(c.before,c.after)))return null;
+ // A shield can turn a wrong verdict into zero points. Preserve the real
+ // awarded amount, not the usual penalty, for later score-only regrading.
+ if(['correct','wrong'].includes(verdict)&&!Number.isFinite(effectiveDelta)){
+  const recorded=changes.person?.after?.rounds?.[String(round)]?.delta;
+  if(Number.isFinite(recorded))effectiveDelta=recorded;
+  else if(Number.isFinite(changes.team?.before)&&Number.isFinite(changes.team?.after))effectiveDelta=changes.team.after-changes.team.before;
+ }
  return {id:clean(id),kind:clean(kind),round:clean(round),questionId:clean(questionId),
-  actor:clean(actor),points,verdict:clean(verdict),at:Number(at)||Date.now(),changes,undoneAt:null};
+  actor:clean(actor),points,verdict:clean(verdict),...(Number.isFinite(effectiveDelta)?{effectiveDelta}:{}),at:Number(at)||Date.now(),changes,undoneAt:null};
 }
 export function appendScoreEvent(events,event,max=120){
  const current=Array.isArray(events)?events:[];
@@ -38,7 +45,9 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
  if(!mayRegradeScore(state,target))throw Error('Diese Bewertung ist nicht mehr aktuell.');
  const verdict=target.verdict==='correct'?'wrong':'correct';
  const points=target.points??questionPoints;
- const adjustment=judgementDelta(points,verdict)-judgementDelta(points,target.verdict);
+ const nextDelta=judgementDelta(points,verdict);
+ const previousDelta=Number.isFinite(target.effectiveDelta)?target.effectiveDelta:judgementDelta(points,target.verdict);
+ const adjustment=nextDelta-previousDelta;
  const next=structuredClone(state);
  const {team,person}=target.changes;
  if(team){
@@ -53,7 +62,7 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
   });
  }
  const event=scoreEvent(state,next,{id:newId,kind:target.kind,team:team?.id,person:person?.id,
-  actor:target.actor,round:target.round,questionId:target.questionId,points,verdict,at});
+  actor:target.actor,round:target.round,questionId:target.questionId,points,verdict,effectiveDelta:nextDelta,at});
  event.corrects=id;
  const revised=events.map(entry=>entry===target?{...entry,supersededBy:event.id}:entry);
  return {state:next,events:appendScoreEvent(revised,event),event};

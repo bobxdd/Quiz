@@ -2,7 +2,7 @@
 // hints belong in the shared public state.
 export const JOKER_TYPES=Object.freeze(['shield','oracle','reroll','chrono']);
 export const JOKER_META=Object.freeze({
- shield:{name:'Banshees Schleier',symbol:'🛡',description:'Einmal keinen Punktabzug für eine falsche Buzzer-Antwort.'},
+ shield:{name:'Banshees Schleier',symbol:'🛡',description:'Einmal einen regulären Punktabzug für eine falsche Antwort verhindern.'},
  oracle:{name:'Oracle Lens',symbol:'🔍',description:'Einen privaten, vorbereiteten Hinweis für dein Team anzeigen.'},
  reroll:{name:'Reroll',symbol:'↻',description:'Vor dem Aufdecken einen anderen Fragenplatz wählen lassen.'},
  chrono:{name:'Chronobreak',symbol:'⏪',description:'Nach eigenem Buzz 8 Sekunden Zeit für eine Antwortkorrektur.'}

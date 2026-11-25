@@ -44,3 +44,14 @@ test('regrading a buzzer replaces its verdict and preserves later team adjustmen
  assert.deepEqual(reverted.state,current);
  assert.equal(latestUndoableEvent(reverted.events).id,'wrong');
 });
+
+test('regrading a shield-protected wrong answer uses actual zero penalty, not theoretical half',()=>{
+ const initial={scores:{t1:100,t2:20}};
+ const wrong=structuredClone(initial);
+ const event=scoreEvent(initial,wrong,{id:'shield',kind:'buzzer-judgement',round:1,team:'t1',points:100,verdict:'wrong'});
+ assert.equal(event.effectiveDelta,0);
+ const corrected=regradeScoreEvent(wrong,[event],'shield',{newId:'correct'});
+ assert.equal(corrected.state.scores.t1,200);
+ const wrongAgain=regradeScoreEvent(corrected.state,corrected.events,'correct',{newId:'wrong-again'});
+ assert.equal(wrongAgain.state.scores.t1,50);
+});

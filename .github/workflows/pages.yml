@@ -35,7 +35,7 @@ jobs:
           # Run the newest visual-UX guard first so a viewport regression fails
           # promptly rather than after the entire legacy browser suite.
           timeout -k 10s 120s python tests/visual-answer-usability-browser.py
-          timeout -k 10s 120s python tests/joker-browser.py || failed=1
+          timeout -k 10s 120s python tests/joker-browser.py
           timeout -k 10s 120s python tests/board-workspace-browser.py || failed=1
           timeout -k 10s 120s python tests/written-deadline-fairness-browser.py || failed=1
           timeout -k 10s 120s python tests/map-step3-browser.py || failed=1
@@ -140,7 +140,7 @@ jobs:
           test -n "$PAGES_URL"
           published="$(mktemp)"
           trap 'rm -f "$published"' EXIT
-          for asset in app.mjs sound-effects.mjs team-emoji.mjs emoji-catalog.json host-flow.css session-ui.css studio-editor.mjs studio-model.mjs projector.html sw.js; do
+          for asset in app.mjs joker-system.mjs sound-effects.mjs team-emoji.mjs emoji-catalog.json host-flow.css session-ui.css studio-editor.mjs studio-model.mjs projector.html sw.js; do
             verified=false
             for attempt in $(seq 1 12); do
               if curl -fsS --max-time 10 "${PAGES_URL%/}/$asset?release=$GITHUB_SHA-$attempt" -o "$published" && cmp -s "docs/$asset" "$published"; then

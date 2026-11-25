@@ -867,7 +867,7 @@ export class PeerGame{
    return true;
   }
   if(member?.status!=='approved'||this.data.roster?.[ctx.uid]?.team!==member.team)throw Error('Hostfreigabe erforderlich.');
-   if(waitsForNextQuestion(pub,member)&&['buzz','answer',TEAM_EMOJI].includes(action))
+   if(waitsForNextQuestion(pub,member)&&['buzz','answer','joker',TEAM_EMOJI].includes(action))
     throw Error('Deine Teilnahme beginnt mit der nächsten Frage.');
   switch(action){
    case TEAM_EMOJI:{
@@ -1075,6 +1075,7 @@ export class PeerGame{
  }
  async releaseBuzzers(room,round,uid=''){
   const d=this._getHostData(room),p=d.public,key=String(round);
+  if(activeChronobreak(p))throw Error('Chronobreak läuft noch.');
   if(key!==String(p.round)||!['question','paused'].includes(p.phase)||roundMode(p.current)!=='buzzer'||p.buzzerResolved?.[key])
    throw Error('Die Buzzerfrage ist nicht mehr aktiv.');
   if(p.current?.firstAnswerPending)throw Error('Erst das auswählende Team bewerten.');
@@ -1152,7 +1153,7 @@ export class PeerGame{
   if(!next)throw Error('Runde 2 bzw. das Ausgleichs-Board kann nur aus der Übersicht bei freien Fragen gestartet werden.');
   d.public=next;this._changed();return clone(next);
  }
- async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(activeChronobreak(d.public)&&changes?.phase==='reveal')throw Error('Chronobreak läuft noch.');if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
+ async updateCurrent(room,round,id,changes,phases=['question','paused','review']){const d=this._getHostData(room);if(activeChronobreak(d.public))throw Error('Chronobreak läuft noch.');if(d.teamEmoji)throw Error('Diese Teamrunde hat eine eigene Phasensteuerung.');
   if(changes?.phase==='reveal'&&d.public?.current?.firstAnswerPending)throw Error('Erst die Erstantwort bewerten.');
   if(changes?.phase==='reveal'&&['question','paused','review','answered'].includes(d.public?.phase)&&
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
