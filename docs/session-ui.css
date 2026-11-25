@@ -841,3 +841,8 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
  .bq-chrono-card{padding:12px}
 }
 @media(prefers-reduced-motion:reduce){.bq-chrono-overlay,.bq-joker-event{animation:none!important;transition:none!important}}
+
+.bq-joker-symbol .bq-joker-icon{width:17px;height:17px;flex-basis:17px}
+.bq-joker-event .bq-joker-icon{display:inline-flex;vertical-align:middle}
+.bq-joker-token.is-empty .bq-joker-name{text-decoration:line-through}
+.bq-joker-empty-label{font-size:10px;color:#ccd2dc}

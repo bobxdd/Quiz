@@ -7,7 +7,20 @@ export const JOKER_META=Object.freeze({
  reroll:{name:'Reroll',symbol:'↻',description:'Vor dem Aufdecken einen anderen Fragenplatz wählen lassen.'},
  chrono:{name:'Chronobreak',symbol:'⏪',description:'Nach eigenem Buzz 8 Sekunden Zeit für eine Antwortkorrektur.'}
 });
+// Original red scanner-lens symbol. No external asset or network request.
+export function jokerIconMarkup(type){
+ if(type==='oracle')return '<svg class="bq-joker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 14l7 7" stroke="#f4a48f" stroke-width="3" stroke-linecap="round"/><circle cx="10" cy="10" r="7" fill="#552531" stroke="#ed8c79" stroke-width="2"/><path d="M4.5 10Q10 3 15.5 10Q10 17 4.5 10Z" fill="#f1b2a2"/><circle cx="10" cy="10" r="2.5" fill="#70293a"/><path d="M7 5l-2 2" stroke="#fff1dc" stroke-width="1.4" stroke-linecap="round"/></svg>';
+ return '<span class="bq-joker-icon" aria-hidden="true">'+(JOKER_META[type]?.symbol||'')+'</span>';
+}
 export const JOKER_MAX_CHARGES=3,CHRONOBREAK_MS=8000;
+export function jokerSetupSummary(quiz){
+ const config=normalizeJokerConfig(quiz?.jokerConfig);
+ const normal=(quiz?.questions||[]).filter(q=>[1,2].includes(Number(q.boardRound||1)));
+ const fields=JOKER_TYPES.reduce((sum,type)=>sum+config.drops[type],0);
+ return {config,fields,available:normal.length,missing:Math.max(0,fields-normal.length),
+  starters:JOKER_TYPES.filter(type=>config.startingByType[type]).length,
+  missingHints:normal.filter(q=>!String(q.oracleHint||'').trim()&&!q.hints?.some(h=>String(h||'').trim())).length};
+}
 export function jokerType(value){return JOKER_TYPES.includes(value)?value:'';}
 export function normalizeJokerConfig(value){
  const obj=value&&typeof value==='object'?value:{};

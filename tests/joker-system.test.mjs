@@ -7,7 +7,7 @@ import {applyBuzzerJudgement} from '../docs/round-rules.mjs';
 import {
  JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,
  jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,
- shieldApplies,activeChronobreak,CHRONOBREAK_MS
+ shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup
 } from '../docs/joker-system.mjs';
 
 const room='ABCDEFGHJKLM2345';
@@ -166,4 +166,20 @@ test('late-joining player cannot use Joker charges during an ineligible question
  assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'oracle',round:1}),/nächsten Frage/);
  assert.equal(jokerCount(g.data.public,'t2','oracle'),1);
  assert.deepEqual(g.data.jokerPrivateHints,{});
+});
+
+test('quiz-wide editor totals include both normal boards, exclude balance and flag missing slots',()=>{
+ const summary=jokerSetupSummary(quiz);
+ assert.equal(summary.fields,6);
+ assert.equal(summary.available,4);
+ assert.equal(summary.missing,2);
+ assert.equal(summary.starters,4);
+ assert.equal(summary.missingHints,3);
+ const six=normalizedQuiz({...quiz,questions:[...quiz.questions,{id:'f',boardRound:2},{id:'g',boardRound:1}]});
+ const fit=jokerSetupSummary(six);
+ assert.equal(fit.missing,0);
+ const drops=placeJokerDrops(six,()=>0);
+ for(const type of JOKER_TYPES)assert.equal(Object.values(drops).filter(value=>value===type).length,fit.config.drops[type]);
+ assert.equal(Object.hasOwn(drops,'e'),false);
+ assert.match(jokerIconMarkup('oracle'),/<svg/);
 });
