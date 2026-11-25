@@ -7,7 +7,7 @@ import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-
 import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,CHRONOBREAK_MS} from './joker-system.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
-import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot} from './lobby-model.mjs';
+import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot,participatingTeamIds} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz,isGuestResumeCode,rememberGuestResume} from './backup-store.mjs';
@@ -485,6 +485,16 @@ export class PeerGame{
   this.savedAt=Number(previous.savedAt)||0;
   this.hostQuiz=await loadBestHostQuiz(room);
   const active=this.data.public;
+  if(!Array.isArray(active.participatingTeams)&&active.started){
+   const originalOrder=active.preBalanceSelectionTurn?.order??(active.boardRound!==3?active.selectionTurn?.order:[]);
+   active.participatingTeams=participatingTeamIds({...active,participatingTeams:originalOrder},this.data.roster);
+   if(active.boardRound===3&&active.selectionTurn?.order){
+    const current=selectingTeam(active);
+    active.selectionTurn.order=active.selectionTurn.order.filter(team=>active.participatingTeams.includes(team));
+    active.selectionTurn.index=Math.max(0,active.selectionTurn.order.indexOf(current));
+   }
+  }
+  if(active.jokerEvent&&!active.jokerEvent.awarded&&roundMode(active.current)!=='buzzer')active.jokerEvent=null;
   if(active.current?.type==='map'&&active.current.roundMode!=='written'&&['question','paused'].includes(active.phase)){
    active.current.roundMode='written';
    active.answerParticipants=writtenParticipants(this.data);
@@ -1031,6 +1041,7 @@ export class PeerGame{
   const next=approval(d.roster,uid,member,destination);if(!next.accepted)throw Error(next.reason);
   if(addition){d.public.teams=addition.teams;d.public.scores[addition.id]=0;}
   d.roster=next.roster;
+  if(d.public.started)d.public.participatingTeams=participatingTeamIds(d.public,d.roster);
   if(late&&d.public.current&&d.public.phase!=='ready')member.playFromRound=d.public.round+1;
   d.members[uid]={...member,team:destination,status:'approved',teamRequest:null,createdTeam:member.createdTeam===true||!!addition,ready:member.ready===true};
   this._changed();
@@ -1047,7 +1058,7 @@ export class PeerGame{
  async buzzer(room,round,team,name){if(this.mode==='guest')return this._rpc('buzz',{round});throw Error('Buzzer nur für Teilnehmer.')}
  async answer(room,round,team,text){if(this.mode==='guest')return this._rpc('answer',{round,text});throw Error('Antworten nur für Teilnehmer.')}
  async message(room,team,name,text){if(this.mode==='guest')return this._rpc('message',{text});const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Unbekanntes Team.');const id='m_'+randomHex(9);d.messages[team]??={};d.messages[team][id]={uid:this.uid,name:'HOST',text:safeText(text,500),at:Date.now()};const keys=Object.keys(d.messages[team]);for(const key of keys.slice(0,-80))delete d.messages[team][key];this._changed()}
- async setState(room,changes){const d=this._getHostData(room);if(changes.started===true&&!d.public.started){d.public.selectionTurn=makeSelectionTurn(d.public,d.roster);d.public.boardSequence=true;}for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
+ async setState(room,changes){const d=this._getHostData(room);if(changes.started===true&&!d.public.started){d.public.participatingTeams=participatingTeamIds({teams:d.public.teams},d.roster);d.public.selectionTurn=makeSelectionTurn(d.public,d.roster);d.public.boardSequence=true;}for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
  async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
   const d=this._getHostData(room);
   const state=covered&&!d.public.selectionTurn?{...d.public,selectionTurn:makeSelectionTurn(d.public,d.roster),boardSequence:true}:d.public;
@@ -1274,11 +1285,17 @@ export class PeerGame{
   // Work on a copy: rejecting a second team's answer must not leave partial
   // personal points or team scores behind in the host checkpoint.
   const before=clone(p),nextPublic=clone(p),pts=Number(p.current.points);
-  const previous=Number(nextPublic.playerScores?.[uid]?.rounds?.[key]?.delta)||0;
+  const previousVerdict=nextPublic.playerScores?.[uid]?.rounds?.[key];
+   if(previousVerdict?.result===result)return clone(nextPublic.playerScores[uid]);
+   if(previousVerdict){
+    const decision=d.scoreEvents?.findLast(event=>event.kind==='written-judgement'&&event.round===key&&event.changes.person?.id===uid&&!event.undoneAt&&!event.supersededBy);
+    if(decision){await this.hostRegradeScore(room,decision.id);return clone(d.public.playerScores[uid]);}
+   }
+   const previous=Number(previousVerdict?.delta)||0;
   const nextScore=updatePlayerScore(nextPublic.playerScores?.[uid],{
    kind:'judgement',round:key,questionId:p.current.id,points:pts,result,at:Date.now()
   });
-  if(teamMode&&result==='wrong'&&shieldApplies(p,team)){
+  if(teamMode&&result==='wrong'&&pts>0&&shieldApplies(p,team)){
    const blocked=Number(nextScore.rounds[key].delta)||0;
    nextScore.rounds[key].delta=0;nextScore.total-=blocked;
    if(nextScore.history?.at(-1)?.round===key&&nextScore.history.at(-1).delta===blocked)nextScore.history.pop();
@@ -1307,7 +1324,7 @@ export class PeerGame{
     throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
    if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
    const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
-   if(result==='wrong'&&shieldApplies(p,team)){
+   if(result==='wrong'&&p.current.points>0&&shieldApplies(p,team)){
     const after=changeJokerCharge(next,team,'shield',-1);
     if(after){next.jokers=after.jokers;delete next.jokerShields?.[team];}
    }

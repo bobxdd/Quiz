@@ -12,6 +12,11 @@ export function approval(roster,id,player,team){
  current[id]={name:player.name.trim().slice(0,28),team};
  return {accepted:true,roster:current};
 }
+export function participatingTeamIds(state,roster={}){
+ const known=new Set(state?.participatingTeams||[]);
+ for(const player of Object.values(roster||{}))known.add(player?.team);
+ return Object.keys(state?.teams||{}).filter(id=>validTeamId(id)&&known.has(id));
+}
 export function participantLabels(roster){return Object.entries(roster||{}).filter(([id,p])=>validPlayerId(id)&&p?.name&&p?.team).slice(0,MAX_PLAYERS).map(([id,p])=>({id,name:String(p.name).slice(0,28),team:p.team}));}
 
 export function participantSnapshot(roster){

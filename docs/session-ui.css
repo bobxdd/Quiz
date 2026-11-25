@@ -784,18 +784,21 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 }
 
 
-/* Optional Joker inventory and event overlays. Never alter the question canvas. */
+/* Give the inventory its own space beneath the play area. */
+.bq-joker-dock{flex:0 0 auto;display:grid;gap:4px;margin-top:4px;min-width:0}
 .bq-joker-panel{
- position:fixed;z-index:70;right:12px;bottom:82px;
- width:min(460px,calc(100vw - 24px));max-height:34dvh;overflow:auto;
- padding:12px;border:1px solid rgba(164,188,205,.38);border-radius:14px;
+ width:100%;max-height:clamp(42px,18dvh,160px);overflow:auto;
+ padding:6px 10px;border:1px solid rgba(164,188,205,.38);border-radius:9px;
  background:rgba(15,24,37,.96);color:#eaf1fa;
  box-shadow:0 12px 34px rgba(0,0,0,.38);font-size:13px;
 }
 .bq-joker-panel>summary{cursor:pointer;user-select:none;list-style:none}
 .bq-joker-panel>summary::-webkit-details-marker{display:none}
+.bq-answer-keyboard .bq-joker-dock{display:none}
 .bq-joker-panel:not([open]){overflow:hidden;max-height:none}
-.bq-joker-heading{display:flex;justify-content:space-between;align-items:baseline;gap:9px;margin-bottom:8px}
+.bq-joker-heading{display:flex;justify-content:space-between;align-items:center;gap:9px;min-height:27px}
+.bq-joker-heading strong::before{content:'▸';margin-right:.45em}
+.bq-joker-panel[open] .bq-joker-heading strong::before{content:'▾'}
 .bq-joker-heading>span{font-size:11px;color:#b7c5d5}
 .bq-joker-teams{display:grid;gap:7px}
 .bq-joker-team{display:flex;align-items:center;gap:10px;border-top:1px solid rgba(180,197,217,.12);padding-top:5px}
@@ -809,7 +812,7 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-token b{font-variant-numeric:tabular-nums}
 .bq-joker-token .btn{min-width:25px;padding:4px 7px;font-size:11px}
 .bq-joker-host-tools{display:inline-flex;gap:2px}
-.bq-oracle-private{margin-top:9px;padding:10px;background:rgba(25,53,67,.95);border-left:3px solid #75cce3;border-radius:7px}
+.bq-oracle-private{max-height:12dvh;overflow:auto;padding:4px 9px;background:rgba(25,53,67,.95);border-left:3px solid #75cce3;border-radius:7px}
 .bq-oracle-private p{margin:4px 0 0}
 .bq-joker-event{position:fixed;top:92px;left:50%;transform:translateX(-50%);z-index:89;max-width:min(92vw,450px);text-align:center;pointer-events:none;padding:11px 20px;border:1px solid #b3bb8c;border-radius:12px;background:#19262d;color:#f6f7e1;box-shadow:0 8px 28px rgba(0,0,0,.45)}
 .bq-joker-event span{display:block;font-size:11px;letter-spacing:.1em;opacity:.8}
@@ -832,7 +835,7 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-chrono-card form{margin-top:10px;display:grid;gap:8px;text-align:left}
 .bq-chrono-card form input{width:100%;max-width:100%;box-sizing:border-box}
 @media(max-width:640px){
- .bq-joker-panel{right:6px;bottom:70px;width:calc(100vw - 12px);max-height:23dvh;padding:8px}
+ .bq-joker-panel{padding:3px 8px}
  .bq-joker-team>strong{width:70px;flex-basis:70px;font-size:11px}
  .bq-joker-token{padding:2px 4px;min-height:27px}
  .bq-joker-name{max-width:52px}

@@ -43,7 +43,7 @@ async def editor_settings(browser,origin):
   await panel.locator('#joker-drops-chrono').select_option('2')
   await panel.locator('#joker-start-all').check()
   await panel.locator('#joker-start-oracle').uncheck()
-  await expect(panel.locator('.bq-joker-config-status')).to_contain_text('6 Fragen')
+  await expect(panel.locator('.bq-joker-config-status')).to_contain_text('6 Buzzerfragen')
   await expect(panel.locator('#joker-start-all')).not_to_be_checked()
   await page.locator('[data-se-action="board-round"][data-board-round="2"]').click()
   await expect(panel).to_be_visible()
@@ -102,13 +102,14 @@ async def exercise(origin):
   questions=[{'id':ch,'boardRound':1,'category':'Jokerprobe','title':'Frage '+ch,'type':'text','roundMode':'buzzer',
               'points':(i+1)*100,'prompt':'Rate Champion '+ch,'answer':'Anivia','answerText':'Anivia','oracleHint':'VERTRAULICHER ORAKELTIPP'}
              for i,ch in enumerate('abcd')]
+  questions.append({**questions[-1],'id':'schriftlich','title':'Schriftliche Frage','points':500,'roundMode':'written'})
   settings={'enabled':True,'starting':True,'drops':{'shield':1,'oracle':1,'reroll':1,'chrono':1}}
   await host.evaluate('(payload)=>window.__probe.setQuiz({title:"Joker QA",teams:["Rot","Blau"],questions:payload.questions,jokerConfig:payload.settings})',
                       {'questions':questions,'settings':settings})
   await host.locator('[data-action="publish"]').first.click()
   try:
    await host.wait_for_function('()=>window.__probe.info().publicState?.published===true',timeout=15000)
-   await expect(host.locator('.bq-board-scene .tile')).to_have_count(4,timeout=15000)
+   await expect(host.locator('.bq-board-scene .tile')).to_have_count(5,timeout=15000)
   except Exception:
    print('Publication failure:',await host.locator('#toaster').text_content(),await host.evaluate('window.__probe.info().publicState'),flush=True)
    raise
@@ -124,6 +125,7 @@ async def exercise(origin):
    if not await page.locator('.bq-joker-panel').evaluate('(el)=>el.open'):
     await page.locator('.bq-joker-panel summary').click()
   assert await host.evaluate("Object.keys(window.__probe.getGame().data.jokerDrops).length")==4
+  assert not await host.evaluate("'schriftlich' in window.__probe.getGame().data.jokerDrops")
 
   # Hidden drop stays secret while the host has selected but not revealed a question.
   await host.locator('[data-action="open"][data-qid="a"]').click()
@@ -180,6 +182,28 @@ async def exercise(origin):
   await expect(host.locator('.bq-chrono-overlay')).to_have_count(0,timeout=15000)
   await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Korrigierte Antwort',timeout=15000)
   assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.chrono")==0
+  await host.locator('[data-action="buzz-correct"]').click()
+  await host.locator('[data-action="back"]').click()
+  await host.locator('[data-action="open"][data-qid="schriftlich"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
+  for player in (alice,bob):
+   await expect(player.locator('.bq-joker-event')).to_have_count(0)
+   await expect(player.locator('#answer-text')).to_be_visible()
+  panel=alice.locator('.bq-joker-panel')
+  save=alice.locator('[data-action="submit-answer"]')
+  for width,height in [(320,568),(390,844),(768,1024),(1366,850),(1920,1080)]:
+   await alice.set_viewport_size({'width':width,'height':height})
+   for opened in (False,True):
+    if await panel.evaluate('(el)=>el.open')!=opened:
+     await panel.locator('summary').click()
+    await save.click(trial=True,timeout=5000)
+   await alice.locator('#answer-text').fill(f'Test {width}')
+   await save.click()
+   await expect(alice.locator('.bq-answer-saved')).to_contain_text(f'Test {width}')
+  await bob.locator('#answer-text').fill('Blau meldet ab')
+  await bob.locator('[data-action="submit-answer"]').click()
+  await expect(host.locator('.review-card')).to_have_count(2)
+  print('PASS: writing stays clickable with open and closed Joker inventory at five viewport sizes',flush=True)
   assert not errors,errors
   await ctx.close();await browser.close()
   print('PASS: Chronobreak is visible to all and host controls resume after an eight-second correction',flush=True)
