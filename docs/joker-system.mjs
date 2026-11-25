@@ -11,13 +11,16 @@ export const JOKER_MAX_CHARGES=3,CHRONOBREAK_MS=8000;
 export function jokerType(value){return JOKER_TYPES.includes(value)?value:'';}
 export function normalizeJokerConfig(value){
  const obj=value&&typeof value==='object'?value:{};
- const drops={};
- for(const type of JOKER_TYPES)drops[type]=[1,2].includes(Number(obj.drops?.[type]))?Number(obj.drops[type]):1;
- return {enabled:obj.enabled===true,starting:obj.starting===true,drops};
+ const drops={},startingByType={};
+ for(const type of JOKER_TYPES){
+  drops[type]=[1,2].includes(Number(obj.drops?.[type]))?Number(obj.drops[type]):1;
+  startingByType[type]=typeof obj.startingByType?.[type]==='boolean'?obj.startingByType[type]:obj.starting===true;
+ }
+ return {enabled:obj.enabled===true,starting:JOKER_TYPES.every(type=>startingByType[type]),startingByType,drops};
 }
 export function initialJokers(teams,config){
  const settings=normalizeJokerConfig(config),charges={};
- for(const id of Object.keys(teams||{}))charges[id]=Object.fromEntries(JOKER_TYPES.map(type=>[type,settings.enabled&&settings.starting?1:0]));
+ for(const id of Object.keys(teams||{}))charges[id]=Object.fromEntries(JOKER_TYPES.map(type=>[type,settings.enabled&&settings.startingByType[type]?1:0]));
  return charges;
 }
 // The host selects the placements once. Never publish the map to a guest.
@@ -68,7 +71,7 @@ export function activeChronobreak(state,at=Date.now()){
  return !!state?.chronoBreak&&state.chronoBreak.round===state.round&&Number(state.chronoBreak.until)>at;
 }
 export function shieldApplies(state,team,round=state?.round){
- return !!team&&state?.jokerShields?.[team]===round;
+ return !!team&&state?.jokerConfig?.enabled===true&&state?.jokerShields?.[team]===round&&jokerCount(state,team,'shield')>0;
 }
 export function useJokerCharge(state,team,type){
  return changeJokerCharge(state,team,type,-1);

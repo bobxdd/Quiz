@@ -58,6 +58,23 @@ test('settings are backwards compatible and each configured type uses at most tw
  assert.equal(Object.hasOwn(fields,'e'),false,'balance board never contains drops');
  assert.equal(JOKER_TYPES.length,4);
 });
+test('per-type starting stock preserves legacy imports and permits mixed setups',()=>{
+ const legacy=normalizeJokerConfig({enabled:true,starting:true});
+ assert.deepEqual(initialJokers(teams,legacy).t1,{shield:1,oracle:1,reroll:1,chrono:1});
+ const mixed=normalizeJokerConfig({enabled:true,starting:true,startingByType:{shield:false,chrono:false}});
+ assert.equal(mixed.starting,false);
+ assert.deepEqual(initialJokers(teams,mixed).t1,{shield:0,oracle:1,reroll:1,chrono:0});
+ assert.deepEqual(initialJokers(teams,normalizeJokerConfig(mixed)).t1,{shield:0,oracle:1,reroll:1,chrono:0});
+});
+test('a manually removed final shield charge cannot prevent a loss',async()=>{
+ const g=fixture(),p=opened(g,'b');
+ g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ await g.hostAdjustJoker(room,'t1','shield',-1);
+ assert.equal(shieldApplies(g.data.public,'t1'),false);
+ g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
+ const result=applyBuzzerJudgement(g.data.public,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
+ assert.equal(result.delta,-200);
+});
 test('starter stock, cap and one-time drop awards',()=>{
  let p=fixture().data.public;
  for(const type of JOKER_TYPES)assert.equal(jokerCount(p,'t1',type),1);

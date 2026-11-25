@@ -957,7 +957,8 @@ export class PeerGame{
   if(!p.jokerConfig?.enabled)throw Error('Joker sind nicht aktiviert.');
   const next=changeJokerCharge(p,team,type,delta);
   if(!next)throw Error('Jokerstand muss zwischen 0 und 3 liegen.');
-  d.public=next;this._changed();return next.jokers[team][type];
+  if(type==='shield'&&next.jokers[team][type]===0&&next.jokerShields?.[team]!==undefined){next.jokerShields={...next.jokerShields};delete next.jokerShields[team];}
+   d.public=next;this._changed();return next.jokers[team][type];
  }
  async hostResolveReroll(room,accept){
   const d=this._getHostData(room),p=d.public,request=p.jokerRerollRequest;

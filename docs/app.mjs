@@ -961,7 +961,7 @@ function jokerPanel(){
     type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
     type==='oracle'?phase==='question'&&!game?.guestData?.jokerPrivateHint:
     phase==='question'&&p.jokerShields?.[team]!==p.round);
-   const armed=type==='shield'&&p.jokerShields?.[team]===p.round;
+   const armed=type==='shield'&&shieldApplies(p,team);
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+e(meta.symbol)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
    if(armed)html+='<small>Aktiv</small>';
    if(selected)html+=btn('Einsetzen','joker-use','small','data-type="'+type+'" '+(canUse?'':'disabled'));
@@ -971,7 +971,8 @@ function jokerPanel(){
   html+='</div></div>';
  }
  html+='</div>';
- const privateHint=own&&p.current?String(game?.guestData?.jokerPrivateHint||''):'';
+ if(p.phase==='ready'&&selectingTeam(p))html+='<p class="small muted">↻ Reroll-Berechtigung: '+e(teamName(selectingTeam(p)))+'</p>';
+  const privateHint=own&&p.current?String(game?.guestData?.jokerPrivateHint||''):'';
  if(privateHint)html+='<div class="bq-oracle-private" role="status"><strong>◉ Dein privater Oracle-Lens-Hinweis</strong><p>'+e(privateHint)+'</p></div>';
  if(own&&p.jokerRerollRequest?.team===own)html+='<p class="small muted" role="status">Reroll angefragt · Der Host entscheidet.</p>';
  return html+'</details>';
@@ -1253,7 +1254,7 @@ function readyQuestionContent(host){
  return `<section class="glass panel bq-question-covered" aria-label="${host?'Private Fragenvorschau':'Verdeckte Frage'}">
   <p class="bq-eyebrow">RUNDE ${boardRoundOf(publicState)}</p><h2>${e(q.category)} · ${e(q.points)} Punkte</h2>
   <p>${host?'Nur für dich sichtbar. Lies die Frage vor und decke sie dann für alle auf.':'Die Frage ist ausgewählt. Der Host deckt sie für alle auf.'}</p>
-  ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control')}${btn('Zurück zur Übersicht','back','small')}${isTeamChallenge(q.type)?'':`<label class="field">Antwortzeit in Sekunden (0 = aus)<input id="ready-time" type="number" min="0" max="${MAX_QUESTION_SECONDS}" step="1" value="${questionSeconds(quiz.questions.find(item=>item.id===q.id)?.seconds)}"></label>`}</div>`:''}
+  ${host?`<div class="row">${btn('Frage aufdecken','uncover-question','primary bq-big-control',publicState?.jokerRerollRequest?'disabled title="Zuerst über Reroll entscheiden"':'')}${btn('Zurück zur Übersicht','back','small')}${isTeamChallenge(q.type)?'':`<label class="field">Antwortzeit in Sekunden (0 = aus)<input id="ready-time" type="number" min="0" max="${MAX_QUESTION_SECONDS}" step="1" value="${questionSeconds(quiz.questions.find(item=>item.id===q.id)?.seconds)}"></label>`}</div>`:''}
  ${host&&publicState?.jokerRerollRequest?`<div class="bq-reroll-request" role="status"><strong>↻ Reroll angefragt · ${e(teamName(publicState.jokerRerollRequest.team))}</strong><p>Frage ungespielt zurücklegen und eine andere wählen?</p><div class="row">${btn('Reroll annehmen','joker-reroll-accept','primary')}${btn('Ablehnen','joker-reroll-reject','small')}</div></div>`:''}</section>${preview?.id===q.id?`<section class="glass panel bq-question-panel bq-private-preview" aria-label="Fragenvorschau nur für den Host"><div class="bq-scene-content">${renderStage(true,preview)}</div></section>${hostPrivateSolution()}`:''}`;
 }
 function readyQuestionScene(){
