@@ -1,5 +1,12 @@
 // Host-authoritative Joker rules. No answers, unrevealed drops or team-only
 // hints belong in the shared public state.
+import {questionRoundMode} from './question-mode.mjs';
+import {boardRoundOf} from './category-model.mjs';
+
+const isStandardBoard=question=>boardRoundOf(question)!==3;
+const isFundField=question=>isStandardBoard(question)&&questionRoundMode(question)==='buzzer';
+const fundFieldIds=quiz=>[...new Set((quiz?.questions||[]).filter(q=>q?.id&&isFundField(q)).map(q=>q.id))];
+
 export const JOKER_TYPES=Object.freeze(['shield','oracle','reroll','chrono']);
 export const JOKER_META=Object.freeze({
  shield:{name:'Banshees Schleier',symbol:'🛡',description:'Einmal einen regulären Punktabzug für eine falsche Antwort verhindern.'},
@@ -15,9 +22,10 @@ export function jokerIconMarkup(type){
 export const JOKER_MAX_CHARGES=3,CHRONOBREAK_MS=8000;
 export function jokerSetupSummary(quiz){
  const config=normalizeJokerConfig(quiz?.jokerConfig);
- const normal=(quiz?.questions||[]).filter(q=>[1,2].includes(Number(q.boardRound||1)));
+ const normal=(quiz?.questions||[]).filter(isStandardBoard);
+ const available=fundFieldIds(quiz).length;
  const fields=JOKER_TYPES.reduce((sum,type)=>sum+config.drops[type],0);
- return {config,fields,available:normal.length,missing:Math.max(0,fields-normal.length),
+ return {config,fields,available,missing:Math.max(0,fields-available),
   starters:JOKER_TYPES.filter(type=>config.startingByType[type]).length,
   missingHints:normal.filter(q=>!String(q.oracleHint||'').trim()&&!q.hints?.some(h=>String(h||'').trim())).length};
 }
@@ -41,21 +49,21 @@ export function initialJokers(teams,config){
 export function placeJokerDrops(quiz,randomIndex){
  const cfg=normalizeJokerConfig(quiz?.jokerConfig);
  if(!cfg.enabled||quiz?.scoreMode==='individual')return {};
- const choices=(quiz?.questions||[]).filter(q=>q?.id&&[1,2].includes(Number(q.boardRound||1))).map(q=>q.id);
- const unique=[...new Set(choices)];
+ const fields=fundFieldIds(quiz);
+ const types=JOKER_TYPES.flatMap(type=>Array(cfg.drops[type]).fill(type));
  const rand=typeof randomIndex==='function'?randomIndex:max=>{
   const bytes=new Uint32Array(1);
   if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);
   else bytes[0]=Math.floor(Math.random()*0x100000000);
   return bytes[0]%max;
  };
- for(let i=unique.length-1;i>0;i--){
-  const j=Math.max(0,Math.min(i,Math.trunc(Number(rand(i+1)))||0));
-  [unique[i],unique[j]]=[unique[j],unique[i]];
+ for(const choices of [fields,types]){
+  for(let i=choices.length-1;i>0;i--){
+   const j=Math.max(0,Math.min(i,Math.trunc(Number(rand(i+1)))||0));
+   [choices[i],choices[j]]=[choices[j],choices[i]];
+  }
  }
- const drops={};let index=0;
- for(const type of JOKER_TYPES)for(let n=0;n<cfg.drops[type]&&index<unique.length;n++)drops[unique[index++]]=type;
- return drops;
+ return Object.fromEntries(fields.slice(0,types.length).map((id,index)=>[id,types[index]]));
 }
 export function jokerCount(state,team,type){
  if(!jokerType(type)||!Object.hasOwn(state?.teams||{},team))return 0;
@@ -70,12 +78,12 @@ export function changeJokerCharge(state,team,type,delta){
 }
 export function drawJokerForQuestion(state,id,drops){
  const type=jokerType(drops?.[id]),round=Number(state?.round);
- if(!type||state?.current?.id!==id||state?.phase!=='question')return {...state,jokerEvent:null};
+ if(!type||state?.current?.id!==id||state?.phase!=='question'||!isFundField({...state.current,boardRound:state.boardRound}))return {...state,jokerEvent:null};
  return {...state,jokerEvent:{type,round,id,awarded:false}};
 }
 export function awardJokerForCorrectAnswer(state,team){
  const event=state?.jokerEvent;
- if(!event||event.awarded||event.id!==state.current?.id||event.round!==state.round||!state.teams?.[team])return state;
+ if(!event||event.awarded||event.id!==state.current?.id||event.round!==state.round||!state.teams?.[team]||!isFundField({...state.current,boardRound:state.boardRound}))return state;
  const next=changeJokerCharge(state,team,event.type,1);
  // Even when full, award only once. No loss of points or extra charge stacking.
  return {...(next||state),jokerEvent:{...event,awarded:true,team,full:!next}};

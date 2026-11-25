@@ -2,10 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {finalStandings,mayFinishGame} from '../docs/final-results.mjs';
 test('teams share ranks on equal scores without duplicating awards',()=>{
- const rows=finalStandings({scoreMode:'team',teams:{t1:'Alpha',t2:'Beta',t3:'Gamma',t4:'Delta'},scores:{t1:300,t2:300,t3:200,t4:-50}});
+ const rows=finalStandings({scoreMode:'team',teams:{t1:'Alpha',t2:'Beta',t3:'Gamma',t4:'Delta'},scores:{t1:300,t2:300,t3:200,t4:-50},participatingTeams:['t1','t2','t3','t4']});
  assert.deepEqual(rows.map(r=>r.rank),[1,1,3,4]);
  assert.deepEqual(rows.map(r=>r.points),[300,300,200,-50]);
  assert.equal(rows[0].tied,true);assert.equal(rows[2].tied,false);
+});
+test('empty teams cannot win against negative scores or share a podium place at zero',()=>{
+ const state={scoreMode:'team',teams:{t1:'Rot',t2:'Blau',t3:'Reserve'},scores:{t1:-100,t2:-200,t3:0},participatingTeams:['t1','t2']};
+ assert.deepEqual(finalStandings(state).map(row=>row.id),['t1','t2']);
+ assert.deepEqual(finalStandings({...state,scores:{}}).map(row=>[row.id,row.rank]),[['t2',1],['t1',1]]);
+ const {participatingTeams,...legacy}=state;
+ assert.deepEqual(finalStandings(legacy,{alice:{team:'t1'}}).map(row=>row.id),['t1']);
 });
 test('individual standings use roster and manual players, not hidden answers',()=>{
  const rows=finalStandings({scoreMode:'individual',playerScores:{alice:{total:100},manual_1:{total:30},_empty:{}},manualPlayers:{manual_1:'Gast'}},{alice:{name:'Alice',team:'red'}});

@@ -4,14 +4,12 @@ import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,imposterPublicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
 import {hasRequiredAnswer} from './answer-view.mjs';
 import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,normalizeTeamEmoji,normalizeTeamDraw,validateTeamEmoji,teamEmojiTarget} from './team-emoji.mjs';
+import {questionRoundMode} from './question-mode.mjs';
+export {questionRoundMode};
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='3.6.0';
+export const VERSION='3.6.2';
 export const MAX_QUESTION_SECONDS=900;
 export const questionSeconds=value=>Math.max(0,Math.min(MAX_QUESTION_SECONDS,Math.trunc(Number(value))||0));
-export function questionRoundMode(question,type=question?.type){
- if(isTeamChallenge(type))return type;
- return ['map','order'].includes(type)||question?.roundMode==='written'?'written':'buzzer';
-}
 export function normalizeAnswerTolerance(value,type){
  if(value==null||String(value).trim()==='')return null;
  const amount=Number(value);

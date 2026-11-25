@@ -183,3 +183,52 @@ test('quiz-wide editor totals include both normal boards, exclude balance and fl
  assert.equal(Object.hasOwn(drops,'e'),false);
  assert.match(jokerIconMarkup('oracle'),/<svg/);
 });
+
+test('bonus drops use the actual question mode across both ordinary boards',()=>{
+ const mixed=normalizedQuiz({...quiz,questions:[
+  {id:'spoken',type:'text',roundMode:'buzzer',boardRound:1},
+  {id:'audio',type:'audio',boardRound:2},
+  {id:'typed',type:'text',roundMode:'written',boardRound:1},
+  {id:'map',type:'map',roundMode:'buzzer',boardRound:2},
+  {id:'sort',type:'order',boardRound:2},
+  {id:'emoji',type:'team-emoji',boardRound:1},
+  {id:'draw',type:'team-draw',boardRound:2},
+  {id:'balance',type:'text',boardRound:3}
+ ]});
+ const placements=placeJokerDrops(mixed,()=>0);
+ assert.deepEqual(Object.keys(placements).sort(),['audio','spoken']);
+ assert.equal(jokerSetupSummary(mixed).available,2);
+ assert.deepEqual(placeJokerDrops({...mixed,questions:mixed.questions.slice(2)},()=>0),{});
+ for(const q of mixed.questions.slice(2)){
+  const state={phase:'question',round:1,boardRound:q.boardRound,current:q};
+  assert.equal(drawJokerForQuestion(state,q.id,{[q.id]:'shield'}).jokerEvent,null);
+ }
+});
+
+test('repeated wrong written verdict preserves shield, and undo restores protection',async()=>{
+ const g=fixture(),p=opened(g);
+ p.current.roundMode='written';
+ g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ p.phase='review';
+ p.answerReview={entries:{alice:{submitted:true,revealed:true}}};
+ await g.judgeWritten(room,1,'alice','wrong');
+ await g.judgeWritten(room,1,'alice','wrong');
+ assert.equal(g.data.public.scores.t1,0);
+ assert.equal(jokerCount(g.data.public,'t1','shield'),0);
+ assert.equal(g.data.scoreEvents.length,1);
+ await g.hostUndoScore(room,g.data.scoreEvents[0].id);
+ assert.equal(jokerCount(g.data.public,'t1','shield'),1);
+ assert.equal(shieldApplies(g.data.public,'t1'),true);
+ await g.judgeWritten(room,1,'alice','wrong');
+ assert.equal(g.data.public.scores.t1,0);
+});
+
+test('a zero-point buzzer penalty does not spend a shield',()=>{
+ const g=fixture(),p=opened(g);
+ p.current.points=0;
+ g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ const buzzers={'1':{uid:'alice',team:'t1',name:'Alice'}};
+ const result=applyBuzzerJudgement(p,buzzers,{round:1,uid:'alice',result:'wrong'});
+ assert.ok(result.delta===0);
+ assert.equal(jokerCount(result.state,'t1','shield'),1);
+});

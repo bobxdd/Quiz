@@ -267,14 +267,14 @@ export function createStudioEditor(api){
   const {config,fields,available,missing,starters,missingHints}=jokerSetupSummary(quiz());
   const teamMode=quiz().scoreMode!=='individual';
   const descriptions={shield:'Verhindert einmal Punktabzug',oracle:'Privater Team-Hinweis',reroll:'Andere Frage vor Aufdecken',chrono:'8 s Antwortkorrektur nach Buzz'};
-  const status=!teamMode?'Nur mit Teamwertung verfügbar':!config.enabled?'Deaktiviert':missing?'Noch '+missing+' Fragen für Fundfelder nötig':fields+' Fundfelder · '+starters+' Startjoker je Team';
+  const status=!teamMode?'Nur mit Teamwertung verfügbar':!config.enabled?'Deaktiviert':missing?available+' von '+fields+' Funden möglich':fields+' Fundfelder · '+starters+' Startjoker je Team';
   return `<section class="bq-joker-editor-settings" aria-labelledby="bq-joker-settings-title">
    <div class="bq-joker-config-heading"><h3 id="bq-joker-settings-title">Teamjoker & Fundfelder</h3><span class="bq-joker-config-status ${config.enabled&&teamMode&&missing?'is-warning':''}" role="status">${escape(status)}</span><label class="bq-joker-toggle"><input id="joker-enabled" type="checkbox" data-joker-setting="enabled" ${config.enabled?'checked':''} ${teamMode||config.enabled?'':'disabled'}> Aktiv</label></div>
    <fieldset class="bq-joker-config-controls" ${config.enabled&&teamMode?'':'disabled'}><legend class="bq-joker-sr">Joker pro Art konfigurieren</legend>
     <div class="bq-joker-config-grid">${JOKER_TYPES.map(type=>`<fieldset class="bq-joker-config-card" data-joker-card="${type}"><legend>${jokerIconMarkup(type)}<span>${escape(JOKER_META[type].name)}</span></legend><p>${escape(descriptions[type])}</p><label class="bq-joker-drop-label" for="joker-drops-${type}">Fundfelder <select id="joker-drops-${type}" data-joker-drops="${type}"><option value="1" ${config.drops[type]===1?'selected':''}>1×</option><option value="2" ${config.drops[type]===2?'selected':''}>2×</option></select></label><label class="bq-joker-start-label"><input id="joker-start-${type}" type="checkbox" data-joker-start="${type}" ${config.startingByType[type]?'checked':''}> 1 Startladung</label></fieldset>`).join('')}</div>
     <label class="bq-joker-all-start"><input id="joker-start-all" type="checkbox" data-joker-setting="starting" ${config.starting?'checked':''}> Alle Startladungen</label>
    </fieldset>
-   <div class="bq-joker-config-foot"><span>${fields} zufällige Fundfelder / ${available} Fragen · Runde 1 + 2 · max. 3 Ladungen je Art</span>${config.enabled&&teamMode&&missingHints?`<span class="is-warning">${missingHints} ohne Oracle-Hinweis</span>`:''}</div>
+   <div class="bq-joker-config-foot"><span>${fields} zufällige Fundfelder / ${available} Buzzerfragen · Runde 1 + 2 · max. 3 Ladungen je Art</span>${config.enabled&&teamMode&&missingHints?`<span class="is-warning">${missingHints} ohne Oracle-Hinweis</span>`:''}</div>
   </section>`;
  }
  function html(){

@@ -1,18 +1,19 @@
 // Guarded question lifecycle for host actions. Every question is identified by
 // its unique board ID, not its category/title/position.
 import {initialJokers} from './joker-system.mjs';
+import {participatingTeamIds} from './lobby-model.mjs';
 const own=(obj,key)=>obj!=null&&Object.hasOwn(obj,key);
 const validBalanceQuestion=q=>q?.roundMode==='buzzer'&&!['map','order','team-emoji','team-draw'].includes(q?.type);
 const boardRound=value=>[2,3].includes(Number(value?.boardRound))?Number(value.boardRound):1;
 export function makeSelectionTurn(state,roster={}){
  if(state?.scoreMode==='individual')return null;
- const occupied=new Set(Object.values(roster).map(player=>player?.team));
  const all=Object.keys(state?.teams||{});
- const order=all.filter(id=>occupied.has(id));
+ const order=participatingTeamIds(state,roster);
  return {order:order.length?order:all,index:0};
 }
 export function balanceSelectionTurn(state){
- const order=Object.keys(state?.teams||{}).sort((a,b)=>(Number(state?.scores?.[a])||0)-(Number(state?.scores?.[b])||0)||a.localeCompare(b,'de'));
+ const eligible=Array.isArray(state?.participatingTeams)?participatingTeamIds(state):Object.keys(state?.teams||{});
+ const order=eligible.sort((a,b)=>(Number(state?.scores?.[a])||0)-(Number(state?.scores?.[b])||0)||a.localeCompare(b,'de'));
  return {order,index:0,balance:true};
 }
 export function selectingTeam(state){
@@ -28,7 +29,8 @@ export function resetBoardGameState(state,board,roster={}){
   jokerShields:{},jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,
   buzzerBlocked:{},buzzerBlockedTeams:{},buzzerReleased:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
-  selectionTurn:makeSelectionTurn(state,roster),presentation:null,finaleStep:null};
+  participatingTeams:participatingTeamIds({teams:state.teams},roster),
+  selectionTurn:makeSelectionTurn({teams:state.teams,scoreMode:state.scoreMode},roster),presentation:null,finaleStep:null};
 }
 export function remainingBoardQuestions(state,round=boardRound(state)){
  return Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round&&!cell.used&&!state.used?.[cell.id]);

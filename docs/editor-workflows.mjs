@@ -1,7 +1,7 @@
 /* Pure, host-only editor helpers. No public question payload is modified here. */
 import {categoryKey,boardRoundOf,boardLayoutIssues,roundQuestions,roundCategories} from './category-model.mjs';
 import {validateQuestion} from './core.mjs';
-import {normalizeJokerConfig,JOKER_TYPES} from './joker-system.mjs';
+import {jokerSetupSummary} from './joker-system.mjs';
 
 export function selectionSummary(quiz, ids) {
  const unique=new Set(ids||[]);
@@ -49,12 +49,10 @@ export function quizAudit(quiz) {
   const tileKey=`${boardRoundOf(q)}|${categoryKey(q.category)}|${q.points}`;
   if(seenTiles.has(tileKey))warnings.push({id:q.id,label,reason:'Mehrere Fragen haben denselben Punktwert in dieser Kategorie.'});seenTiles.add(tileKey);
  }
- const joker=normalizeJokerConfig(quiz?.jokerConfig);
+ const {config:joker,fields:requested,available,missing}=jokerSetupSummary(quiz);
  if(joker.enabled){
   if(quiz?.scoreMode==='individual')errors.push({id:null,label:'Joker',reason:'Joker benötigen die Teamwertung.'});
-  const fields=questions.filter(q=>[1,2].includes(boardRoundOf(q))).length;
-  const requested=JOKER_TYPES.reduce((total,type)=>total+joker.drops[type],0);
-  if(fields<requested)errors.push({id:null,label:'Joker-Fundfelder',reason:'Für '+requested+' Joker-Fundfelder werden mindestens '+requested+' Fragen auf den normalen Spielbrettern benötigt (vorhanden: '+fields+').'});
+  if(missing)warnings.push({id:null,label:'Joker-Fundfelder',reason:available+' von '+requested+' gewünschten Funden können auf Buzzerfragen in Runde 1 und 2 verteilt werden.'});
   const withoutHint=questions.filter(q=>[1,2].includes(boardRoundOf(q))&&!String(q.oracleHint||'').trim()&&!q.hints?.some(h=>String(h||'').trim()));
   if(withoutHint.length)warnings.push({id:withoutHint[0].id,label:'Oracle Lens',reason:withoutHint.length+' Frage(n) besitzen noch keinen Team- oder allgemeinen Hinweis. Oracle Lens wäre dort nicht nutzbar.'});
  }
