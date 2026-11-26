@@ -5,7 +5,7 @@ import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
-import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,MAX_BALANCE_FIELDS,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
+import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,MAX_BALANCE_FIELDS,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions,reorderCategoryQuestions} from './category-model.mjs';
 /* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
 import {TEMPLATE_NAMES,element,orderSlotPosition,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
@@ -37,12 +37,16 @@ export function createStudioEditor(api){
   if(!libraryMenu)return '';
   const {kind,x,y,id,category}=libraryMenu;
   const categoryMenu=kind==='category';
+  const within=categoryMenu||search.trim()?[]:questionsInCategory(visibleQuestions(),activeCategory);
+  const index=within.findIndex(question=>question.id===id);
   const title=categoryMenu?category:(quiz().questions||[]).find(item=>item.id===id)?.title||'Frage';
   const items=categoryMenu?[
    ['library-open','Öffnen'],['library-new','Neue Frage'],['category-move',moveCategoryLabel()],['category-transfer-open','In anderes Quizbrett übertragen'],
    ['library-rename','Umbenennen'],['library-delete','Kategorie löschen','se-destructive']
-  ]:[['library-open','Öffnen'],['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
-  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-252,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${['category-move','category-transfer-open'].includes(action)?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
+  ]:[['library-open','Öffnen'],...(index>0?[['question-up','Nach oben verschieben']]:[]),
+   ...(index>=0&&index<within.length-1?[['question-down','Nach unten verschieben']]:[]),
+   ['copy-q','Duplizieren'],['library-delete','Frage löschen','se-destructive']];
+  return `<div class="se-context" style="left:${Math.max(8,Math.min(window.innerWidth-238,x))}px;top:${Math.max(8,Math.min(window.innerHeight-302,y))}px" role="menu" aria-label="Kontextmenü"><div class="se-context-head"><strong>${escape(title)}</strong><button type="button" aria-label="Menü schließen" data-se-action="library-menu-close">✕</button></div>${items.map(([action,label,cls=''])=>`<button type="button" role="menuitem" tabindex="-1" class="${cls}" data-se-action="${action}" ${['category-move','category-transfer-open'].includes(action)?`data-category="${escape(category)}"`:''}>${label}</button>`).join('')}</div>`;
  }
  function refreshSaveStatus(){
   const root=document.getElementById('se-root');
@@ -277,12 +281,24 @@ export function createStudioEditor(api){
    <div class="bq-joker-config-foot"><span>${fields} zufällige Fundfelder / ${available} Buzzerfragen · Runde 1 + 2 · max. 3 Ladungen je Art</span>${config.enabled&&teamMode&&missingHints?`<span class="is-warning">${missingHints} ohne vorbereitete Oracle-Notiz</span>`:''}</div>
   </section>`;
  }
+ function questionRow(item,selectedId,invalid,sortable){
+  const id=escape(item.id),title=escape(item.title);
+  const grip=sortable?`<button type="button" class="se-question-grip" data-se-action="question-order" data-se-library="question" data-id="${id}" aria-haspopup="menu" aria-label="Reihenfolge von ${title} ändern" title="Ziehen oder klicken, um die Frage zu verschieben"><span aria-hidden="true">⠿</span></button>`:'';
+  return `<div class="se-qwrap" data-se-question-row="${id}">${grip}
+   <label class="se-qpick" title="Frage für Sammelbearbeitung auswählen"><input type="checkbox" data-se-multi="${id}" aria-label="${title} auswählen" ${selectedQuestions.has(item.id)?'checked':''}></label>
+   <button type="button" class="se-qrow ${item.id===selectedId?'is-active':''}" data-se-library="question" data-se-action="select" data-id="${id}">
+    <span><strong>${escape(item.points)} Punkte</strong><small>${title}</small></span>
+    <span class="se-q-status ${invalid?'is-incomplete':'is-complete'}" title="${invalid?'Noch unvollständig':'Zum Veröffentlichen bereit'}" aria-label="${invalid?'Frage unvollständig':'Frage bereit'}">${invalid?'!':'✓'}</span>
+   </button></div>`;
+ }
  function html(){
   const all=visibleQuestions(),cats=categories();
   if(activeCategory&&!cats.some(c=>categoryKey(c)===categoryKey(activeCategory)))activeCategory='';
   const item=current(),within=activeCategory?questionsInCategory(all,activeCategory):[];
   if(item?.id!==mapQuestionId){mapQuestionId=item?.id||'';mapCamera={...DEFAULT_MAP_VIEW};}
-  const displayed=within.filter(x=>[x.title,x.prompt,String(x.points)].join(' ').toLocaleLowerCase('de').includes(search.toLocaleLowerCase('de')));
+  const filter=search.trim().toLocaleLowerCase('de');
+  const displayed=within.filter(x=>[x.title,x.prompt,String(x.points)].join(' ').toLocaleLowerCase('de').includes(filter));
+  const sortable=within.length>1&&!filter;
   const bankItems=all.filter(x=>categoryKey(x.category)!==categoryKey(activeCategory)&&[x.title,x.prompt,x.category,String(x.points)].join(' ').toLocaleLowerCase('de').includes(bankQuery.toLocaleLowerCase('de'))).slice(0,40);
   const audit=quizAudit(quiz()),invalidIds=new Set(audit.errors.map(x=>x.id));
   const nav=`<nav class="se-category-nav" aria-label="Quizkategorien"><button type="button" data-se-action="category-overview" class="se-category-navrow ${!activeCategory?'is-current':''}" aria-current="${!activeCategory?'page':'false'}"><span>▦ Alle Kategorien</span><small>${cats.length}</small></button>${cats.map(name=>`<button type="button" class="se-category-navrow ${categoryKey(name)===categoryKey(activeCategory)?'is-current':''}" data-se-library="category" data-se-action="category-select" data-category="${escape(name)}" ${categoryKey(name)===categoryKey(activeCategory)?'aria-current="page"':''}><span>${escape(name)}</span><small>${questionsInCategory(all,name).length}</small></button>`).join('')}</nav>`;
@@ -323,7 +339,7 @@ export function createStudioEditor(api){
    <nav class="bq-round-picker" aria-label="Spielbrett bearbeiten">${[1,...(quiz().balanceBoard?[3]:[]),2].map(round=>`<button type="button" data-se-action="board-round" data-board-round="${round}" aria-pressed="${editorRound===round}" class="${editorRound===round?'se-primary':''}">${round===3?'Ausgleichs-Board':'Runde '+round} · ${roundQuestions(quiz(),round).length}/${round===3?MAX_BALANCE_FIELDS:36} Fragen</button>`).join('')}<button type="button" data-se-action="balance-board-toggle" class="se-balance-toggle">${quiz().balanceBoard?'✕ Ausgleichs-Board entfernen':'+ Ausgleichs-Board hinzufügen'}</button><span>${quiz().balanceBoard&&editorRound===3?'Pro Team bis zu zwei Felder einplanen: eins zum Antworten, eins zum Streichen.':'Maximal 6 Kategorien × 6 Fragen je Standardbrett'}</span></nav>
     ${auditOpen?`<section class="se-audit" aria-label="Quizprüfung"><div class="se-sectionhead"><h3>${audit.ready?'Quiz bereit':'Quiz noch unvollständig'} · ${audit.questionCount} Fragen</h3><button type="button" data-se-action="audit">Schließen</button></div><p>${audit.errors.length} Fehler · ${audit.warnings.length} Hinweise</p>${audit.errors.some(row=>row.id)?`<button type="button" class="se-audit-next" data-se-action="open-next-issue">Nächsten Fehler bearbeiten →</button>`:''}${[...audit.errors,...audit.warnings].slice(0,25).map(a=>`<div class="se-audit-row"><span>${escape(a.label)}: ${escape(a.reason)}</span>${a.id?`<button type="button" data-se-action="select" data-id="${escape(a.id)}">Öffnen</button>`:''}</div>`).join('')}</section>`:''}
    <div class="se-workgrid ${activeCategory?'se-category-detail se-mobile-tab-'+mobileTab:'se-category-home'}">${activeCategory?`<nav class="se-mobile-editor-tabs" aria-label="Editorbereiche">${[['categories','Bibliothek'],['canvas',editorPane==='answer'?'Antwort':'Bearbeiten'],...(editorPane==='answer'||item?.type===TEAM_EMOJI?[]:[['properties','Eigenschaften']])].map(([name,label])=>`<button type="button" data-se-action="mobile-tab" data-mobile-tab="${name}" aria-current="${mobileTab===name?'page':'false'}" class="${mobileTab===name?'active':''}">${label}</button>`).join('')}</nav>`:''}<aside class="se-list"><div class="se-sectionhead"><h3>Bibliothek</h3><button type="button" data-se-action="category-form" title="Kategorie erstellen" aria-label="Neue Kategorie">+ Kategorie</button></div>${categoryForm}${nav}
-    ${activeCategory?`<div class="se-category-questions-head"><div><strong>${escape(activeCategory)}</strong><small>${within.length} ${within.length===1?'Frage':'Fragen'}</small></div><div class="se-inline"><button type="button" data-se-action="category-rename" title="Kategorie umbenennen">✎</button><button type="button" data-se-action="category-remove" title="Kategorie mit allen Fragen löschen">✕</button></div></div><button type="button" class="se-primary se-add-question" data-se-action="new">+ Frage hinzufügen</button><input class="se-search" data-se-search aria-label="Fragen dieser Kategorie suchen" placeholder="Fragen suchen …" value="${escape(search)}"><div class="se-questions">${displayed.map(x=>`<div class="se-qwrap"><label class="se-qpick" title="Frage für Sammelbearbeitung auswählen"><input type="checkbox" data-se-multi="${escape(x.id)}" aria-label="${escape(x.title)} auswählen" ${selectedQuestions.has(x.id)?'checked':''}></label><button type="button" class="se-qrow ${x.id===item?.id?'is-active':''}" data-se-library="question" data-se-action="select" data-id="${escape(x.id)}"><span><strong>${escape(x.points)} Punkte</strong><small>${escape(x.title)}</small></span><span class="se-q-status ${invalidIds.has(x.id)?'is-incomplete':'is-complete'}" title="${invalidIds.has(x.id)?'Noch unvollständig':'Zum Veröffentlichen bereit'}" aria-label="${invalidIds.has(x.id)?'Frage unvollständig':'Frage bereit'}">${invalidIds.has(x.id)?'⚠':'✓'}</span></button></div>`).join('')}${!displayed.length?'<p class="se-muted se-empty-filter">Keine Fragen gefunden.</p>':''}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div>
+    ${activeCategory?`<div class="se-category-questions-head"><div><strong>${escape(activeCategory)}</strong><small>${within.length} ${within.length===1?'Frage':'Fragen'}</small></div><div class="se-inline"><button type="button" data-se-action="category-rename" title="Kategorie umbenennen">✎</button><button type="button" data-se-action="category-remove" title="Kategorie mit allen Fragen löschen">✕</button></div></div><button type="button" class="se-primary se-add-question" data-se-action="new">+ Frage hinzufügen</button><input class="se-search" data-se-search aria-label="Fragen dieser Kategorie suchen" placeholder="Fragen suchen …" value="${escape(search)}"> ${within.length>1&&search.trim()?'<p class="se-muted se-question-order-hint">Zum Sortieren die Suche leeren.</p>':''}<div class="se-questions">${displayed.map(x=>questionRow(x,item?.id,invalidIds.has(x.id),sortable)).join('')}${!displayed.length?'<p class="se-muted se-empty-filter">Keine Fragen gefunden.</p>':''}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div>
     <details class="se-question-bank" ${bankOpen?'open':''}><summary>Fragenbank · Frage übernehmen</summary><label class="se-field"><span>In anderen Kategorien suchen</span><input data-se-bank-search value="${escape(bankQuery)}" placeholder="Frage oder Kategorie …"></label><div class="se-bank-list">${bankItems.length?bankItems.map(x=>`<div class="se-bank-item"><span><strong>${escape(x.title)}</strong><small>${escape(x.category)} · ${x.points} Punkte</small></span><button type="button" data-se-action="reuse-question" data-id="${escape(x.id)}" aria-label="${escape(x.title)} nach ${escape(activeCategory)} kopieren">Übernehmen</button></div>`).join(''):'<p class="se-muted">Keine passenden Fragen in anderen Kategorien.</p>'}</div></details>
     ${selectedQuestions.size?`<div class="se-batch" aria-label="Mehrere Fragen bearbeiten"><strong>${selectedQuestions.size} ausgewählt</strong><label>Kategorie<select data-se-batch-category><option value="">Unverändert</option>${cats.map(name=>`<option value="${escape(name)}">${escape(name)}</option>`).join('')}</select></label><label>Punkte<input data-se-batch-points type="number" min="0" max="10000" step="1" placeholder="Unverändert"></label><div class="se-inline"><button type="button" data-se-action="batch-apply" class="se-primary">Übernehmen</button><button type="button" data-se-action="batch-clear">Auswahl löschen</button></div></div>`:''}`:`<input class="se-search" data-se-search aria-label="Fragen im Quiz suchen" placeholder="Im Quiz suchen …" value="${escape(search)}"><details class="se-advanced-set"><summary>Mehrere Fragen auf einmal</summary><p>Optional: 5 × 5 Felder pro Kategorie.</p><button type="button" class="se-quick" data-se-action="quickset">5 × 5 Schnellset erstellen</button></details>`}
    </aside>
@@ -374,6 +390,23 @@ export function createStudioEditor(api){
   api.setSelected(id);mobileTab='canvas';editorPane=problem.includes('Antwort-Tab')?'answer':'question';
   sel='';menu=null;libraryMenu=null;preview=false;reveal=0;draw();
  }
+ function moveQuestion(sourceId,targetId,placement,focusGrip=false){
+  if(search.trim())return;
+  const questions=quiz().questions;
+  const visible=questionsInCategory(visibleQuestions(),activeCategory);
+  if(!visible.some(q=>q.id===sourceId)||!visible.some(q=>q.id===targetId))return;
+  flushDraft();
+  const ordered=reorderCategoryQuestions(questions,sourceId,targetId,placement);
+  if(!ordered)return;
+  snapshot();
+  quiz().questions=ordered;
+  libraryMenu=null;
+  api.save();draw();
+  const grip=document.querySelector(`#se-root .se-question-grip[data-id="${CSS.escape(sourceId)}"]`);
+  grip?.scrollIntoView({block:'nearest',inline:'nearest'});
+  if(focusGrip)grip?.focus({preventScroll:true});
+  api.notice?.('Frage verschoben.');
+ }
  function updateField(field,value){const item=current(),el=find();if(!item)return;
   if(field==='category'&&categoryKey(value)!==categoryKey(item.category)&&questionsInCategory(visibleQuestions(),value).length>=6){
    const control=document.querySelector('#se-root [data-se-field="category"]');
@@ -388,7 +421,7 @@ export function createStudioEditor(api){
     if(destination===3&&(questions.length>=MAX_BALANCE_FIELDS||['map','order','team-emoji','team-draw'].includes(item.type)||item.roundMode==='written'))
       throw Error('Das Ausgleichs-Board erlaubt bis zu zwölf mündlich bewertete Fragen.');
    if(questionsInCategory(questions,item.category).length>=6||!cats.some(cat=>categoryKey(cat)===categoryKey(item.category))&&cats.length>=6)throw Error('Die Zielrunde hat keinen freien Platz für diese Frage.');
-   item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
+   delete item.manualOrder;item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
    deferDraft();return;
   }
   const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds',drawSeconds:'drawSeconds'}[field];
@@ -423,6 +456,7 @@ export function createStudioEditor(api){
    deferDraft();return;
   }
   if(field==='category'||field==='title'||field==='points'||field==='answer'||field==='answerText'||field==='answerImageAlt'||field==='oracleHint'||field==='acceptedAnswers'||field==='hostNotes'||field==='sourceUrl'||field==='sourcePatch'||field==='sourceCheckedOn'||field==='seconds'||field==='explanation'||field==='estimateTarget'||field==='estimateUnit'||field==='audioStart'||field==='audioDuration'||field==='imposterIndex'||field==='mapTargetX'||field==='mapTargetY'||field==='correct'){
+   if(field==='category'&&categoryKey(value)!==categoryKey(item.category))delete item.manualOrder;
    if(field==='correct')item.correct='ABCD'.indexOf(value);else item[field]=['points','seconds','estimateTarget','audioStart','audioDuration','imposterIndex','mapTargetX','mapTargetY'].includes(field)?Number(value):value;
     if(field==='answerText'&&!['multiple','order','estimate','map','imposter'].includes(item.type))item.answer=value;
   }else if(el){if(['x','y','w','h','font','step'].includes(field))el[field]=Number(value);else if(['text','alt','fill','bg','align','shape','role'].includes(field)){el[field]=value;if(field==='role'&&(value==='question'||value==='clue')){for(const other of item.scene.elements){if(other.id!==el.id&&other.role===value)other.role='content';}}}
@@ -460,7 +494,7 @@ export function createStudioEditor(api){
  function openLibraryMenu(node,event){
   const {seLibrary:kind,id='',category=''}=node.dataset;
   const rect=node.getBoundingClientRect();
-  const opener=kind==='question'?`[data-se-library="question"][data-id="${CSS.escape(id)}"]`:
+  const opener=kind==='question'?`${node.matches('.se-question-grip')?'.se-question-grip':'.se-qrow'}[data-id="${CSS.escape(id)}"]`:
    node.matches('button')?`.se-category-navrow[data-category="${CSS.escape(category)}"]`:
    `.se-category-card[data-category="${CSS.escape(category)}"] .se-category-open`;
   menu=null;libraryMenu={kind,id,category,opener,x:event.clientX||rect.left+18,y:event.clientY||rect.top+18};
@@ -471,8 +505,17 @@ export function createStudioEditor(api){
   libraryMenu=null;draw();
   if(opener)document.querySelector('#se-root '+opener)?.focus({preventScroll:true});
  }
- function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['balance-board-toggle','board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename'].includes(action))return;menu=null;
+ function onAction(action,button){const item=current(),scene=item?.scene;if(action==='menu-close'){menu=null;draw();return;}if(action==='library-menu-close'){closeLibraryMenu();return;}if(action==='open-menu'){const r=document.querySelector('.se-canvas-wrap')?.getBoundingClientRect();menu={x:(r?.right||260)-225,y:(r?.top||120)+60};libraryMenu=null;draw();return;}if(!item&& !['balance-board-toggle','board-round','category-move','category-transfer-open','category-transfer-cancel','audit','open-next-issue','batch-apply','batch-clear','reuse-question','preview-device','toggle-preview','mobile-tab','new','quickset','category-overview','category-form','category-form-cancel','category-select','category-preset','category-new-question','category-rename','category-remove','select','undo','redo','backup','library-open','library-delete','library-new','library-rename','question-order','question-up','question-down'].includes(action))return;menu=null;
  switch(action){
+  case 'question-order':openLibraryMenu(button,{});return;
+  case 'question-up':case 'question-down':{
+   const list=questionsInCategory(visibleQuestions(),activeCategory);
+   const id=libraryMenu?.id,index=list.findIndex(question=>question.id===id);
+   if(index<0)return;
+   const up=action==='question-up',target=list[index+(up?-1:1)];
+   if(target)moveQuestion(id,target.id,up?'before':'after',true);
+   return;
+  }
   case 'balance-board-toggle':{
     if(quiz().balanceBoard){
       const count=roundQuestions(quiz(),3).length;
@@ -625,7 +668,85 @@ export function createStudioEditor(api){
   if(current()?.id!==questionId)throw Error('Die Frage wurde während des Uploads gewechselt. Bitte die Datei erneut auswählen.');
   flushDraft();snapshot();current().audio=converted;persist(true);
  }
+ function mountQuestionSorting(root){
+  const list=root.querySelector('.se-questions');
+  if(!list?.querySelector('.se-question-grip'))return;
+  const rows=[...list.querySelectorAll('[data-se-question-row]')];
+  let gesture=null,frame=0,suppressClick=false;
+  const updateTarget=()=>{
+   const box=list.getBoundingClientRect(),{x,y,source}=gesture;
+   const inside=x>=box.left&&x<=box.right&&y>=box.top&&y<=box.bottom;
+   const target=inside?(rows.find(row=>y<=row.getBoundingClientRect().bottom+2)||rows.at(-1)):null;
+   const marker=target!==source?target:null;
+   const rect=marker?.getBoundingClientRect();
+   const placement=rect&&y<(rect.top+rect.bottom)/2?'before':'after';
+   if(gesture.target!==marker||gesture.placement!==placement){
+    gesture.target?.removeAttribute('data-se-drop');
+    marker?.setAttribute('data-se-drop',placement);
+    gesture.target=marker;
+    gesture.placement=placement;
+   }
+   if(!inside)return 0;
+   const edge=Math.min(24,box.height/4);
+   if(y<box.top+edge&&list.scrollTop>0)return -8;
+   if(y>box.bottom-edge&&list.scrollTop+list.clientHeight<list.scrollHeight-1)return 8;
+   return 0;
+  };
+  const refresh=()=>{
+   frame=0;
+   if(!gesture||!root.isConnected)return;
+   const step=updateTarget();
+   if(step){list.scrollTop+=step;frame=requestAnimationFrame(refresh);}
+  };
+  const stop=()=>{
+   const last=gesture;
+   gesture=null;
+   cancelAnimationFrame(frame);frame=0;
+   last?.source.classList.remove('is-question-dragging');
+   last?.target?.removeAttribute('data-se-drop');
+   if(last?.grip.hasPointerCapture(last.id))last.grip.releasePointerCapture(last.id);
+   return last;
+  };
+  list.addEventListener('pointerdown',event=>{
+   if(event.button!==0||!event.isPrimary||gesture)return;
+   suppressClick=false;
+   const grip=event.target.closest('.se-question-grip');
+   if(!grip)return;
+   gesture={grip,id:event.pointerId,source:grip.closest('[data-se-question-row]'),x:event.clientX,y:event.clientY};
+   grip.setPointerCapture(event.pointerId);
+  });
+  list.addEventListener('pointermove',event=>{
+   if(gesture?.id!==event.pointerId)return;
+   if(!gesture.moved&&Math.hypot(event.clientX-gesture.x,event.clientY-gesture.y)<6)return;
+   gesture.moved=true;
+   suppressClick=true;
+   gesture.source.classList.add('is-question-dragging');
+   gesture.x=event.clientX;gesture.y=event.clientY;
+   if(!frame)refresh();
+  });
+  list.addEventListener('pointerup',event=>{
+   if(gesture?.id!==event.pointerId)return;
+   if(gesture.moved){
+    gesture.x=event.clientX;gesture.y=event.clientY;
+    updateTarget();
+   }
+   const {source,target,placement}=stop();
+   if(target)moveQuestion(source.dataset.seQuestionRow,target.dataset.seQuestionRow,placement);
+  });
+  for(const type of ['pointercancel','lostpointercapture'])list.addEventListener(type,event=>{
+   if(gesture?.id===event.pointerId)stop();
+  });
+  list.addEventListener('click',event=>{
+   if(!suppressClick||event.detail===0||!event.target.closest('.se-question-grip'))return;
+   event.preventDefault();event.stopPropagation();
+  });
+  root.addEventListener('keydown',event=>{
+   if(event.key!=='Escape'||!gesture)return;
+   event.preventDefault();event.stopImmediatePropagation();stop();
+  });
+ }
  function mount(root){if(!root||root.dataset.bound)return;root.dataset.bound='yes';
+  mountQuestionSorting(root);
   const map=root.querySelector('[data-map-viewport]');
   if(map){
    const questionId=current()?.id;

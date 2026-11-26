@@ -2,12 +2,33 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {quickBoard,categoryColumns,STANDARD_POINTS,judgementDelta,updatePlayerScore,emptyQuiz,normalizedQuiz,buildPublicBoard,manualPlayerLabels} from '../docs/core.mjs';
+import {reorderCategoryQuestions} from '../docs/category-model.mjs';
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 test('Schnellset erzeugt 25 eigenständige Fragen auf 100 bis 500 Punkten',()=>{
  const qs=quickBoard(['Champions','Items','Lore','Splash Art','Fähigkeiten']);
  assert.equal(qs.length,25);assert.equal(new Set(qs.map(q=>q.id)).size,25);
  assert.deepEqual(qs.slice(0,5).map(q=>q.points),STANDARD_POINTS);
  assert.deepEqual(categoryColumns(qs).map(x=>x.items.length),[5,5,5,5,5]);
+});
+test('Manuelle Reihenfolge bleibt nach Import und auf dem öffentlichen Brett auf ihre Kategorie und Runde begrenzt',()=>{
+ const original=normalizedQuiz({questions:[
+  {id:'10',category:'Lore',points:100},{id:'other',category:'Items',points:200},
+  {id:'3',category:'Lore',points:200},{id:'later',category:'Lore',boardRound:2,points:250},
+  {id:'2',category:' lore ',points:300},{id:'only',category:'Items',points:100}
+ ]});
+ assert.equal(reorderCategoryQuestions(original.questions,'2','later','before'),null);
+ assert.equal(reorderCategoryQuestions(original.questions,'10','other','after'),null);
+ assert.equal(reorderCategoryQuestions(original.questions,'10','3','before'),null);
+ const reordered=reorderCategoryQuestions(original.questions,'2','10','before');
+ assert.deepEqual(reordered.map(q=>q.id),['2','other','10','later','3','only']);
+ assert.equal(original.questions[0].manualOrder,undefined);
+ const saved=normalizedQuiz(JSON.parse(JSON.stringify({...original,questions:reordered})));
+ const board=buildPublicBoard(saved);
+ assert.equal(board.later.boardPosition,undefined);
+ const columns=categoryColumns(Object.values(board).filter(q=>q.boardRound===1));
+ assert.deepEqual(columns.find(c=>c.category.trim().toLowerCase()==='lore').items.map(q=>q.id),['2','10','3']);
+ assert.deepEqual(columns.find(c=>c.category==='Items').items.map(q=>q.points),[100,200]);
+ assert.equal(board['2'].points,300);
 });
 test('Richtig gibt volle Punktzahl, falsch zieht die Hälfte ab, auch bei ungeraden Punkten',()=>{
  assert.equal(judgementDelta(300,'correct'),300);

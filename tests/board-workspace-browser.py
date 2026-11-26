@@ -4,12 +4,91 @@ Only the local editor is exercised; PeerJS real network is intentionally not cla
 import asyncio, functools, json, threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from board_library_test_support import active_board_id, read_board, read_boards, wait_board_saved
 
 ROOT=Path(__file__).resolve().parents[1] / 'docs'
 class Handler(SimpleHTTPRequestHandler):
  def log_message(self,*args): pass
+
+async def reorder_questions(browser,url):
+ ctx=await browser.new_context(viewport={'width':1366,'height':930},has_touch=True)
+ try:
+  page=await ctx.new_page()
+  await page.goto(url)
+  await page.locator('.bq-legacy-options>summary').click()
+  await page.get_by_role('button',name='Quizbrett bearbeiten').click()
+  questions=[{'id':f'q{i}','title':f'Titel {i}','category':'Lore','points':i*100,
+   'prompt':f'Frage {i}?','answer':f'Antwort {i}'} for i in range(1,4)]
+  questions.append({**questions[0],'id':'other','category':'Items'})
+  await page.locator('#import-quiz').set_input_files({'name':'sort.brainquiz.json',
+   'mimeType':'application/json','buffer':json.dumps({'title':'Sortiertest','questions':questions}).encode()})
+  await expect(page.locator('.se-board-context>strong')).to_have_text('Sortiertest')
+  category=page.locator('.se-category-navrow[data-category="Lore"]')
+  await category.click()
+  rows=page.locator('.se-questions .se-qrow')
+  grip=lambda id: page.locator(f'.se-question-grip[data-id="{id}"]')
+  async def expect_order(ids):
+   await expect(rows).to_have_count(len(ids))
+   for idx,id in enumerate(ids):
+    await expect(rows.nth(idx)).to_have_attribute('data-id',id)
+  async def points(source,target):
+   await grip(source).scroll_into_view_if_needed()
+   a=await grip(source).bounding_box()
+   b=await page.locator(f'[data-se-question-row="{target}"]').bounding_box()
+   return (a['x']+a['width']/2,a['y']+a['height']/2),(b['x']+b['width']/2,b['y']+b['height']*.25)
+  start,end=await points('q3','q1')
+  await page.mouse.move(*start)
+  await page.mouse.down()
+  await page.mouse.move(*end,steps=8)
+  await expect(page.locator('[data-se-question-row="q1"][data-se-drop="before"]')).to_be_visible()
+  await page.mouse.up()
+  await expect_order(['q3','q1','q2'])
+  await page.keyboard.press('Control+z')
+  await expect_order(['q1','q2','q3'])
+  await page.keyboard.press('Control+Shift+z')
+  await expect_order(['q3','q1','q2'])
+  start,_=await points('q3','q1')
+  await page.mouse.move(*start)
+  await page.mouse.down()
+  await page.mouse.move(2,2,steps=5)
+  await page.mouse.up()
+  await expect_order(['q3','q1','q2'])
+  await expect(page.locator('.se-context')).to_have_count(0)
+  await grip('q3').press('Enter')
+  await page.keyboard.press('ArrowDown')
+  await expect(page.get_by_role('menuitem',name='Nach unten verschieben')).to_be_focused()
+  await page.keyboard.press('Enter')
+  await expect_order(['q1','q3','q2'])
+  await expect(grip('q3')).to_be_focused()
+  search=page.locator('[data-se-search]')
+  await search.fill('Titel 3')
+  await expect(page.locator('.se-question-grip')).to_have_count(0)
+  await search.fill('')
+  await page.set_viewport_size({'width':390,'height':844})
+  await page.locator('[data-se-action="mobile-tab"][data-mobile-tab="categories"]').click()
+  start,end=await points('q2','q1')
+  touch=await ctx.new_cdp_session(page)
+  await touch.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':start[0],'y':start[1]}]})
+  await touch.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':end[0],'y':end[1]}]})
+  await touch.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+  await expect_order(['q2','q1','q3'])
+  await wait_board_saved(page)
+  board_id=await active_board_id(page)
+  assert [q['id'] for q in (await read_board(page))['quiz']['questions']]==['q2','q1','q3','other']
+  await page.set_viewport_size({'width':1366,'height':930})
+  await page.reload()
+  if not await page.locator('.bq-landing-boards').evaluate('(el)=>el.open'):
+   await page.locator('.bq-landing-boards>summary').click()
+  await page.locator(f'[data-action="open-landing-board"][data-board-id="{board_id}"]').click()
+  await category.click()
+  await expect_order(['q2','q1','q3'])
+  await page.get_by_role('button',name='Quizbrett ansehen').click()
+  lore=page.locator('.jeopardy-board .column').filter(has_text='Lore')
+  await expect(lore.locator('.tile-points')).to_have_text(['400','200','600'])
+  print('PASS: question sorting with mouse, keyboard and touch, cancellation, undo/redo, reload and board order')
+ finally:
+  await ctx.close()
 
 async def migrate_full_storage(browser,url):
  ctx=await browser.new_context()
@@ -105,6 +184,7 @@ async def main():
  try:
   async with async_playwright() as p:
    browser=await p.chromium.launch(args=['--no-sandbox'])
+   await reorder_questions(browser,url)
    ctx=await browser.new_context(viewport={'width':1280,'height':800})
    page=await ctx.new_page()
    page.on('pageerror',lambda err: errors.append(str(err)))

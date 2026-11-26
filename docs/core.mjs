@@ -1,4 +1,4 @@
-import {collectCategories,roundCategories,boardRoundOf} from './category-model.mjs';
+import {categoryKey,collectCategories,roundCategories,boardRoundOf,questionCategoryKey} from './category-model.mjs';
 import {normalizeJokerConfig} from './joker-system.mjs';
 import {normalizeBlocks,publicBlocks,validateBlocks} from './layout.mjs';
 import {normalizeScene,publicScene,imposterPublicScene,reconcileQuestion,validateScene} from './studio-model.mjs';
@@ -7,7 +7,7 @@ import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,normalizeTeamEmoji,normalizeTeamDra
 import {questionRoundMode} from './question-mode.mjs';
 export {questionRoundMode};
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='3.6.5';
+export const VERSION='3.6.6';
 export const MAX_QUESTION_SECONDS=900;
 export const questionSeconds=value=>Math.max(0,Math.min(MAX_QUESTION_SECONDS,Math.trunc(Number(value))||0));
 export function normalizeAnswerTolerance(value,type){
@@ -35,11 +35,17 @@ export function normalizedQuiz(source){
  const imageCount=(Array.isArray(q.scene?.elements)?q.scene.elements.filter(el=>el?.kind==='image').length:0)||q.icons?.length||5;
  const slots=Math.max(type==='imposter'?2:5,Math.min(8,Number(imageCount)||5));
  const tolerance=['estimate','map'].includes(type)?normalizeAnswerTolerance(q.answerTolerance,type):null;
- return {id,boardRound:boardRoundOf(q),roundMode:questionRoundMode(q,type),category:String(q.category||'Allgemein').slice(0,70),title:String(q.title||'Frage').slice(0,100),type,points:Math.max(0,Math.min(10000,q.points!==''&&q.points!==null&&q.points!==undefined&&Number.isFinite(Number(q.points))?Number(q.points):100)),prompt:String(q.prompt||'').slice(0,2000),answer:String(q.answer||'').slice(0,2000),answerText:String(q.answerText||'').slice(0,2000),answerImage:isImageData(q.answerImage)?q.answerImage:'',answerImageAlt:String(q.answerImageAlt||'').slice(0,140),hostNotes:String(q.hostNotes||'').slice(0,1600),oracleHint:String(q.oracleHint||'').slice(0,220),acceptedAnswers:String(q.acceptedAnswers||'').slice(0,1200),sourceUrl:String(q.sourceUrl||'').slice(0,450),sourcePatch:String(q.sourcePatch||'').slice(0,100),sourceCheckedOn:/^\d{4}-\d{2}-\d{2}$/.test(q.sourceCheckedOn||'')?String(q.sourceCheckedOn):'',explanation:String(q.explanation||'').slice(0,2000),options:Array.from({length:4},(_,i)=>String(q.options?.[i]||'').slice(0,500)),correct:Math.max(0,Math.min(3,Number(q.correct)||0)),image:isImageData(q.image)?q.image:'',cropX:Math.max(0,Math.min(100,Number(q.cropX??50))),cropY:Math.max(0,Math.min(100,Number(q.cropY??50))),zoom:Math.max(1,Math.min(9,Number(q.zoom??3))),abilityNames:Array.from({length:slots},(_,i)=>String(q.abilityNames?.[i]||ABILITIES[i]||`Bild ${i+1}`).slice(0,30)),icons:Array.from({length:slots},(_,i)=>isImageData(q.icons?.[i])?q.icons[i]:''),imposterIndex:Math.max(0,Math.min(7,Number(q.imposterIndex)||0)),mapTargetX:Math.max(0,Math.min(100,Number(q.mapTargetX??50)||0)),mapTargetY:Math.max(0,Math.min(100,Number(q.mapTargetY??50)||0)),mapTargetSet:q.mapTargetSet===true,correctIcon:isImageData(q.correctIcon)?q.correctIcon:'',orderItems:(Array.isArray(q.orderItems)?q.orderItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120)),clue:String(q.clue||'').slice(0,1200),estimateTarget:Number.isFinite(Number(q.estimateTarget))?Number(q.estimateTarget):0,estimateUnit:String(q.estimateUnit||'').slice(0,40),...(tolerance===null?{}:{answerTolerance:tolerance}),seconds:questionSeconds(q.seconds),hints:(Array.isArray(q.hints)?q.hints:[]).slice(0,4).map(x=>String(x||'').slice(0,220)),audio:isAudioData(q.audio)?q.audio:'',audioStart:Math.max(0,Math.min(3600,Number(q.audioStart)||0)),audioDuration:Math.max(1,Math.min(12,Number(q.audioDuration)||8)),...(type===TEAM_EMOJI?{teamEmoji:normalizeTeamEmoji(q.teamEmoji)}:{}),...(type===TEAM_DRAW?{teamDraw:normalizeTeamDraw(q.teamDraw)}:{}),blocks:normalizeBlocks(q.blocks),scene:normalizeScene(q.scene),orderDisplayItems:(Array.isArray(q.orderDisplayItems)?q.orderDisplayItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120))};
+ return {id,boardRound:boardRoundOf(q),...(q.manualOrder===true?{manualOrder:true}:{}),roundMode:questionRoundMode(q,type),category:String(q.category||'Allgemein').slice(0,70),title:String(q.title||'Frage').slice(0,100),type,points:Math.max(0,Math.min(10000,q.points!==''&&q.points!==null&&q.points!==undefined&&Number.isFinite(Number(q.points))?Number(q.points):100)),prompt:String(q.prompt||'').slice(0,2000),answer:String(q.answer||'').slice(0,2000),answerText:String(q.answerText||'').slice(0,2000),answerImage:isImageData(q.answerImage)?q.answerImage:'',answerImageAlt:String(q.answerImageAlt||'').slice(0,140),hostNotes:String(q.hostNotes||'').slice(0,1600),oracleHint:String(q.oracleHint||'').slice(0,220),acceptedAnswers:String(q.acceptedAnswers||'').slice(0,1200),sourceUrl:String(q.sourceUrl||'').slice(0,450),sourcePatch:String(q.sourcePatch||'').slice(0,100),sourceCheckedOn:/^\d{4}-\d{2}-\d{2}$/.test(q.sourceCheckedOn||'')?String(q.sourceCheckedOn):'',explanation:String(q.explanation||'').slice(0,2000),options:Array.from({length:4},(_,i)=>String(q.options?.[i]||'').slice(0,500)),correct:Math.max(0,Math.min(3,Number(q.correct)||0)),image:isImageData(q.image)?q.image:'',cropX:Math.max(0,Math.min(100,Number(q.cropX??50))),cropY:Math.max(0,Math.min(100,Number(q.cropY??50))),zoom:Math.max(1,Math.min(9,Number(q.zoom??3))),abilityNames:Array.from({length:slots},(_,i)=>String(q.abilityNames?.[i]||ABILITIES[i]||`Bild ${i+1}`).slice(0,30)),icons:Array.from({length:slots},(_,i)=>isImageData(q.icons?.[i])?q.icons[i]:''),imposterIndex:Math.max(0,Math.min(7,Number(q.imposterIndex)||0)),mapTargetX:Math.max(0,Math.min(100,Number(q.mapTargetX??50)||0)),mapTargetY:Math.max(0,Math.min(100,Number(q.mapTargetY??50)||0)),mapTargetSet:q.mapTargetSet===true,correctIcon:isImageData(q.correctIcon)?q.correctIcon:'',orderItems:(Array.isArray(q.orderItems)?q.orderItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120)),clue:String(q.clue||'').slice(0,1200),estimateTarget:Number.isFinite(Number(q.estimateTarget))?Number(q.estimateTarget):0,estimateUnit:String(q.estimateUnit||'').slice(0,40),...(tolerance===null?{}:{answerTolerance:tolerance}),seconds:questionSeconds(q.seconds),hints:(Array.isArray(q.hints)?q.hints:[]).slice(0,4).map(x=>String(x||'').slice(0,220)),audio:isAudioData(q.audio)?q.audio:'',audioStart:Math.max(0,Math.min(3600,Number(q.audioStart)||0)),audioDuration:Math.max(1,Math.min(12,Number(q.audioDuration)||8)),...(type===TEAM_EMOJI?{teamEmoji:normalizeTeamEmoji(q.teamEmoji)}:{}),...(type===TEAM_DRAW?{teamDraw:normalizeTeamDraw(q.teamDraw)}:{}),blocks:normalizeBlocks(q.blocks),scene:normalizeScene(q.scene),orderDisplayItems:(Array.isArray(q.orderDisplayItems)?q.orderDisplayItems:[]).slice(0,10).map(x=>String(x??'').trim().slice(0,120))};
  });
  return {version:1,scoreMode:obj.scoreMode==='individual'?'individual':'team',title:String(obj.title||'Meine Quiznacht').slice(0,100),description:String(obj.description||'').slice(0,400),teams:names.length?names:['Team 1','Team 2'],manualPlayers:(Array.isArray(obj.manualPlayers)?obj.manualPlayers:[]).slice(0,24).map(x=>String(x||'').trim().slice(0,28)).filter(Boolean),categories:collectCategories(obj.categories,questions),balanceBoard:obj.balanceBoard===true||questions.some(q=>boardRoundOf(q)===3),jokerConfig:normalizeJokerConfig(obj.jokerConfig),roundCategories:{1:roundCategories({...obj,questions},1),2:roundCategories({...obj,questions},2),3:roundCategories({...obj,questions},3)},questions};
 }
-export function buildPublicBoard(quiz,used={}){return Object.fromEntries(quiz.questions.map(q=>[q.id,{id:q.id,boardRound:boardRoundOf(q),category:q.category,type:q.type,points:q.points,used:!!used[q.id]}]));}
+export function buildPublicBoard(quiz,used={}){
+ const manualCategories=new Set(quiz.questions.filter(q=>q.manualOrder===true).map(questionCategoryKey));
+ return Object.fromEntries(quiz.questions.map((q,index)=>[q.id,{
+  id:q.id,boardRound:boardRoundOf(q),category:q.category,type:q.type,points:q.points,used:!!used[q.id],
+  ...(manualCategories.has(questionCategoryKey(q))?{boardPosition:index}:{})
+ }]));
+}
 export function buildTeams(quiz){return Object.fromEntries(quiz.teams.map((name,i)=>['t'+(i+1),name]));}
 export function buildScores(quiz){return Object.fromEntries(quiz.teams.map((_,i)=>['t'+(i+1),0]));}
 const sortingPrompt=q=>String(q.prompt||q.scene?.elements?.find(el=>el.kind==='text'&&el.role==='question')?.text||'').trim();
@@ -191,8 +197,17 @@ export function quickBoard(categories=DEFAULT_CATEGORIES,points=STANDARD_POINTS)
 }
 export function categoryColumns(questions){
  const grouped=new Map();
- for(const q of questions||[]){if(!grouped.has(q.category))grouped.set(q.category,[]);grouped.get(q.category).push(q);}
- return [...grouped].map(([category,items])=>({category,items:[...items].sort((a,b)=>a.points-b.points||String(a.title).localeCompare(String(b.title)))}));
+ for(const q of questions||[]){
+  const key=categoryKey(q.category);
+  if(!grouped.has(key))grouped.set(key,{category:q.category,items:[]});
+  grouped.get(key).items.push(q);
+ }
+ return [...grouped.values()].map(({category,items})=>{
+  const custom=items.some(q=>Number.isInteger(q.boardPosition));
+  if(custom)items.sort((a,b)=>(a.boardPosition??Infinity)-(b.boardPosition??Infinity));
+  else if(!items.some(q=>q.manualOrder===true))items.sort((a,b)=>a.points-b.points||String(a.title).localeCompare(String(b.title)));
+  return {category,items};
+ });
 }
 export function judgementDelta(points,result){
  const value=Number(points);if(!Number.isFinite(value)||value<0||value>20000)throw Error('Ungültiger Fragewert.'); // Editor base max 10,000; final-six modifier ×2.

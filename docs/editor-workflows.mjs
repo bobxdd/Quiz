@@ -23,7 +23,15 @@ export function changeSelectedQuestions(quiz, ids, {category,points}={}) {
   }
  }
  let count=0;
- for(const q of quiz.questions||[]){if(!selected.has(q.id))continue;if(category!==undefined)q.category=category;if(points!==undefined)q.points=Number(points);count++;}
+ for(const q of quiz.questions||[]){
+  if(!selected.has(q.id))continue;
+  if(category!==undefined){
+   if(categoryKey(q.category)!==categoryKey(category))delete q.manualOrder;
+   q.category=category;
+  }
+  if(points!==undefined)q.points=Number(points);
+  count++;
+ }
  if(!count)throw Error('Die ausgewählten Fragen sind nicht mehr vorhanden.');
  return count;
 }
@@ -34,6 +42,7 @@ export function reuseQuestion(quiz, sourceId, destination, newId) {
  if(quiz.questions.length>=180)throw Error('Maximal 180 Fragen pro Quiz.');
  if(!newId||quiz.questions.some(q=>q.id===newId))throw Error('Ungültige neue Fragen-ID.');
  const copy=structuredClone(source);copy.id=newId;copy.title=(source.title||'Frage').slice(0,86)+' (Kopie)';copy.category=destination;
+ delete copy.manualOrder;
  quiz.questions.push(copy);return copy;
 }
 export function quizAudit(quiz) {

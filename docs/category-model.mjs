@@ -27,11 +27,27 @@ export function collectCategories(stored,questions=[]){
 }
 export function questionsInCategory(questions,category){return (questions||[]).filter(q=>categoryKey(q?.category)===categoryKey(category));}
 export const boardRoundOf=question=>[2,3].includes(Number(question?.boardRound))?Number(question.boardRound):1;
+export const questionCategoryKey=question=>boardRoundOf(question)+'|'+categoryKey(question?.category);
 export const MAX_BALANCE_FIELDS=12;
 export const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(question=>boardRoundOf(question)===Number(round));
 export function roundCategories(quiz,round=1){
  const stored=quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]);
  return collectCategories(stored,roundQuestions(quiz,round));
+}
+export function reorderCategoryQuestions(questions,sourceId,targetId,placement){
+ if(sourceId===targetId||!['before','after'].includes(placement))return null;
+ const source=questions.find(question=>question.id===sourceId);
+ const target=questions.find(question=>question.id===targetId);
+ if(!source||!target)return null;
+ const scope=questionCategoryKey(source);
+ if(questionCategoryKey(target)!==scope)return null;
+ const original=questions.filter(question=>questionCategoryKey(question)===scope);
+ const ordered=original.filter(question=>question!==source);
+ const index=ordered.indexOf(target)+(placement==='after'?1:0);
+ ordered.splice(index,0,source);
+ if(ordered.every((question,i)=>question===original[i]))return null;
+ let position=0;
+ return questions.map(question=>questionCategoryKey(question)===scope?{...ordered[position++],manualOrder:true}:question);
 }
 export function boardLayoutIssues(quiz){
  const issues=[];
