@@ -52,9 +52,9 @@ export function placeJokerDrops(quiz,randomIndex){
  const fields=fundFieldIds(quiz);
  const types=JOKER_TYPES.flatMap(type=>Array(cfg.drops[type]).fill(type));
  const rand=typeof randomIndex==='function'?randomIndex:max=>{
-  const bytes=new Uint32Array(1);
-  if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);
-  else bytes[0]=Math.floor(Math.random()*0x100000000);
+  if(!globalThis.crypto?.getRandomValues)return Math.floor(Math.random()*max);
+  const bytes=new Uint32Array(1),limit=0x100000000-(0x100000000%max);
+  do{globalThis.crypto.getRandomValues(bytes);}while(bytes[0]>=limit);
   return bytes[0]%max;
  };
  for(const choices of [fields,types]){

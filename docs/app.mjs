@@ -963,7 +963,7 @@ function jokerPanel(locked=false){
    const canUse=selected&&connected&&count>0&&(type==='reroll'?phase==='ready'&&!p.jokerRerollRequest&&selectingTeam(p)===team&&remainingBoardQuestions(p).length>0:
     type==='chrono'?phase==='question'&&roundMode(p.current)==='buzzer'&&winner()?.uid===game?.uid&&p.chronoBreak?.round!==p.round:
     type==='oracle'?phase==='question'&&!game?.guestData?.jokerPrivateHint:
-    phase==='question'&&p.jokerShields?.[team]!==p.round&&!p.buzzerBlockedTeams?.[roundKey()]?.[team]&&!p.writtenTeamRepresentatives?.[roundKey()]?.[team]);
+    phase==='question'&&boardRoundOf(p)!==3&&p.jokerShields?.[team]!==p.round&&!p.buzzerBlockedTeams?.[roundKey()]?.[team]&&!p.writtenTeamRepresentatives?.[roundKey()]?.[team]);
    const armed=type==='shield'&&shieldApplies(p,team);
    html+='<div class="bq-joker-token '+(count?'':'is-empty')+(armed?' is-armed':'')+'" title="'+e(meta.description)+'"><span class="bq-joker-symbol" aria-hidden="true">'+jokerIconMarkup(type)+'</span><span class="bq-joker-name">'+e(meta.name)+'</span><b>×'+count+'</b>';
    if(armed)html+='<small>Aktiv</small>';else if(!count)html+='<small class="bq-joker-empty-label">Leer</small>';

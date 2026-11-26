@@ -6,7 +6,8 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 root=Path(__file__).resolve().parents[1]
 files=['app.mjs','answer-view.mjs','score-ledger.mjs','backup-store.mjs','final-results.mjs','sound-effects.mjs','peer-client.mjs','core.mjs','team-emoji.mjs','layout.mjs','studio-model.mjs','studio-editor.mjs','image-drop.mjs','answer-review.mjs','history-model.mjs','lobby-model.mjs','lobby-view.mjs','question-flow.mjs','category-model.mjs','editor-workflows.mjs','round-rules.mjs','joker-system.mjs','map-tools.mjs','map-viewport.mjs','map-dagger-animation.mjs','board-workspace.mjs']
-sources={name:(root/'docs'/name).read_text() for name in files}
+files.append('question-mode.mjs')
+sources={name:(root/'docs'/name).read_text(encoding='utf-8') for name in files}
 characters_css=(root/'docs/characters.css').read_text()
 for character in ('rogue','blades','mage','druid'):
  src='./characters/'+character+'.webp'
@@ -46,17 +47,20 @@ async def install(page):
   window.history.replaceState=()=>{};
   const blob=body=>URL.createObjectURL(new Blob([body],{type:'text/javascript'}));
   const emoji=blob(src['team-emoji.mjs']);
-  const joker=blob(src['joker-system.mjs']);
-  for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs','question-flow.mjs','round-rules.mjs','editor-workflows.mjs']){
+  const category=blob(src['category-model.mjs']);
+  const mode=blob(src['question-mode.mjs'].replace("from './team-emoji.mjs'",`from '${emoji}'`));
+  const joker=blob(src['joker-system.mjs'].replace("from './question-mode.mjs'",`from '${mode}'`).replace("from './category-model.mjs'",`from '${category}'`));
+  src['core.mjs']=src['core.mjs'].replaceAll("'./question-mode.mjs'",`'${mode}'`);
+  for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs','question-flow.mjs','round-rules.mjs','editor-workflows.mjs','score-ledger.mjs']){
    src[path]=src[path].replace("from './joker-system.mjs'",`from '${joker}'`);
   }
   for(const path of ['app.mjs','core.mjs','studio-editor.mjs','peer-client.mjs']){
    src[path]=src[path].replace("from './team-emoji.mjs'",`from '${emoji}'`);
   }
-  const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));const category=blob(src['category-model.mjs']);
+  const lobby=blob(src['lobby-model.mjs']);const layout=blob(src['layout.mjs']);const map=blob(src['map-tools.mjs']);const viewport=blob(src['map-viewport.mjs'].replace("from './map-tools.mjs'",`from '${map}'`));const model=blob(src['studio-model.mjs'].replace("from './map-viewport.mjs'",`from '${viewport}'`));
   const review=blob(src['answer-review.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
-  const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs']);const dagger=blob(src['map-dagger-animation.mjs']);
-  const boardWorkspaces=blob(src['board-workspace.mjs']);const answerView=blob(src['answer-view.mjs']);const backups=blob(src['backup-store.mjs']);const finale=blob(src['final-results.mjs']);
+  const history=blob(src['history-model.mjs']);const flow=blob(src['question-flow.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));const dagger=blob(src['map-dagger-animation.mjs']);
+  const boardWorkspaces=blob(src['board-workspace.mjs']);const answerView=blob(src['answer-view.mjs']);const backups=blob(src['backup-store.mjs']);const finale=blob(src['final-results.mjs'].replace("from './lobby-model.mjs'",`from '${lobby}'`));
   const core=blob(src['core.mjs'].replace("from './layout.mjs'",`from '${layout}'`).replace("from './studio-model.mjs'",`from '${model}'`).replace("from './category-model.mjs'",`from '${category}'`).replace("from './answer-view.mjs'",`from '${answerView}'`));
   const ledger=blob(src['score-ledger.mjs'].replace("from './core.mjs'",`from '${core}'`));
   const lobbyView=blob(src['lobby-view.mjs'].replace("from './core.mjs'",`from '${core}'`).replace("from './lobby-model.mjs'",`from '${lobby}'`));
