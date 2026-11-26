@@ -1,7 +1,7 @@
 export const TEAM_EMOJI = 'team-emoji';
 export const TEAM_DRAW = 'team-draw';
 export const isTeamChallenge = type => type === TEAM_EMOJI || type === TEAM_DRAW;
-export const MAX_EMOJI_CLUES = 5;
+export const MAX_EMOJI_CLUES = 3;
 export const MAX_EMOJI_PALETTE = 96;
 export const EMOJI_TIMER_MIN = 5;
 export const EMOJI_TIMER_MAX = 180;
@@ -49,9 +49,7 @@ const phaseSeconds = (value, fallback) => {
 };
 
 export function normalizeTeamEmoji(settings = {}) {
- const palette = String(settings?.palette ?? '').trim();
  return {
-  palette: !palette || palette === legacyDefaultPalette ? defaultPalette : palette.slice(0, 4000),
   clueSeconds: phaseSeconds(settings?.clueSeconds, 35),
   guessSeconds: phaseSeconds(settings?.guessSeconds, 25)
  };
@@ -91,14 +89,12 @@ export function validateTeamEmoji(question, scoreMode) {
  const target = teamEmojiTarget(question);
  if(!normalizeGuess(target) || target.length > 100) return 'Antwort-Tab ist Pflicht: Einen Champion oder Begriff mit maximal 100 Zeichen eingeben.';
  if(question.type === TEAM_DRAW) return '';
- try { parseEmojiPalette(normalizeTeamEmoji(question.teamEmoji).palette); }
- catch(error) { return error.message; }
  return '';
 }
 
 const clueGiver = team => Object.keys(team.roles).find(id => team.roles[id] === 'clue');
 const ready = team => !!clueGiver(team) && Object.values(team.roles).includes('guess');
-const clueSymbols = (round, team) => team.clues.map(value => typeof value === 'number' ? round.palette[value] : value);
+const clueSymbols = (round, team) => team.clues.map(value => typeof value === 'number' ? round.palette?.[value] : value).filter(Boolean).slice(0,MAX_EMOJI_CLUES);
 const hasClue = (round, team) => round.type === TEAM_DRAW ? !!team.drawing?.length : !!team.clues.length;
 
 // Each stroke stores a color index, size index and pairs of canvas coordinates.
@@ -133,7 +129,7 @@ export function newTeamEmojiRound(question, state, roster, id) {
  const accepted = [target, ...String(question.acceptedAnswers || '').split(/[\n;,]+/)].map(normalizeGuess).filter(Boolean);
  return {
   id, type:draw ? TEAM_DRAW : TEAM_EMOJI, teams, target, accepted, phase:'roles', deadline:0, points:question.points,
-  ...(draw ? {reference:question.answerImage || ''} : {palette:parseEmojiPalette(config.palette)}),
+  ...(draw ? {reference:question.answerImage || ''} : {}),
   clueSeconds:draw ? config.drawSeconds : config.clueSeconds, guessSeconds:config.guessSeconds
  };
 }
@@ -152,10 +148,8 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
    team.drawing = value.map(stroke => stroke.slice());
   }else{
    if(!Array.isArray(value) || value.length < 1 || value.length > MAX_EMOJI_CLUES ||
-      Array.from(value).some(symbol => typeof symbol === 'number' ?
-       !Number.isInteger(symbol) || symbol < 0 || symbol >= round.palette.length :
-       !isEmojiSymbol(symbol) || emojiSegments(symbol).length !== 1)) {
-    throw Error('Wähle bis zu fünf Emojis aus der vorgegebenen Auswahl oder der Emoji-Tastatur.');
+      Array.from(value).some(symbol => !isEmojiSymbol(symbol) || emojiSegments(symbol).length !== 1)) {
+    throw Error('Wähle maximal drei einzelne Emojis.');
    }
    team.clues = value.slice();
   }
@@ -163,12 +157,17 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
   const guess = typeof value === 'string' ? value.trim() : '';
   if(guess.length > 100 || !normalizeGuess(guess)) throw Error('Gib einen Champion oder Begriff mit maximal 100 Zeichen ein.');
   team.guess = guess;
+  if(round.type!==TEAM_DRAW&&allEmojiTeamsGuessed(round))waitForEmojiReveal(round);
  }else {
   throw Error('Diese Aktion ist in deiner Rolle oder Phase nicht verfügbar.');
  }
  return true;
 }
 
+function allEmojiTeamsGuessed(round){
+ return Object.values(round.teams).filter(team=>team.active&&hasClue(round,team)).every(team=>!!team.guess);
+}
+function waitForEmojiReveal(round){round.phase='awaiting-reveal';round.deadline=0;}
 export function advanceTeamEmoji(round, now) {
  if(round.phase === 'roles') {
   if(!Object.values(round.teams).some(ready)) throw Error('Mindestens ein Team braucht einen Hinweisgeber und eine ratende Person.');
@@ -178,20 +177,25 @@ export function advanceTeamEmoji(round, now) {
  }else if(round.phase === 'clues' && now >= round.deadline) {
   round.phase = 'guess';
   round.deadline = now + round.guessSeconds * 1000;
+  if(round.type!==TEAM_DRAW&&allEmojiTeamsGuessed(round))waitForEmojiReveal(round);
  }else if(round.phase === 'guess' && now >= round.deadline) {
-  finishTeamEmoji(round);
+  if(round.type===TEAM_DRAW)finishTeamEmoji(round);
+  else waitForEmojiReveal(round);
  }else return false;
  return true;
 }
 export function finishTeamEmoji(round){
+ if(round.type!==TEAM_DRAW&&round.phase!=='awaiting-reveal')return false;
+ if(round.phase==='reveal')return false;
  round.phase='reveal';
  round.deadline=0;
  round.results=Object.entries(round.teams).map(([id,team])=>{
-  const correct=!!team.guess&&round.accepted.includes(normalizeGuess(team.guess));
+  const correct=team.active&&hasClue(round,team)&&!!team.guess&&round.accepted.includes(normalizeGuess(team.guess));
   const status=!team.active?'no-roles':!hasClue(round,team)?'no-clues':!team.guess?'no-guess':correct?'correct':'wrong';
   return {id,status,clues:clueSymbols(round,team),guess:team.guess,points:correct?round.points:0,
    ...(round.type===TEAM_DRAW ? {drawing:team.drawing||[]} : {})};
  });
+ return true;
 }
 
 export function publicTeamEmoji(round) {
@@ -212,7 +216,7 @@ export function teamEmojiForPlayer(round, teamId, uid) {
  };
  if(round.phase === 'clues' && team.active && role === 'clue') {
   return {...own, target:round.target, ...(round.type===TEAM_DRAW ?
-   {reference:round.reference, drawing:team.drawing||[]} : {palette:round.palette, selected:clueSymbols(round,team)})};
+   {reference:round.reference, drawing:team.drawing||[]} : {selected:clueSymbols(round,team)})};
  }
  if(round.phase === 'guess' && team.active && role === 'guess') {
   return {...own, clues:clueSymbols(round,team),guess:team.guess,...(round.type===TEAM_DRAW ? {drawing:team.drawing||[]} : {})};
