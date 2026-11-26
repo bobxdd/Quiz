@@ -256,7 +256,7 @@ test('Oracle only falls back to hints that have yet to be revealed',()=>{
  assert.equal(oracleHintFor({...q,oracleHint:'Privat'},3),'Privat');
 });
 
-test('host explicit reveal atomically publishes both team results and scores exactly once, including Joker award',async()=>{
+test('host explicit reveal atomically publishes both team results and scores exactly once, preserving buzzer-only Joker fields',async()=>{
  for(const type of ['team-emoji','team-draw']){
   const g=fixture();
   const q={id:'challenge',type,answerText:'Jinx',category:'Team',points:200};
@@ -282,7 +282,9 @@ test('host explicit reveal atomically publishes both team results and scores exa
   assert.equal(g.data.public.teamEmoji.solution,'Jinx');
   assert.equal(g.data.public.teamEmoji.results.length,2);
   assert.deepEqual(g.data.public.scores,{t1:200,t2:200});
-  assert.equal(jokerCount(g.data.public,'t1','shield'),2);
+  // Current release deliberately permits hidden Joker fields only on buzzer questions.
+  // Even a stale/invalid field in a restored team round must not award a charge.
+  assert.equal(jokerCount(g.data.public,'t1','shield'),1);
   assert.equal(jokerCount(g.data.public,'t2','shield'),1);
   await assert.rejects(g.reviewTeamEmoji(room,r.id,'awaiting-reveal'),/nicht mehr offen/);
   assert.deepEqual(g.data.public.scores,{t1:200,t2:200});
