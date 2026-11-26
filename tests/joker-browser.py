@@ -205,9 +205,67 @@ async def exercise(origin):
   await bob.locator('[data-action="submit-answer"]').click()
   await expect(host.locator('.review-card')).to_have_count(2)
   print('PASS: writing stays clickable with open and closed Joker inventory at five viewport sizes',flush=True)
+  await balance_board(ctx,origin)
   assert not errors,errors
   await ctx.close();await browser.close()
   print('PASS: Chronobreak is visible to all and host controls resume after an eight-second correction',flush=True)
+
+async def balance_board(ctx,origin):
+ host=await ctx.new_page()
+ host.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
+ await host.goto(origin)
+ await host.locator('.bq-legacy-options>summary').click()
+ await host.get_by_role('button',name='Online-Raum erstellen').click()
+ await expect(host.locator('#se-root')).to_be_visible()
+ room=await host.evaluate('window.__probe.room()')
+ def question(id,board,points):
+  return {'id':id,'boardRound':board,'points':points,'category':'Testfragen','title':'Frage '+id,
+          'type':'text','prompt':'Frage '+id,'answer':'Lösung '+id}
+ questions=[question('start',1,100),question('next',2,100)]
+ questions.extend(question(id,3,index*100) for index,id in enumerate('abcd',1))
+ await host.evaluate('(questions)=>window.__probe.setQuiz({title:"Ausgleich QA", teams:["Rot","Blau"],balanceBoard:true,questions})',questions)
+ await host.locator('[data-action="publish"]').first.click()
+ await host.wait_for_function('()=>window.__probe.info().publicState?.published')
+ await host.locator('.top-nav [data-view="teams"]').click()
+ red=await join(ctx,host,room,'Rot QA','t1',origin)
+ blue=await join(ctx,host,room,'Blau QA','t2',origin)
+ await host.locator('[data-action="start-game"]').click()
+
+ async def uncover(id):
+  await host.locator(f'[data-action="open"][data-qid="{id}"]').click()
+  await host.locator('[data-action="uncover-question"]').click()
+
+ await uncover('start')
+ await red.locator('[data-action="buzz"]').click()
+ await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Rot QA')
+ await host.locator('[data-action="buzz-correct"]').click()
+ await host.locator('[data-action="back"]').click()
+ await expect(blue.locator('.bq-selection-turn')).to_contain_text('Blau')
+ for id,team,verdict,strike in [('a','t2','wrong','b'),('c','t1','correct','d')]:
+  await uncover(id)
+  await expect(host.locator('.bq-first-answer')).to_contain_text('Blau' if team=='t2' else 'Rot')
+  for guest in (red,blue):
+   await expect(guest.locator('.bq-quiz-verdict')).to_contain_text('antwortet')
+   await expect(guest.locator('[data-action="buzz"]')).to_have_count(0)
+  before=await host.evaluate('team=>window.__probe.info().publicState.scores[team]',team)
+  points=await host.evaluate('()=>window.__probe.info().publicState.current.points')
+  await host.locator(f'[data-action="first-{verdict}"]').click()
+  await expect(blue.locator('.bq-answer-view')).to_contain_text('Lösung '+id)
+  assert await host.evaluate('team=>window.__probe.info().publicState.scores[team]',team)==before+(points if verdict=='correct' else 0)
+  await host.locator('[data-action="back"]').click()
+  field=host.locator(f'[data-action="balance-strike"][data-qid="{strike}"]')
+  for width,height in [(320,568),(390,844),(768,1024),(1366,850),(1920,1080)]:
+   await host.set_viewport_size({'width':width,'height':height})
+   await field.click(trial=True,timeout=5000)
+   assert await host.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+  await field.click()
+  await expect(blue.locator('.tile.is-struck')).to_have_count(1 if id=='a' else 2)
+  await host.locator('[data-action="balance-unstrike"]').click()
+  await expect(field).to_be_enabled()
+  await field.click()
+ await host.locator('[data-action="next-board"]').click()
+ await expect(blue.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 2')
+ print('PASS: Board 1, balance board exclusive answers, zero or full points, reversible strikes, then Board 2',flush=True)
 
 async def main():
  server=fixture.http.ThreadingHTTPServer(('127.0.0.1',0),fixture.http.Handler)

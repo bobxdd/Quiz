@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion} from '../docs/core.mjs';
 import {roundQuestions,boardLayoutIssues} from '../docs/category-model.mjs';
-import {advanceBoardState,nextBoardRound,canAdvanceBoard,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn} from '../docs/question-flow.mjs';
+import {advanceBoardState,nextBoardRound,canAdvanceBoard,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn,strikeBalanceField,undoBalanceStrike,judgeBalanceAnswer,applyQuestionChanges} from '../docs/question-flow.mjs';
 import {canBuzz,applyBuzzerJudgement} from '../docs/round-rules.mjs';
 
 const source=[
@@ -19,12 +19,15 @@ const publicState=()=>{
   board:buildPublicBoard(quiz),used:{},settings:{buzzerEnabled:true,manualBuzzer:false}};
 };
 
-test('round three is optional, survives a JSON round trip and has exactly one question per team',()=>{
+test('round three survives a JSON round trip and accepts an additional strike field per team',()=>{
  const q=create();
  assert.equal(q.balanceBoard,true);
  assert.equal(roundQuestions(q,3).length,3);
  assert.deepEqual(normalizedQuiz(JSON.parse(JSON.stringify(q))),q);
  assert.deepEqual(boardLayoutIssues(q),[]);
+ const expanded=normalizedQuiz({...q,questions:[...q.questions,...source.slice(2).map(item=>({...item,id:item.id+'-extra'}))]});
+ assert.equal(roundQuestions(expanded,3).length,6);
+ assert.deepEqual(boardLayoutIssues(expanded),[]);
  const missing=structuredClone(q);missing.questions.pop();
  assert.match(boardLayoutIssues(missing).map(issue=>issue.reason).join('; '),/eine Frage je Team/);
  const invalid=structuredClone(q);invalid.questions[2].roundMode='written';
@@ -49,7 +52,9 @@ test('balance-round selection starts with lowest score and breaks ties by stable
  const cancelled=returnToBoardState(open);
  assert.equal(selectingTeam(cancelled),'t2','uncovered cancellation must preserve the selection turn');
  const finished=returnToBoardState({...open,phase:'reveal'});
- assert.equal(selectingTeam(finished),'t1','the next lowest team is next after a played question');
+ assert.equal(finished.balanceStrike.team,'t2');
+ const struck=strikeBalanceField(finished,'b');
+ assert.equal(selectingTeam(struck),'t1','the next lowest team is next after the strike');
 });
 
 test('normal team choice rotation is restored after the temporary balance order',()=>{
@@ -92,6 +97,42 @@ test('the first-answer reservation blocks all buzzers even when the buzzer is fo
   {round:1,uid:'bob',result:'correct'}),/reserviert/);
  const released={...pending,current:{...pending.current,firstAnswerPending:false},
   buzzerBlockedTeams:{'1':{t2:{team:'t2'}}}};
- assert.equal(canBuzz(released,{},'b','t1',Date.now()),true);
- assert.equal(canBuzz(released,{},'a','t2',Date.now()),false,'first team cannot steal its second chance');
+ assert.equal(canBuzz(released,{},'b','t1',Date.now()),false);
+ assert.equal(canBuzz(released,{},'a','t2',Date.now()),false);
+});
+
+test('exclusive wrong and right answers reveal and end the field, then the same team gets a reversible strike',()=>{
+ const quiz=normalizedQuiz({...create(),questions:[...source,...source.slice(2).map(item=>({...item,id:item.id+'-extra'}))]});
+ const initial={...publicState(),board:buildPublicBoard(quiz),participatingTeams:['t1','t2']};
+ let state=advanceBoardState(initial,{force:true});
+ assert.deepEqual(state.selectionTurn.order,['t2','t1']);
+ for(const [id,team,result,target] of [['a','t2','wrong','b'],['c','t1','correct','a-extra']]){
+  const q=quiz.questions.find(item=>item.id===id);
+  state=openQuestionState(state,{expectedRound:state.round,question:q,playerQuestion:publicQuestion(q)});
+  const round=state.round;
+  const refreshed=applyQuestionChanges(state,round,id,{current:publicQuestion(q)});
+  assert.equal(refreshed.current.firstAnswerTeam,team);
+  const revealPatch={current:publicQuestion(q,true),phase:'reveal',deadline:0};
+  assert.equal(judgeBalanceAnswer(refreshed,{round,team:'t3',result,revealPatch}),null);
+  const judgement=judgeBalanceAnswer(refreshed,{round,team,result,revealPatch});
+  assert.equal(judgement.delta,result==='wrong'?0:state.current.points);
+  assert.equal(judgement.state.phase,'reveal');
+  assert.equal(judgement.state.current.firstAnswerResult,result);
+  assert.equal(judgement.state.current.answer,id);
+  assert.equal(judgeBalanceAnswer(judgement.state,{round,team,result,revealPatch}),null);
+  state=returnToBoardState(judgement.state);
+  assert.equal(state.balanceStrike.team,team);
+  assert.equal(advanceBoardState(state,{force:true}),null);
+  assert.equal(strikeBalanceField(state,id),null);
+  assert.equal(strikeBalanceField(state,'two'),null);
+  const struck=strikeBalanceField(state,target);
+  assert.equal(struck.board[target].struck,true);
+  assert.equal(strikeBalanceField(struck,'b-extra'),null);
+  state=undoBalanceStrike(struck);
+  assert.equal(state.board[target].used,false);
+  assert.equal(state.balanceStrike.team,team);
+  state=strikeBalanceField(state,target);
+ }
+ assert.equal(selectingTeam(state),'','no second turn on the balance board');
+ assert.equal(advanceBoardState(state).boardRound,2);
 });

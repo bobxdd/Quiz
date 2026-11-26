@@ -3,6 +3,7 @@
 // Deliberately keep this module standalone. Browser tests and offline recovery
 // load it from an isolated data: URL; relative ES module imports would break them.
 // Mirror the small category model selectors without introducing an import.
+const MAX_BALANCE_FIELDS=12;
 const categoryKey=value=>String(value??'').trim().replace(/\s+/g,' ').slice(0,70).toLocaleLowerCase('de');
 const boardRoundOf=q=>[2,3].includes(Number(q?.boardRound))?Number(q.boardRound):1;
 const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(q=>boardRoundOf(q)===Number(round));
@@ -135,7 +136,7 @@ export function transferCategoryBetweenBoards(store,{
   throw Error('Im Zielbrett sind bereits sechs Kategorien. Es wurde nichts übertragen.');
  if(destinationQuestions.length+sourceQuestions.length>6)
   throw Error('Die Kategorie würde im Zielbrett mehr als sechs Fragen enthalten. Es wurde nichts übertragen.');
- if(toRound===3&&roundQuestions(target.quiz,3).length+sourceQuestions.length>target.quiz.teams.length)throw Error('Im Ausgleichs-Board ist nur eine Frage pro Team erlaubt.');
+ if(toRound===3&&roundQuestions(target.quiz,3).length+sourceQuestions.length>MAX_BALANCE_FIELDS)throw Error('Im Ausgleichs-Board sind bis zu zwölf Fragen erlaubt.');
  if(toRound===3&&sourceQuestions.some(q=>q.roundMode==='written'||['map','order','team-emoji','team-draw'].includes(q.type)))throw Error('Im Ausgleichs-Board sind nur Buzzerfragen zulässig.');
  if(target.quiz.questions.length+sourceQuestions.length>180)
   throw Error('Das Zielquiz würde mehr als 180 Fragen enthalten. Es wurde nichts übertragen.');

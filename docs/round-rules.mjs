@@ -15,7 +15,7 @@ export function buzzerLocked(state,uid,team){
 }
 export function canBuzz(state,buzzers,uid,team,time=Date.now()){
  const round=String(state?.round||0);
- return !!uid&&!!team&&state?.phase==='question'&&roundMode(state.current)==='buzzer'&&
+ return !!uid&&!!team&&state?.phase==='question'&&Number(state.boardRound)!==3&&roundMode(state.current)==='buzzer'&&
   (state.buzzerArmed!==false||state.buzzerReleased?.[round]?.[uid]===true)&&
   state.settings?.buzzerEnabled!==false&&!state.current?.firstAnswerPending&&(!state.deadline||state.deadline>time)&&
   !buzzers?.[round]&&!activeChronobreak(state,time)&&!state?.buzzerResolved?.[round]&&!buzzerLocked(state,uid,team);
@@ -23,7 +23,7 @@ export function canBuzz(state,buzzers,uid,team,time=Date.now()){
 export function applyBuzzerJudgement(state,buzzers,{round,uid,result,at=Date.now()}){
  const key=String(round),winner=buzzers?.[key];
  if(!['question','paused'].includes(state?.phase)||roundMode(state.current)!=='buzzer'||key!==String(state.round)||!winner||winner.uid!==uid||!['correct','wrong'].includes(result))throw Error('Buzzer nicht mehr aktuell. Bitte Spielstand aktualisieren.');
- if(state?.buzzerResolved?.[key]||state.current?.firstAnswerPending||activeChronobreak(state,at))throw Error('Der Buzzer ist noch reserviert, im Chronobreak oder wurde bereits bewertet.');
+ if(Number(state.boardRound)===3||state?.buzzerResolved?.[key]||state.current?.firstAnswerPending||activeChronobreak(state,at))throw Error('Der Buzzer ist noch reserviert, im Chronobreak oder wurde bereits bewertet.');
  const points=Number(state.current.points),delta=result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)?0:judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
  if(result==='wrong'&&points>0&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)){
   const charged=changeJokerCharge(next,winner.team,'shield',-1);

@@ -63,7 +63,7 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
  if(!mayRegradeScore(state,target))throw Error('Diese Bewertung ist nicht mehr aktuell.');
  const verdict=target.verdict==='correct'?'wrong':'correct';
  const points=target.points??questionPoints;
- let nextDelta=judgementDelta(points,verdict);
+ let nextDelta=target.kind==='balance-first-answer'&&verdict==='wrong'?0:judgementDelta(points,verdict);
  const previousDelta=Number.isFinite(target.effectiveDelta)?target.effectiveDelta:judgementDelta(points,target.verdict);
  let next=structuredClone(state);
  let shieldUsed=false,fundAward=null;
@@ -91,6 +91,12 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
   const total=Number(next.scores[team.id]||0)+nextDelta-previousDelta;
   if(Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
   next.scores[team.id]=total;
+  if(target.kind==='balance-first-answer'&&next.current?.id===target.questionId&&Number(target.round)===next.round){
+   next.current.firstAnswerResult=verdict;
+   for(const path of ['buzzerJudgements','buzzerResolved']){
+    if(next[path]?.[target.round])Object.assign(next[path][target.round],{result:verdict,delta:nextDelta});
+   }
+  }
  }
  if(person){
   next.playerScores[person.id]=updatePlayerScore(next.playerScores[person.id],{

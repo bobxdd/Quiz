@@ -681,6 +681,17 @@ body.bq-game-mode.bq-answer-keyboard :is(.topbar,.bq-score-footer){display:none}
 .bq-board-scene .tile.bq-double-points .tile-points:before{
  content:'×2';display:block;font-size:.58em;line-height:1.15;letter-spacing:.04em
 }
+.bq-balance-scene .bq-board-full .board-scroll{overflow:auto;scrollbar-width:thin}
+.bq-balance-scene .bq-board-full .jeopardy-board{
+ min-height:calc(36px + var(--board-rows,6)*49px);
+}
+.bq-balance-scene .bq-board-full .jeopardy-board .column,
+.bq-balance-scene .bq-board-full .jeopardy-board.bq-board-sparse .column{
+ grid-template-rows:minmax(32px,46px) repeat(var(--board-rows,6),minmax(44px,1fr));
+}
+.bq-balance-scene .bq-board-full .jeopardy-board .tile{
+ min-height:0;font-size:clamp(16px,3vw,27px);line-height:1.08;
+}
 .bq-team-only-scoreboard{
  display:grid;gap:8px;margin:8px 0 14px;padding:10px 12px;
  border-radius:10px;border:1px solid var(--line,rgba(180,200,220,.25));

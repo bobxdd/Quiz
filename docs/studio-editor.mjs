@@ -5,7 +5,7 @@ import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
-import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
+import {CATEGORY_SUGGESTIONS,MAX_CATEGORIES,MAX_BALANCE_FIELDS,collectCategories,questionsInCategory,categoryKey,cleanCategoryName,assertNewCategory,suggestedTemplate,boardRoundOf,roundCategories,roundQuestions} from './category-model.mjs';
 /* BrainQuiz 1.7 — standalone browser editor. Local listeners on a replaceable root; no old q-* field wiring. */
 import {TEMPLATE_NAMES,element,orderSlotPosition,templateScene,ensureScene,normalizeScene,normalizeElement,reconcileQuestion,renderScene,publicScene,imposterPublicScene,validateScene,escape} from './studio-model.mjs';
 export function createStudioEditor(api){
@@ -320,7 +320,7 @@ export function createStudioEditor(api){
       </div></details>
      </div>
     </div>
-   <nav class="bq-round-picker" aria-label="Spielbrett bearbeiten">${[1,...(quiz().balanceBoard?[3]:[]),2].map(round=>`<button type="button" data-se-action="board-round" data-board-round="${round}" aria-pressed="${editorRound===round}" class="${editorRound===round?'se-primary':''}">${round===3?'Ausgleichs-Board':'Runde '+round} · ${roundQuestions(quiz(),round).length}/${round===3?quiz().teams.length:36} Fragen</button>`).join('')}<button type="button" data-se-action="balance-board-toggle" class="se-balance-toggle">${quiz().balanceBoard?'✕ Ausgleichs-Board entfernen':'+ Ausgleichs-Board hinzufügen'}</button><span>${quiz().balanceBoard&&editorRound===3?'Eine Buzzerfrage je Team · Wenigste Punkte wählen zuerst':'Maximal 6 Kategorien × 6 Fragen je Standardbrett'}</span></nav>
+   <nav class="bq-round-picker" aria-label="Spielbrett bearbeiten">${[1,...(quiz().balanceBoard?[3]:[]),2].map(round=>`<button type="button" data-se-action="board-round" data-board-round="${round}" aria-pressed="${editorRound===round}" class="${editorRound===round?'se-primary':''}">${round===3?'Ausgleichs-Board':'Runde '+round} · ${roundQuestions(quiz(),round).length}/${round===3?MAX_BALANCE_FIELDS:36} Fragen</button>`).join('')}<button type="button" data-se-action="balance-board-toggle" class="se-balance-toggle">${quiz().balanceBoard?'✕ Ausgleichs-Board entfernen':'+ Ausgleichs-Board hinzufügen'}</button><span>${quiz().balanceBoard&&editorRound===3?'Pro Team bis zu zwei Felder einplanen: eins zum Antworten, eins zum Streichen.':'Maximal 6 Kategorien × 6 Fragen je Standardbrett'}</span></nav>
     ${auditOpen?`<section class="se-audit" aria-label="Quizprüfung"><div class="se-sectionhead"><h3>${audit.ready?'Quiz bereit':'Quiz noch unvollständig'} · ${audit.questionCount} Fragen</h3><button type="button" data-se-action="audit">Schließen</button></div><p>${audit.errors.length} Fehler · ${audit.warnings.length} Hinweise</p>${audit.errors.some(row=>row.id)?`<button type="button" class="se-audit-next" data-se-action="open-next-issue">Nächsten Fehler bearbeiten →</button>`:''}${[...audit.errors,...audit.warnings].slice(0,25).map(a=>`<div class="se-audit-row"><span>${escape(a.label)}: ${escape(a.reason)}</span>${a.id?`<button type="button" data-se-action="select" data-id="${escape(a.id)}">Öffnen</button>`:''}</div>`).join('')}</section>`:''}
    <div class="se-workgrid ${activeCategory?'se-category-detail se-mobile-tab-'+mobileTab:'se-category-home'}">${activeCategory?`<nav class="se-mobile-editor-tabs" aria-label="Editorbereiche">${[['categories','Bibliothek'],['canvas',editorPane==='answer'?'Antwort':'Bearbeiten'],...(editorPane==='answer'||item?.type===TEAM_EMOJI?[]:[['properties','Eigenschaften']])].map(([name,label])=>`<button type="button" data-se-action="mobile-tab" data-mobile-tab="${name}" aria-current="${mobileTab===name?'page':'false'}" class="${mobileTab===name?'active':''}">${label}</button>`).join('')}</nav>`:''}<aside class="se-list"><div class="se-sectionhead"><h3>Bibliothek</h3><button type="button" data-se-action="category-form" title="Kategorie erstellen" aria-label="Neue Kategorie">+ Kategorie</button></div>${categoryForm}${nav}
     ${activeCategory?`<div class="se-category-questions-head"><div><strong>${escape(activeCategory)}</strong><small>${within.length} ${within.length===1?'Frage':'Fragen'}</small></div><div class="se-inline"><button type="button" data-se-action="category-rename" title="Kategorie umbenennen">✎</button><button type="button" data-se-action="category-remove" title="Kategorie mit allen Fragen löschen">✕</button></div></div><button type="button" class="se-primary se-add-question" data-se-action="new">+ Frage hinzufügen</button><input class="se-search" data-se-search aria-label="Fragen dieser Kategorie suchen" placeholder="Fragen suchen …" value="${escape(search)}"><div class="se-questions">${displayed.map(x=>`<div class="se-qwrap"><label class="se-qpick" title="Frage für Sammelbearbeitung auswählen"><input type="checkbox" data-se-multi="${escape(x.id)}" aria-label="${escape(x.title)} auswählen" ${selectedQuestions.has(x.id)?'checked':''}></label><button type="button" class="se-qrow ${x.id===item?.id?'is-active':''}" data-se-library="question" data-se-action="select" data-id="${escape(x.id)}"><span><strong>${escape(x.points)} Punkte</strong><small>${escape(x.title)}</small></span><span class="se-q-status ${invalidIds.has(x.id)?'is-incomplete':'is-complete'}" title="${invalidIds.has(x.id)?'Noch unvollständig':'Zum Veröffentlichen bereit'}" aria-label="${invalidIds.has(x.id)?'Frage unvollständig':'Frage bereit'}">${invalidIds.has(x.id)?'⚠':'✓'}</span></button></div>`).join('')}${!displayed.length?'<p class="se-muted se-empty-filter">Keine Fragen gefunden.</p>':''}</div><div class="se-inline se-listfoot"><button type="button" data-se-action="copy-q" ${item?'':'disabled'}>Duplizieren</button><button type="button" data-se-action="delete-q" ${item?'':'disabled'}>Löschen</button></div>
@@ -385,8 +385,8 @@ export function createStudioEditor(api){
     if(destination===3&&!quiz().balanceBoard)throw Error('Ausgleichs-Board ist nicht aktiviert.');
    const questions=roundQuestions(quiz(),destination),cats=roundCategories(quiz(),destination);
    if(destination===editorRound)return;
-    if(destination===3&&(questions.length>=quiz().teams.length||['map','order','team-emoji','team-draw'].includes(item.type)||item.roundMode==='written'))
-      throw Error('Das Ausgleichs-Board erlaubt genau eine Buzzerfrage je Team.');
+    if(destination===3&&(questions.length>=MAX_BALANCE_FIELDS||['map','order','team-emoji','team-draw'].includes(item.type)||item.roundMode==='written'))
+      throw Error('Das Ausgleichs-Board erlaubt bis zu zwölf mündlich bewertete Fragen.');
    if(questionsInCategory(questions,item.category).length>=6||!cats.some(cat=>categoryKey(cat)===categoryKey(item.category))&&cats.length>=6)throw Error('Die Zielrunde hat keinen freien Platz für diese Frage.');
    item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
    deferDraft();return;
@@ -451,7 +451,7 @@ export function createStudioEditor(api){
   }
  }
  function makeCategoryQuestion(name,template='text'){
-   if(editorRound===3&&(visibleQuestions().length>=quiz().teams.length||['map','order','team-emoji','team-draw','written'].includes(template)))throw Error('Im Ausgleichs-Board genau eine Buzzerfrage je Team anlegen.');
+   if(editorRound===3&&(visibleQuestions().length>=MAX_BALANCE_FIELDS||['map','order','team-emoji','team-draw','written'].includes(template)))throw Error('Für das Ausgleichs-Board sind bis zu zwölf mündlich bewertete Fragen möglich.');
   if(questionsInCategory(visibleQuestions(),name).length>=6)throw Error('Diese Kategorie enthält bereits sechs Fragen. Wähle das andere Spielbrett.');
   mobileTab='canvas';api.makeQuestion(name,template,editorRound);sel='';preview=false;reveal=0;search='';draw();
  }
@@ -506,7 +506,7 @@ export function createStudioEditor(api){
    const targetQuestions=questionsInCategory(roundQuestions(quiz(),destination),name);
    const moving=questionsInCategory(visibleQuestions(),name);
    if(!targetName&&target.length>=6)throw Error(`Runde ${destination} hat bereits sechs Kategorien.`);
-   if(destination===3&&roundQuestions(quiz(),3).length+moving.length>quiz().teams.length)throw Error('Das Ausgleichs-Board erlaubt genau eine Frage je Team.');
+   if(destination===3&&roundQuestions(quiz(),3).length+moving.length>MAX_BALANCE_FIELDS)throw Error('Das Ausgleichs-Board erlaubt bis zu zwölf Fragen.');
     if(targetQuestions.length+moving.length>6)throw Error(`In Runde ${destination} sind insgesamt höchstens sechs Fragen in „${targetName||name}“ möglich.`);
    flushDraft();snapshot();
    for(const question of moving)question.boardRound=destination;
