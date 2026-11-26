@@ -101,8 +101,14 @@ async def main():
   await expect(page.locator('.se-answer-readiness.is-ready')).to_be_visible()
   await page.locator('#se-answer-text').blur()
   await page.set_viewport_size({'width':1366,'height':900})
+  warnings=[]
+  async def accept_quizcheck_warning(dialog):
+   warnings.append(dialog.message)
+   await dialog.accept()
+  page.once('dialog',accept_quizcheck_warning)
   await page.locator('[data-action="publish"]').click()
   await expect(page.locator('.bq-board-scene .tile')).to_have_count(2,timeout=12000)
+  assert any('Hinweise im Quizcheck' in message for message in warnings),warnings
   assert not exceptions,exceptions
   print('PASS: 390px responsive answer tab and repaired quiz publishes without browser exceptions')
   await browser.close()

@@ -25,6 +25,18 @@ test('Nicht erfasste Antwort erzeugt keinen erfundenen Schätzwert',()=>{
  const rows=historyRows({'1':createHistoryEntry(q,1)},{},{abc:{rounds:{'1':{result:'correct',delta:400}}}},{abc:{name:'Alex'}});
  assert.equal(rows[0].participants[0].answer,'');assert.equal(rows[0].participants[0].status,'correct');
 });
+test('Verlauf und CSV führen mündliche Teamwertungen mit tatsächlichem Betrag und doppeltem Fragewert',()=>{
+ const entry=createHistoryEntry({...q,points:20000,answerText:'Musterlösung'},3);
+ entry.oralVerdicts={first:{name:'Alice · Rot',result:'wrong',delta:-10000},second:{name:'Bob · Blau',result:'correct',delta:20000}};
+ const [row]=historyRows({'3':entry},{},{},{});
+ assert.equal(row.points,20000);
+ assert.equal(row.solution,'Musterlösung');
+ assert.equal(row.submittedCount,0);
+ assert.deepEqual(row.participants.map(({name,status,delta})=>[name,status,delta]),[
+  ['Alice · Rot','wrong',-10000],['Bob · Blau','correct',20000]
+ ]);
+ assert.match(historyCsv([row]),/"Alice · Rot";"Mündliche Antwort";"Falsch";"-10000"/);
+});
 test('CSV-Export neutralisiert Formelinjektionen',()=>{
  for(const v of ['=1+1','+SUM(1,1)','@cmd','-2'])assert.ok(csvSafeCell(v).startsWith('"\''));
  const csv=historyCsv(historyRows({'1':createHistoryEntry(q,1)},{'1':{abc:{text:'=IMPORTXML()'}}},{},{abc:{name:'Alex'}}),{'q-01':'B'});

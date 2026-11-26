@@ -9,7 +9,7 @@ import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot,participatingTeamIds} from './lobby-model.mjs';
 import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn,strikeBalanceField,undoBalanceStrike,judgeBalanceAnswer} from './question-flow.mjs';
-import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
+import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent,isOralScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz,isGuestResumeCode,rememberGuestResume} from './backup-store.mjs';
 import {TEAM_EMOJI,isTeamChallenge,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,finishTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
 
@@ -1158,7 +1158,14 @@ export class PeerGame{
     d.public?.current?.roundMode==='buzzer'&&d.buzzers[String(round)]&&!d.public?.buzzerResolved?.[String(round)])
    throw Error('Ein Buzzer ist noch offen. Zuerst Richtig oder Falsch bestätigen oder den Buzzer zurücksetzen.');
   const next=applyQuestionChanges(d.public,round,id,changes,phases);if(!next)throw Error('Die Runde hat sich geändert. Veraltete Aufdeckung verworfen.');d.public=next;this._changed();return clone(next)}
- async recordQuestion(room,round,entry){const d=this._getHostData(room);d.questionHistory[String(round)]=clone(entry);this._changed()}
+ async recordQuestion(room,round,entry){
+  const d=this._getHostData(room),key=String(round);
+  d.questionHistory[key]={...d.questionHistory[key],...clone(entry)};
+  for(const event of d.scoreEvents||[]){
+   if(event.round===key&&!event.undoneAt&&!event.supersededBy)this._recordOralVerdict(d,event);
+  }
+  this._changed();
+ }
  async replacePublic(room,state){const d=this._getHostData(room);d.public=clone(state);if(!d.teamEmoji)delete d.public.teamEmoji;this._changed()}
  _syncTeamEmoji(){
   const d=this.data;
@@ -1348,7 +1355,25 @@ export class PeerGame{
   this._changed();
   return {delta:next.delta,winner:next.winner};
  }
- _auditScore(d,before,meta){const event=scoreEvent(before,d.public,{...meta,points:meta.verdict?before.current?.points:undefined,id:randomHex(8),at:Date.now()});if(event)d.scoreEvents=appendScoreEvent(d.scoreEvents,event);}
+ _recordOralVerdict(d,event,replacement=event){
+  if(!isOralScoreEvent(event)||!event.changes?.team)return;
+  const entry=d.questionHistory?.[event.round];
+  if(!entry||entry.questionId!==event.questionId)return;
+  const key='oral-'+(event.attempt||event.id);
+  if(!replacement){if(entry.oralVerdicts)delete entry.oralVerdicts[key];return;}
+  const team=event.changes.team.id,teamName=d.public.teams?.[team]||team;
+  const player=event.kind==='buzzer-judgement'?d.roster?.[event.actor]?.name:null;
+  entry.oralVerdicts??={};
+  entry.oralVerdicts[key]={name:entry.oralVerdicts[key]?.name||(player?player+' · '+teamName:teamName),
+   result:replacement.verdict,delta:replacement.effectiveDelta};
+ }
+ _auditScore(d,before,meta){
+  const judgedAt=isOralScoreEvent(meta)?d.public.buzzerJudgements?.[meta.round]?.at:undefined;
+  const event=scoreEvent(before,d.public,{...meta,judgedAt,points:meta.verdict?before.current?.points:undefined,id:randomHex(8),at:Date.now()});
+  if(!event)return;
+  d.scoreEvents=appendScoreEvent(d.scoreEvents,event);
+  this._recordOralVerdict(d,event);
+ }
  hostScoreAudit(room){const d=this._getHostData(room);return clone((d.scoreEvents||[]).slice(-40));}
  async hostUndoScore(room,id){
   const d=this._getHostData(room),done=undoScoreEvent(d.public,d.scoreEvents,id);
@@ -1363,13 +1388,17 @@ export class PeerGame{
    if(!Object.keys(reps[event.round]).length)delete reps[event.round];
    done.state.writtenTeamRepresentatives=reps;
   }
-  d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);
+  d.public=done.state;d.scoreEvents=done.events;
+  this._recordOralVerdict(d,event,done.events.find(e=>e.id===event.corrects&&!e.undoneAt&&!e.supersededBy)||null);
+  this._changed();return clone(done.event);
  }
  async hostRegradeScore(room,id){
   const d=this._getHostData(room),target=d.scoreEvents?.find(event=>event.id===id);
   const questionPoints=d.public.board?.[target?.questionId]?.points;
   const done=regradeScoreEvent(d.public,d.scoreEvents,id,{newId:randomHex(8),questionPoints});
-  d.public=done.state;d.scoreEvents=done.events;this._changed();return clone(done.event);
+  d.public=done.state;d.scoreEvents=done.events;
+  this._recordOralVerdict(d,done.event);
+  this._changed();return clone(done.event);
  }
  async clearBuzzer(room,round){const d=this._getHostData(room);if(activeChronobreak(d.public))throw Error('Chronobreak läuft noch.');delete d.buzzers[String(round)];this._changed()}
  async removeResponse(room,round,uid){const d=this._getHostData(room);delete d.responses[String(round)]?.[uid];this._changed()}

@@ -42,6 +42,6 @@ export function applyBuzzerJudgement(state,buzzers,{round,uid,result,useShield=f
   next.buzzerBlocked={...(next.buzzerBlocked||{}),[key]:{...(next.buzzerBlocked?.[key]||{}),[uid]:{uid,name:winner.name,team:winner.team,at}}};
   if(scoreMode(state)==='team')next.buzzerBlockedTeams={...(next.buzzerBlockedTeams||{}),[key]:{...(next.buzzerBlockedTeams?.[key]||{}),[winner.team]:{team:winner.team,name:winner.name,at}}};
   delete nextBuzzers[key];
- }else next.buzzerResolved={...(next.buzzerResolved||{}),[key]:{uid,team:winner.team,result,at}};
+ }else next.buzzerResolved={...(next.buzzerResolved||{}),[key]:{...next.buzzerJudgements[key]}};
  return {state:next,buzzers:nextBuzzers,delta,winner};
 }

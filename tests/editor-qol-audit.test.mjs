@@ -44,6 +44,18 @@ test('Pure answer content is recomputed without prematurely publishing media',()
  assert.match(editor,/requestAnimationFrame\(\(\)=>document\.querySelector\('\.se-editor-pane-tabs/);
 });
 
+test('Quizcheck flags untouched question placeholders even when an answer is filled',()=>{
+ const quiz=normalizedQuiz({questions:[
+  {id:'template',category:'Items',title:'Template',prompt:'Frage eingeben',answerText:'Ja'},
+  {id:'complete',category:'Items',title:'Complete',prompt:'Frage eingeben',answerText:'Ja',scene:{
+   template:'text',elements:[{kind:'text',role:'question',text:'Welche Fähigkeit?',step:0}]
+  }}
+ ]});
+ const report=quizAudit(quiz);
+ assert.equal(report.ready,true);
+ assert.deepEqual(report.warnings.filter(x=>x.reason.includes('Platzhalter')).map(x=>x.id),['template']);
+});
+
 test('Dedicated editor tab controls always have corresponding panels and issue routing',()=>{
  const editor=src('studio-editor.mjs');
  assert.ok(editor.includes('id="se-answer-tabpanel" role="tabpanel"'));

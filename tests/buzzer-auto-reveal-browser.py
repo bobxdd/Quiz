@@ -112,6 +112,27 @@ async def main():
   await host.evaluate('window.__probe.getGame()._changed()')
   await host.wait_for_timeout(200)
   assert await host.evaluate("window.__probe.info().publicState.scores.t2")==200,'Repeated state must not double count'
+
+  # Correcting the verdict updates both the score and the team's visible result.
+  # Undo restores the original verdict and the already revealed solution.
+  host.on('dialog',lambda dialog:dialog.accept())
+  await host.locator('.top-nav [data-view="history"]').click()
+  await expect(host.locator('.history-person').filter(has_text='Alice')).to_contain_text('-100 Punkte')
+  await expect(host.locator('.history-person').filter(has_text='Bob')).to_contain_text('+200 Punkte')
+  await host.locator('.bq-score-ledger > summary').click()
+  await host.get_by_role('button',name='Als falsch werten').click()
+  await expect(bob.locator('.bq-quiz-verdict.is-wrong')).to_contain_text('Falsch bewertet')
+  await expect(bob.locator('.bq-quiz-verdict.is-wrong')).to_contain_text('-100 Punkte')
+  await expect(host.locator('.history-person').filter(has_text='Bob')).to_contain_text('-100 Punkte')
+  await check_revealed(bob,'Anivia')
+  await host.locator('[data-action="undo-last-score"]').click()
+  await expect(bob.locator('.bq-quiz-verdict.is-right')).to_contain_text('+200 Punkte')
+  await expect(host.locator('.history-person').filter(has_text='Bob')).to_contain_text('+200 Punkte')
+  await host.locator('.top-nav [data-view="live"]').click()
+  await host.locator('[data-action="reveal-prev"]').click()
+  await bob.wait_for_function("() => window.__probe.info().publicState.solutionVisible===false")
+  await host.locator('[data-action="solution-forward"]').click()
+  await check_revealed(bob,'Anivia')
   await host.locator('[data-action="back"]').click()
   await expect(host.locator('.bq-board-scene')).to_be_visible()
 

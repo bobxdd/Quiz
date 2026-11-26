@@ -44,6 +44,11 @@ export function quizAudit(quiz) {
   const label=`${q.category||'Ohne Kategorie'} · ${q.title||'Unbenannte Frage'}`;
   const problem=validateQuestion(q,quiz.scoreMode);
   if(problem)errors.push({id:q.id,label,reason:problem});
+  const sceneHeading=q.scene?.elements?.find(el=>el.kind==='text'&&el.role==='question')||
+   q.scene?.elements?.find(el=>el.kind==='text'&&el.step===0);
+  if(!problem&&String(sceneHeading?.text??q.prompt??'').trim()==='Frage eingeben'){
+   warnings.push({id:q.id,label,reason:'Der sichtbare Fragetext enthält noch den Platzhalter „Frage eingeben“.'});
+  }
   const titleKey=`${boardRoundOf(q)}|${categoryKey(q.category)}|${String(q.title||'').trim().toLocaleLowerCase('de')}`;
   if(seenTitles.has(titleKey))warnings.push({id:q.id,label,reason:'Fragentitel ist in dieser Kategorie doppelt.'});seenTitles.add(titleKey);
   const tileKey=`${boardRoundOf(q)}|${categoryKey(q.category)}|${q.points}`;

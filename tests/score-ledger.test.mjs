@@ -55,3 +55,32 @@ test('regrading a shield-protected wrong answer uses actual zero penalty, not th
  const wrongAgain=regradeScoreEvent(corrected.state,corrected.events,'correct',{newId:'wrong-again'});
  assert.equal(wrongAgain.state.scores.t1,50);
 });
+
+test('the closed round reflects a new verdict and undo while keeping its solution and lock',()=>{
+ const initial={scores:{t1:0},round:1,current:{id:'q',points:100}};
+ const verdict={team:'t1',uid:'p',result:'correct',delta:100,at:200};
+ const shown={...initial,scores:{t1:100},phase:'reveal',solutionVisible:true,
+  buzzerJudgements:{1:verdict},buzzerResolved:{1:verdict}};
+ const first=scoreEvent(initial,shown,{id:'first',kind:'buzzer-judgement',round:1,questionId:'q',actor:'p',team:'t1',points:100,verdict:'correct',judgedAt:200});
+ const corrected=regradeScoreEvent(shown,[first],'first',{newId:'corrected'});
+ assert.equal(corrected.state.scores.t1,-50);
+ assert.equal(corrected.state.buzzerResolved[1].result,'wrong');
+ assert.equal(corrected.state.buzzerJudgements[1].delta,-50);
+ assert.equal(corrected.state.solutionVisible,true);
+ const restored=undoScoreEvent(corrected.state,corrected.events,'corrected');
+ assert.deepEqual(restored.state,shown);
+ const undone=undoScoreEvent(restored.state,restored.events,'first');
+ assert.equal(undone.state.scores.t1,0);
+ assert.equal(undone.state.phase,'reveal');
+ assert.equal(undone.state.buzzerResolved[1].result,'undone');
+});
+
+test('regrading an earlier attempt cannot overwrite a later verdict by the same player',()=>{
+ const initial={scores:{t1:0},round:1,current:{id:'q',points:100}};
+ const wrong={...initial,scores:{t1:-50}};
+ const first=scoreEvent(initial,wrong,{id:'first',kind:'buzzer-judgement',round:1,questionId:'q',actor:'p',team:'t1',points:100,verdict:'wrong',judgedAt:200});
+ const verdict={team:'t1',uid:'p',result:'wrong',delta:-50,at:300};
+ const shown={...wrong,scores:{t1:-100},buzzerJudgements:{1:verdict}};
+ const corrected=regradeScoreEvent(shown,[first],'first',{newId:'corrected'});
+ assert.deepEqual(corrected.state.buzzerJudgements[1],verdict);
+});

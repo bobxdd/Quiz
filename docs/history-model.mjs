@@ -8,30 +8,31 @@ export function solutionFor(question){
  if(question.type==='order')return (question.scene?.sortCorrect||[]).join(' → ').slice(0,800)||String(question.answer||'').slice(0,800);
  if(question.type==='imposter')return question.abilityNames?.[question.imposterIndex]||['Passiv','Q','W','E','R'][Number(question.imposterIndex)||0]||String(question.answer||'');
  if(question.type==='team-emoji')return safe(question.answerText||question.answer,100);
- return safe(question.answer||'',800);
+ return safe(question.answerText||question.answer,800);
 }
 export function createHistoryEntry(question,round,askedAt=Date.now()){
  if(!question?.id)throw new Error('Frage benötigt eine ID.');
- return {questionId:safe(question.id,80),round:safeRound(round),category:safe(question.category||'',80),title:safe(question.title||'',120),prompt:safe(question.prompt||'',600),solution:solutionFor(question),points:Math.max(0,Math.min(10000,Number(question.points)||0)),askedAt:Math.max(0,Number(askedAt)||0)};
+ return {questionId:safe(question.id,80),round:safeRound(round),category:safe(question.category||'',80),title:safe(question.title||'',120),prompt:safe(question.prompt||'',600),solution:solutionFor(question),points:Math.max(0,Math.min(20000,Number(question.points)||0)),askedAt:Math.max(0,Number(askedAt)||0)};
 }
 export function historyRows(history,answers,scores,people){
  const entries=Object.values(history||{}).filter(x=>x&&Number.isInteger(x.round)&&x.round>0&&x.questionId).sort((a,b)=>b.round-a.round);
  return entries.map(item=>{
   const round=String(item.round),submitted=answers?.[round]||{};
-  const ids=new Set([...Object.keys(submitted),...Object.keys(scores||{}).filter(id=>scores[id]?.rounds?.[round])]);
+  const oralVerdicts=item.oralVerdicts||{};
+  const ids=new Set([...Object.keys(submitted),...Object.keys(scores||{}).filter(id=>scores[id]?.rounds?.[round]),...Object.keys(oralVerdicts)]);
   const teamResults=Array.isArray(item.emojiResults)?item.emojiResults:null;
   const participants=(teamResults?teamResults.map(result=>({id:result.id,name:safe(result.name||result.id,35),
    answer:[...result.clues,result.guess].filter(Boolean).join(' '),status:['correct','wrong'].includes(result.status)?result.status:'open',delta:result.points
   })):[...ids].map(id=>{
-   const judgement=scores?.[id]?.rounds?.[round]||null;
-   return {id,name:safe(people?.[id]?.name||submitted[id]?.name||id,28),answer:typeof submitted[id]?.text==='string'?safe(submitted[id].text):'',status:judgement?.result==='correct'?'correct':judgement?.result==='wrong'?'wrong':'open',delta:judgement&&Number.isFinite(Number(judgement.delta))?Number(judgement.delta):null};
+   const oral=oralVerdicts[id],judgement=oral||scores?.[id]?.rounds?.[round];
+   return {id,name:safe(oral?.name||people?.[id]?.name||submitted[id]?.name||id,oral?80:28),...(oral?{oral:true}:{}),answer:typeof submitted[id]?.text==='string'?safe(submitted[id].text):'',status:judgement?.result==='correct'?'correct':judgement?.result==='wrong'?'wrong':'open',delta:judgement&&Number.isFinite(Number(judgement.delta))?Number(judgement.delta):null};
   })).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   const submittedCount=teamResults?teamResults.filter(result=>result.guess).length:Object.values(submitted).filter(v=>v&&typeof v.text==='string').length;
   return {...item,participants,submittedCount,correctCount:participants.filter(p=>p.status==='correct').length,wrongCount:participants.filter(p=>p.status==='wrong').length};
  });
 }
 export function responseStatus(status){return status==='correct'?{label:'Richtig',icon:'✓'}:status==='wrong'?{label:'Falsch',icon:'✕'}:{label:'Nicht bewertet',icon:'–'};}
-export function csvSafeCell(value){const s=safe(value,1200);const guarded=/^[=+@\-\t\r]/.test(s)?"'"+s:s;return '"'+guarded.replaceAll('"','""')+'"';}
+export function csvSafeCell(value){const s=safe(value,1200);const guarded=!Number.isFinite(value)&&/^[=+@\-\t\r]/.test(s)?"'"+s:s;return '"'+guarded.replaceAll('"','""')+'"';}
 export function historyCsv(rows,solutionLookup={},metadataLookup={}){
  const lines=[['Runde','Kategorie','Frage','Punkte','Person','Antwort','Bewertung','Punkteänderung','Musterlösung','Antwortbild','Akzeptierte Varianten','Host-Notizen','Quelle','Patch / Bezugsjahr','Geprüft am']];
  for(const row of rows){
@@ -39,7 +40,7 @@ export function historyCsv(rows,solutionLookup={},metadataLookup={}){
   const meta=Object.hasOwn(metadataLookup,row.questionId)?metadataLookup[row.questionId]:{};
   const solution=Object.hasOwn(solutionLookup,row.questionId)?solutionLookup[row.questionId]:row.solution||'';
   for(const p of participants){
-   lines.push([row.round,row.category,row.prompt||row.title,row.points,p.name,p.answer,
+   lines.push([row.round,row.category,row.prompt||row.title,row.points,p.name,p.oral?'Mündliche Antwort':p.answer,
     responseStatus(p.status).label,p.delta??'',solution,meta.answerImage?meta.answerImageAlt||'Enthalten':'',
     meta.acceptedAnswers,meta.hostNotes,meta.sourceUrl,meta.sourcePatch,meta.sourceCheckedOn]);
   }

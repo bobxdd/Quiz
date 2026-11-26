@@ -8,7 +8,8 @@ import {JOKER_TYPES,jokerCount,changeJokerCharge,awardJokerForCorrectAnswer} fro
 const copy=x=>x===undefined?undefined:structuredClone(x);
 const equals=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const clean=s=>String(s??'').slice(0,110);
-export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,round='',questionId='',points,verdict='',effectiveDelta,shieldUsed,fundAward,at=Date.now()}={}){
+export const isOralScoreEvent=event=>event?.kind==='buzzer-judgement'||event?.kind==='balance-first-answer';
+export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,round='',questionId='',points,verdict='',effectiveDelta,shieldUsed,fundAward,attempt,judgedAt,at=Date.now()}={}){
  const changes={};
  if(team){
   changes.team={id:clean(team),before:copy(before?.scores?.[team]),after:copy(after?.scores?.[team])};
@@ -34,6 +35,7 @@ export function scoreEvent(before,after,{id,kind,team='',person='',actor=person,
  }
  return {id:clean(id),kind:clean(kind),round:clean(round),questionId:clean(questionId),
   actor:clean(actor),points,verdict:clean(verdict),...(Number.isFinite(effectiveDelta)?{effectiveDelta}:{}),
+  ...(attempt?{attempt}:{}),...(Number.isFinite(judgedAt)?{judgedAt}:{}),
   ...(shieldUsed?{shieldUsed:true}:{}),...(fundAward?{fundAward}:{}),at:Number(at)||Date.now(),changes,undoneAt:null};
 }
 function adjustJoker(state,team,type,delta){
@@ -54,6 +56,21 @@ export function mayRegradeScore(state,event){
  if(!event||event.undoneAt||event.supersededBy||!['correct','wrong'].includes(event.verdict))return false;
  const person=event.changes.person;
  return !person||equals(state?.playerScores?.[person.id]?.rounds?.[event.round],person.after?.rounds?.[event.round]);
+}
+function updateOralVerdict(state,event,replacement){
+ if(!isOralScoreEvent(event)||Number(event.round)!==state.round||state.current?.id!==event.questionId)return;
+ const firstAnswer=event.kind==='balance-first-answer',team=event.changes?.team?.id;
+ const result=replacement?.verdict||'undone';
+ for(const path of ['buzzerJudgements','buzzerResolved']){
+  const verdict=state[path]?.[event.round];
+  if(!verdict||Boolean(verdict.firstAnswer)!==firstAnswer||(!firstAnswer&&verdict.uid!==event.actor)||
+     (team&&verdict.team!==team)||(event.judgedAt!==undefined&&verdict.at!==event.judgedAt))continue;
+  verdict.result=result;
+  verdict.delta=replacement?.effectiveDelta??0;
+  if(replacement?.shieldUsed)verdict.shieldUsed=true;
+  else delete verdict.shieldUsed;
+  if(firstAnswer)state.current.firstAnswerResult=result;
+ }
 }
 export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.now()}){
  const target=events?.find(event=>event.id===id);
@@ -82,12 +99,6 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
   const total=Number(next.scores[team.id]||0)+nextDelta-previousDelta;
   if(Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
   next.scores[team.id]=total;
-  if(target.kind==='balance-first-answer'&&next.current?.id===target.questionId&&Number(target.round)===next.round){
-   next.current.firstAnswerResult=verdict;
-   for(const path of ['buzzerJudgements','buzzerResolved']){
-    if(next[path]?.[target.round])Object.assign(next[path][target.round],{result:verdict,delta:nextDelta});
-   }
-  }
  }
  if(person){
   next.playerScores[person.id]=updatePlayerScore(next.playerScores[person.id],{
@@ -95,7 +106,9 @@ export function regradeScoreEvent(state,events,id,{newId,questionPoints,at=Date.
   });
  }
  const event=scoreEvent(state,next,{id:newId,kind:target.kind,team:team?.id,person:person?.id,
-  actor:target.actor,round:target.round,questionId:target.questionId,points,verdict,effectiveDelta:nextDelta,fundAward,at});
+  actor:target.actor,round:target.round,questionId:target.questionId,points,verdict,effectiveDelta:nextDelta,fundAward,
+  attempt:target.attempt||target.id,judgedAt:target.judgedAt,at});
+ updateOralVerdict(next,target,event);
  event.corrects=id;
  const revised=events.map(entry=>entry===target?{...entry,supersededBy:event.id}:entry);
  return {state:next,events:appendScoreEvent(revised,event),event};
@@ -124,5 +137,6 @@ export function undoScoreEvent(state,events,id,at=Date.now()){
   if(e.id===target.corrects&&e.supersededBy===target.id){const {supersededBy,...rest}=e;return rest;}
   return e;
  });
+ updateOralVerdict(result,target,revised.find(e=>e.id===target.corrects&&!e.undoneAt&&!e.supersededBy));
  return {state:result,events:revised,event:target};
 }

@@ -76,6 +76,8 @@ async def main():
   assert authoring[1]['image']>50 and not authoring[1]['answerText'] and not authoring[1]['answer'],authoring
   assert authoring[2]['image']==0 and authoring[2]['answerText']=='Nur Textantwort',authoring
 
+  # This fixture intentionally leaves the canvas prompts at their defaults.
+  host.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
   await host.locator('[data-action="publish"]').click()
   try:
    await expect(host.locator('.bq-board-scene .tile')).to_have_count(3,timeout=12000)
