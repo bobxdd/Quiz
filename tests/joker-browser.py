@@ -189,7 +189,9 @@ async def exercise(origin):
   await expect(bob.locator('.bq-chrono-overlay')).to_contain_text('Ally')
   await expect(ally.locator('.bq-chrono-overlay input')).to_have_count(0)
   await expect(host.locator('.bq-chrono-overlay')).to_have_count(0,timeout=15000)
-  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Ally darf die mündliche Antwort korrigieren.',timeout=15000)
+  speaker=host.locator('.bq-buzzer-winner .bq-chrono-speaker')
+  await expect(speaker).to_be_visible(timeout=15000)
+  await expect(speaker).to_contain_text('Ally darf die mündliche Antwort korrigieren.')
   assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.chrono")==0
   await host.locator('[data-action="buzz-correct"]').click()
   await host.locator('[data-action="back"]').click()

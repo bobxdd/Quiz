@@ -220,6 +220,7 @@ body.bq-game-mode:has(.bq-question-scene) .shell{height:100dvh;min-height:0;over
 }
 .bq-question-scene .bq-buzzer-winner strong{font-size:14px}
 .bq-question-scene .bq-buzzer-winner small{display:none}
+ .bq-question-scene .bq-buzzer-winner small.bq-chrono-speaker{display:block;overflow-wrap:anywhere}
 .bq-question-scene .bq-judge-actions{flex-wrap:wrap;gap:5px}
 .bq-question-scene .bq-judge-actions .btn{min-height:36px}
 .bq-question-scene .bq-question-body,.bq-question-scene .bq-answer-review-body{
