@@ -138,6 +138,7 @@ async def exercise(origin):
    await host.set_viewport_size({'width':width,'height':height})
    for selector in ('#ready-time','[data-action="back"]','[data-action="uncover-question"]','.bq-private-preview','.bq-joker-panel summary'):
     await expect(host.locator(selector)).to_be_in_viewport(ratio=.97)
+   await expect(host.locator('.bq-score-footer .bq-host-manual-score summary')).to_be_in_viewport(ratio=.97)
   await host.set_viewport_size({'width':1366,'height':850})
   assert await alice.locator('.bq-joker-event').count()==0
   await alice.locator('[data-action="joker-use"][data-type="reroll"]').click()

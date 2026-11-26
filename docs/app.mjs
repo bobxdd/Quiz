@@ -1265,10 +1265,10 @@ function scoreControls(){
  const teams=Object.entries(publicState?.teams||{});
  return `<details class="bq-host-manual-score" data-bq-persist="manual-score">
   <summary>✎ Punkte ändern</summary>
-  <div class="bq-manual-score-form"><label class="field">Team<select id="manual-score-team">${teams.map(([id,name])=>`<option value="${e(id)}">${e(name)}</option>`).join('')}</select></label>
+  <div class="bq-manual-score-popover"><div class="bq-manual-score-form"><label class="field">Team<select id="manual-score-team">${teams.map(([id,name])=>`<option value="${e(id)}">${e(name)}</option>`).join('')}</select></label>
   <label class="field">Punkte (+ oder −)<input id="manual-score-amount" type="number" step="0.5" min="-10000" max="10000" value="100" aria-label="Punktekorrektur" /></label>
   ${btn('Punkte buchen','score-team-custom','small primary')}</div>
-  <p class="small muted">Auch während einer Frage möglich. Beispiel: +100 oder -50. Im Online-Spiel mit Punkteprotokoll und Rückgängig.</p>
+  <p class="small muted">Auch während einer Frage möglich. Beispiel: +100 oder -50. Im Online-Spiel mit Punkteprotokoll und Rückgängig.</p></div>
  </details>`;
 }
 function buzzerStatus(){const b=winner(),locks=Object.values(buzzLocks()),teamLocks=Object.keys(publicState?.buzzerBlockedTeams?.[roundKey()]||{});return `<div class="buzzerbox"><div class="sub">BUZZER / SERVERENTSCHEIDUNG</div>${b?`<h2 style="margin:16px 0 4px">◉ ${e(b.name)}</h2><p>${e(teamName(b.team))} ist zuerst eingegangen und darf antworten.</p>`:`<h2 style="margin:16px 0 4px">○ Noch kein Buzzer</h2><p>${isOpen()?'Frage läuft, Buzzer ist für alle freigegeben.':'Buzzer derzeit nicht aktiv.'}</p>`}<p class="small muted">Gesperrt für diese Runde: ${locks.length?locks.map(x=>e(x.name||x.uid||'Spieler')).join(' · '):'niemand'}${teamLocks.length?' · Teams: '+teamLocks.map(id=>e(teamName(id))).join(', '):''}</p>${canHost()?`<div class="row">${btn('Buzzer zurücksetzen','reset-buzz','small',b?'':'disabled')}${btn('Alle Sperren lösen','unlock-buzz-all','small',locks.length?'':'disabled')}</div>`:''}</div>`;}

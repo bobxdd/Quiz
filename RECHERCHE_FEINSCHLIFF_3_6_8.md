@@ -40,4 +40,6 @@ Vorher stand die Bedienung in einer großen, zentrierten Karte. Darunter folgten
 
 Die Abmessungen der Vorschau richten sich nach der tatsächlich verfügbaren Fläche. Medien behalten ihre Proportionen. Bei kurzem Fenster oder langen Inhalten kann der Vorschauinhalt scrollen, während die primären Host-Aktionen früh in der Ansicht stehen. Teilnehmer erhalten vor dem Aufdecken weiter die verdeckte Ansicht.
 
+Die Punktekorrektur ist im Punktestand verankert. Damit liegt der Button neben den Punkteständen und bleibt auch bei geöffneter Jokerleiste erreichbar.
+
 [W3C Grid-Reflow-Technik](https://www.w3.org/WAI/WCAG21/Techniques/css/C32), [MDN minmax](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/minmax), [MDN object-fit](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/object-fit)
