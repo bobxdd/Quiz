@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,publicQuestion,validateQuestion} from '../docs/core.mjs';
-import {advanceTeamEmoji,emojiGroup,emojiName,emojisFromText,MAX_DRAW_POINTS,MAX_EMOJI_PALETTE,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
+import {advanceTeamEmoji,finishTeamEmoji,emojiGroup,emojiName,emojisFromText,MAX_DRAW_POINTS,MAX_EMOJI_CLUES,newTeamEmojiRound,normalizeTeamEmoji,parseEmojiPalette,playTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from '../docs/team-emoji.mjs';
 import {canBuzz} from '../docs/round-rules.mjs';
 import {templateScene,reconcileQuestion} from '../docs/studio-model.mjs';
 
@@ -16,23 +16,18 @@ test('palette parsing preserves emoji sequences and rejects text',()=>{
  for(const invalid of ['','A 🦊','123','\u200D'])assert.throws(()=>parseEmojiPalette(invalid),/Emojis/);
 });
 
-test('The larger default palette is available without author configuration and custom picks retain their indices',()=>{
- const settings=normalizeTeamEmoji();
- const defaults=parseEmojiPalette(settings.palette);
- assert.ok(defaults.length>=80&&defaults.length<=MAX_EMOJI_PALETTE);
- assert.equal(new Set(defaults.map(emojiGroup)).size,6);
+test('legacy palette imports are ignored without changing timers',()=>{
+ assert.deepEqual(normalizeTeamEmoji({palette:'👩‍🚀 🦊',clueSeconds:8,guessSeconds:5}),{clueSeconds:8,guessSeconds:5});
  assert.equal(emojiName('⚓'),'Anker');
- assert.equal(normalizeTeamEmoji({palette:' '}).palette,settings.palette);
- assert.equal(normalizeTeamEmoji({palette:'🔥 ❄️ ⚡ 🌊 🌪️ 🌿 🌙 ☀️ ⭐ ✨ 🌈 🌋 🗡️ 🏹 🛡️ 🔨 ⚙️ 🤖 💣 ☠️ 👻 😈 🎭 👑 🧪 🎵 🔮 💎 ❤️ 🤝 🦊 🐻 🐺 🐱 🐦 🐉 🕷️ 🐍 🦈 🦋 🐵 🍄 👁️ 🩸 ⏳ 🧊 🍌 🏴‍☠️'}).palette,settings.palette);
- assert.deepEqual(parseEmojiPalette(normalizeTeamEmoji({palette:'👩‍🚀 🦊'}).palette),['👩‍🚀','🦊']);
  assert.equal(emojiGroup('👩‍🚀'),'Weitere');
+ assert.equal(MAX_EMOJI_CLUES,3);
 });
 
 test('team question imports with private settings and never opens a buzzer',()=>{
  const q=normalizedQuiz({questions:[question]}).questions[0];
  const publicCopy=publicQuestion(q);
  assert.equal(q.roundMode,'team-emoji');
- assert.deepEqual(q.teamEmoji,question.teamEmoji);
+ assert.deepEqual(q.teamEmoji,{clueSeconds:8,guessSeconds:5});
  assert.equal(validateQuestion(q),'');
  assert.match(validateQuestion(q,'individual'),/Teamwertung/);
  assert.match(validateQuestion({...q,answerText:'',answer:''}),/Antwort-Tab/);
@@ -60,9 +55,10 @@ test('separate timer phases, private team clues and one final answer per team',(
  assert.equal(view('t1','d'),null);
  assert.equal(view('t1','b').palette,undefined);
  assert.throws(()=>act('t1','b','clue',[0]),/Rolle/);
- assert.throws(()=>act('t1','a','clue',[0,4]),/vorgegebenen/);
- act('t1','a','clue',[0,2]);
- act('t2','c','clue',[1]);
+ assert.throws(()=>act('t1','a','clue',[0,4]),/Emojis/);
+ assert.equal(finishTeamEmoji(round),false,'no early reveal');
+ act('t1','a','clue',['🐦','❄️']);
+ act('t2','c','clue',['👩‍🚀']);
  assert.equal(view('t1','b').clues,undefined);
  assert.throws(()=>act('t1','a','clue',[1],9000),/abgelaufen/);
  assert.equal(advanceTeamEmoji(round,8999),false);
@@ -76,9 +72,16 @@ test('separate timer phases, private team clues and one final answer per team',(
  act('t1','b','guess','KAISA',9002);
  assert.equal(view('t1','b').guess,'KAISA');
  assert.throws(()=>act('t1','b','guess','Zu spät',14000),/abgelaufen/);
- act('t2','d','guess','Tochter der Leere',9001);
+ act('t2','d','guess','Tochter der Leere',9003);
+ assert.equal(round.phase,'awaiting-reveal');
+ assert.equal(round.deadline,0);
+ assert.equal(teamEmojiForPlayer(round,'t1','b').clues,undefined);
+ assert.equal(publicTeamEmoji(round).solution,undefined);
+ assert.throws(()=>act('t1','b','guess','Late update',9004),/Rolle/);
  assert.equal(publicTeamEmoji(round).results,undefined);
- advanceTeamEmoji(round,14000);
+ assert.equal(advanceTeamEmoji(round,14000),false,'timer cannot reveal');
+ assert.equal(finishTeamEmoji(round),true);
+ assert.equal(finishTeamEmoji(round),false,'cannot reveal twice');
  assert.deepEqual(publicTeamEmoji(round).results.map(result=>[result.status,result.points]),[
   ['correct',175],['correct',175],['no-roles',0]
  ]);
@@ -115,9 +118,9 @@ test('catalogue and operating-system emoji can be used outside the shortcut pale
  playTeamEmoji(round,'t1','a','role','clue',10);
  playTeamEmoji(round,'t1','b','role','guess',10);
  advanceTeamEmoji(round,10);
- const symbols=['🐱','🇩🇪','🧑🏾‍🚀','🐱'];
+ const symbols=['🐱','🇩🇪','🧑🏾‍🚀'];
  assert.deepEqual(emojisFromText('Text 🐱🇩🇪 🧑🏾‍🚀 🐱'),symbols);
- for(const invalid of [['🐱🇩🇪'],['Antwort'],Array(6).fill('🐱')]){
+ for(const invalid of [['🐱🇩🇪'],['Antwort'],Array(4).fill('🐱')]){
   assert.throws(()=>playTeamEmoji(round,'t1','a','clue',invalid,100),/Emojis/);
  }
  playTeamEmoji(round,'t1','a','clue',symbols,100);
@@ -177,4 +180,41 @@ test('drawing rounds keep the reference and artwork private until the appropriat
  assert.deepEqual(result.results[0].drawing,[stroke]);
  assert.equal(result.results[0].points,125);
  assert.equal(teamEmojiForPlayer(newTeamEmojiRound(q,state,roster,'next'),'t1','a').role,'');
+});
+
+test('emoji guess timeout with missing answer stays private until explicit reveal',()=>{
+ const r=newTeamEmojiRound(question,state,roster,'timeout');
+ for(const [t,c,g] of [['t1','a','b'],['t2','c','d']]){
+  playTeamEmoji(r,t,c,'role','clue',1);playTeamEmoji(r,t,g,'role','guess',1);
+ }
+ advanceTeamEmoji(r,2);
+ playTeamEmoji(r,'t1','a','clue',['👩‍🚀','🇩🇪','❄️'],3);
+ playTeamEmoji(r,'t2','c','clue',['🔥'],3);
+ advanceTeamEmoji(r,r.deadline);
+ playTeamEmoji(r,'t1','b','guess','KAISA',r.deadline-1);
+ assert.equal(r.phase,'guess');
+ advanceTeamEmoji(r,r.deadline);
+ assert.equal(r.phase,'awaiting-reveal');
+ assert.equal(publicTeamEmoji(r).results,undefined);
+ assert.equal(publicTeamEmoji(r).solution,undefined);
+ assert.equal(JSON.stringify(publicTeamEmoji(r)).includes('🇩🇪'),false);
+ assert.equal(finishTeamEmoji(r),true);
+ const p=publicTeamEmoji(r);
+ assert.deepEqual(p.results.map(x=>[x.status,x.points]),[['correct',175],['no-guess',0],['no-roles',0]]);
+ assert.deepEqual(p.results[0].clues,['👩‍🚀','🇩🇪','❄️']);
+});
+test('teams without clues do not prevent waiting; invalid fourth emoji cannot replace a valid clue',()=>{
+ const r=newTeamEmojiRound(question,state,roster,'no-clues');
+ for(const [t,c,g] of [['t1','a','b'],['t2','c','d']]){
+  playTeamEmoji(r,t,c,'role','clue',1);playTeamEmoji(r,t,g,'role','guess',1);
+ }
+ advanceTeamEmoji(r,2);
+ playTeamEmoji(r,'t1','a','clue',['🔥','🔥','🔥'],3);
+ assert.throws(()=>playTeamEmoji(r,'t1','a','clue',['🐱','🇩🇪','🧑🏾‍🚀','🔥'],4),/Emojis/);
+ assert.deepEqual(r.teams.t1.clues,['🔥','🔥','🔥']);
+ advanceTeamEmoji(r,r.deadline);
+ playTeamEmoji(r,'t1','b','guess','KAISA',r.deadline-1);
+ assert.equal(r.phase,'awaiting-reveal');
+ finishTeamEmoji(r);
+ assert.equal(r.results[1].status,'no-clues');
 });
