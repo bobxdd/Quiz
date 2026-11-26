@@ -50,6 +50,9 @@ export function quizAudit(quiz) {
   if(seenTiles.has(tileKey))warnings.push({id:q.id,label,reason:'Mehrere Fragen haben denselben Punktwert in dieser Kategorie.'});seenTiles.add(tileKey);
  }
  const {config:joker,fields:requested,available,missing}=jokerSetupSummary(quiz);
+ if(quiz?.balanceBoard&&roundQuestions(quiz,3).length<2*(quiz.teams?.length||0)){
+  warnings.push({id:null,label:'Ausgleichs-Board',reason:'Mit '+2*quiz.teams.length+' Feldern hat jedes der '+quiz.teams.length+' Teams eine Frage und ein Feld zum Streichen.'});
+ }
  if(joker.enabled){
   if(quiz?.scoreMode==='individual')errors.push({id:null,label:'Joker',reason:'Joker benötigen die Teamwertung.'});
   if(missing)warnings.push({id:null,label:'Joker-Fundfelder',reason:available+' von '+requested+' gewünschten Funden können auf Buzzerfragen in Runde 1 und 2 verteilt werden.'});

@@ -8,7 +8,7 @@ import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCoun
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot,participatingTeamIds} from './lobby-model.mjs';
-import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn} from './question-flow.mjs';
+import {openQuestionState,applyQuestionChanges,returnToBoardState,advanceBoardState,makeSelectionTurn,selectingTeam,cancelQuestionState,skipSelectionTurn,strikeBalanceField,undoBalanceStrike,judgeBalanceAnswer} from './question-flow.mjs';
 import {scoreEvent,appendScoreEvent,undoScoreEvent,regradeScoreEvent} from './score-ledger.mjs';
 import {saveHostCheckpoint,loadHostCheckpoint,deleteHostCheckpoint,saveLocalHostQuiz,loadBestHostQuiz,isGuestResumeCode,rememberGuestResume} from './backup-store.mjs';
 import {TEAM_EMOJI,isTeamChallenge,newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,finishTeamEmoji,publicTeamEmoji,teamEmojiForPlayer} from './team-emoji.mjs';
@@ -936,7 +936,7 @@ export class PeerGame{
    return true;
   }
   if(type==='shield'){
-   if(p.phase!=='question'||!p.current?.id||p.jokerShields?.[team]===round||
+   if(p.phase!=='question'||p.boardRound===3||!p.current?.id||p.jokerShields?.[team]===round||
       p.buzzerBlockedTeams?.[String(round)]?.[team]||p.writtenTeamRepresentatives?.[String(round)]?.[team])
     throw Error('Schutz kann für diese Frage nicht mehr aktiviert werden.');
    // Arming is free; consume the charge only if the team actually loses points.
@@ -1314,44 +1314,22 @@ export class PeerGame{
    questionId:nextPublic.current.id,verdict:result});
   this._changed();return clone(nextScore);
  }
- async judgeFirstAnswer(room,round,team,result,revealPatch=null){
-   const d=this._getHostData(room),p=d.public,key=String(round);
-   if(Number(p.round)!==Number(round)||!['question','paused'].includes(p.phase)||
-      p.boardRound!==3||p.scoreMode!=='team'||p.current?.roundMode!=='buzzer'||
-      p.current?.firstAnswerPending!==true||p.current.firstAnswerTeam!==team||
-      p.selectionTurn?.order?.[p.selectionTurn.index]!==team||
-      d.buzzers?.[key]||p.buzzerResolved?.[key]||!['correct','wrong'].includes(result))
-    throw Error('Das Erst-Antwortrecht ist nicht mehr aktuell. Bitte Spielstand aktualisieren.');
-   if(!Object.hasOwn(p.teams||{},team))throw Error('Das Team ist nicht mehr aktiv.');
-   const before=clone(p),next=clone(p),delta=result==='wrong'&&shieldApplies(p,team)?0:judgementDelta(p.current.points,result);
-   if(result==='wrong'&&p.current.points>0&&shieldApplies(p,team)){
-    const after=changeJokerCharge(next,team,'shield',-1);
-    if(after){next.jokers=after.jokers;delete next.jokerShields?.[team];}
-   }
-   const total=(Number(next.scores?.[team])||0)+delta,at=Date.now();
-   if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
-   next.scores={...(next.scores||{}),[team]:total};
-   next.current={...next.current,firstAnswerPending:false,firstAnswerResult:result};
-   let finalState=next;
-   if(result==='correct'){
-    if(!revealPatch||revealPatch.phase!=='reveal'||revealPatch.deadline!==0||
-       revealPatch.current?.id!==p.current.id||revealPatch.current?.roundMode!=='buzzer'||
-       !Object.hasOwn(revealPatch.current,'answer'))
-     throw Error('Für die richtige Erstantwort fehlt die vollständige Lösungsfreigabe.');
-    next.buzzerResolved={...(next.buzzerResolved||{}),[key]:{team,uid:'',result,at,firstAnswer:true}};
-    finalState=applyQuestionChanges(next,round,p.current.id,revealPatch,['question','paused']);
-    if(!finalState)throw Error('Erstantwort und Lösung konnten nicht gemeinsam übernommen werden.');
-   }else{
-    next.buzzerArmed=true;next.deadline=0;
-    next.buzzerBlockedTeams={...(next.buzzerBlockedTeams||{}),
-      [key]:{...(next.buzzerBlockedTeams?.[key]||{}),[team]:{team,name:p.teams[team],at}}};
-    next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid:'',team,result,delta,at,firstAnswer:true}};
-   }
-   d.public=result==='correct'?awardJokerForCorrectAnswer(finalState,team):finalState;
-   this._auditScore(d,before,{kind:'balance-first-answer',team,actor:team,round:key,questionId:p.current.id,verdict:result});
-   this._changed();
-   return {delta,team,result};
-  }
+ async judgeFirstAnswer(room,round,team,result,revealPatch){
+  const d=this._getHostData(room),before=d.public;
+  const judged=judgeBalanceAnswer(before,{round,team,result,revealPatch});
+  if(!judged)throw Error('Diese Ausgleichsfrage ist nicht mehr offen.');
+  d.public=judged.state;
+  this._auditScore(d,before,{kind:'balance-first-answer',team,actor:team,round,questionId:before.current.id,verdict:result});
+  this._changed();
+  return {delta:judged.delta,team,result};
+ }
+ async changeBalanceStrike(room,round,id=null){
+  const d=this._getHostData(room);
+  const next=Number(round)===d.public.round&&(id===null?undoBalanceStrike(d.public):strikeBalanceField(d.public,id));
+  if(!next)throw Error('Dieses Feld kann in diesem Spielschritt nicht gestrichen oder wiederhergestellt werden.');
+  d.public=next;
+  this._changed();
+ }
   async judgeBuzzer(room,round,uid,result,revealPatch=null,{oral=false}={}){
    const d=this._getHostData(room),before=clone(d.public),key=String(round);
    if(activeChronobreak(d.public))throw Error('Chronobreak läuft: erst nach dem Countdown bewerten.');

@@ -799,6 +799,10 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-heading{display:flex;justify-content:space-between;align-items:center;gap:9px;min-height:27px}
 .bq-joker-heading strong::before{content:'▸';margin-right:.45em}
 .bq-joker-panel[open] .bq-joker-heading strong::before{content:'▾'}
+.bq-board-full .jeopardy-board .tile.is-struck{opacity:.7!important}
+.bq-board-full .jeopardy-board .tile.is-struck .tile-points{color:#e7b5b5;text-decoration:none}
+.bq-selection-turn>span{min-width:0;overflow-wrap:anywhere}
+.bq-selection-turn>.btn{align-self:flex-start;white-space:normal}
 .bq-joker-heading>span{font-size:11px;color:#b7c5d5}
 .bq-joker-teams{display:grid;gap:7px}
 .bq-joker-team{display:flex;align-items:center;gap:10px;border-top:1px solid rgba(180,197,217,.12);padding-top:5px}

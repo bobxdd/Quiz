@@ -27,6 +27,7 @@ export function collectCategories(stored,questions=[]){
 }
 export function questionsInCategory(questions,category){return (questions||[]).filter(q=>categoryKey(q?.category)===categoryKey(category));}
 export const boardRoundOf=question=>[2,3].includes(Number(question?.boardRound))?Number(question.boardRound):1;
+export const MAX_BALANCE_FIELDS=12;
 export const roundQuestions=(quiz,round=1)=>(quiz?.questions||[]).filter(question=>boardRoundOf(question)===Number(round));
 export function roundCategories(quiz,round=1){
  const stored=quiz?.roundCategories?.[round]??(Number(round)===1?quiz?.categories:[]);
@@ -46,10 +47,11 @@ export function boardLayoutIssues(quiz){
   const third=roundQuestions(quiz,3),teamCount=(quiz?.teams||[]).length;
   if(quiz.scoreMode==='individual')issues.push({id:null,label:'Ausgleichs-Board',reason:'Das Ausgleichs-Board benötigt die Teamwertung.'});
   if(!roundQuestions(quiz,2).length)issues.push({id:null,label:'Ausgleichs-Board',reason:'Zuerst Fragen in Runde 2 anlegen.'});
-  if(third.length!==teamCount)issues.push({id:null,label:'Ausgleichs-Board',reason:'Genau eine Frage je Team: '+teamCount+' Fragen für '+teamCount+' Teams erforderlich.'});
+  if(third.length<teamCount)issues.push({id:null,label:'Ausgleichs-Board',reason:'Mindestens eine Frage je Team: '+teamCount+' Fragen für '+teamCount+' Teams erforderlich.'});
+  if(third.length>MAX_BALANCE_FIELDS)issues.push({id:null,label:'Ausgleichs-Board',reason:'Maximal '+MAX_BALANCE_FIELDS+' Fragen auf dem Ausgleichs-Board.'});
   for(const question of third){
    if(['map','order','team-emoji','team-draw'].includes(question.type)||question.roundMode==='written')
-    issues.push({id:question.id,label:'Ausgleichs-Board · '+question.category,reason:'Für das Erst-Antwortrecht ist eine Buzzerfrage erforderlich.'});
+    issues.push({id:question.id,label:'Ausgleichs-Board · '+question.category,reason:'Wähle den Fragemodus Buzzerfrage, damit der Host die mündliche Antwort eines Teams bewerten kann.'});
   }
  }
  if(roundQuestions(quiz,2).length&&!roundQuestions(quiz,1).length)issues.push({id:null,label:'Runde 1',reason:'Zuerst mindestens eine Frage in Runde 1 anlegen.'});

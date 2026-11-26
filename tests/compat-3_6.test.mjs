@@ -7,7 +7,7 @@ import {applyBuzzerJudgement,canBuzz} from '../docs/round-rules.mjs';
 
 const app=readFileSync(new URL('../docs/app.mjs',import.meta.url),'utf8');
 test('3.6 live: version, hints and shared team chat stay expanded after updates',()=>{
- assert.equal(VERSION,'3.6.2');
+ assert.equal(VERSION,'3.6.3');
  assert.match(app,/const expanded=\[\.\.\.document\.querySelectorAll\('#app details\[data-bq-persist\]\[open\]'\)\]/);
  assert.match(app,/if\(item\)item\.open=true/);
  assert.match(app,/Tipp '\+Math\.min\(4,Number\(q\.hintStep/);

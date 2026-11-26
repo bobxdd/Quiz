@@ -784,7 +784,7 @@ test('host manual score corrections remain auditable before, during and after qu
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
 });
 
-test('intermediate balance board reserves first answer to lowest-scoring team and unlocks other guests on wrong',async()=>{
+test('intermediate balance board ends on a wrong answer, leaves scores intact and rejects other teams',async()=>{
  const {host,guest1,guest2}=await setup();
  try{
   const q=host.hostQuiz.questions[0],previous=host.hostQuiz.questions[1];
@@ -801,18 +801,23 @@ test('intermediate balance board reserves first answer to lowest-scoring team an
   assert.equal(host.data.public.current.firstAnswerTeam,'t2');
   assert.equal(host.data.public.current.firstAnswerPending,true);
   assert.equal(host.data.public.buzzerArmed,false);
-  const points=host.data.public.current.points;
   await assert.rejects(host.releaseBuzzers(room,1),/Erst das auswählende Team/);
   await assert.rejects(host.judgeBuzzer(room,1,guest1.uid,'wrong',null,{oral:true}),/reserviert/);
   assert.equal(host.data.public.scores.t2,-100);
-  await host.judgeFirstAnswer(room,1,'t2','wrong');
-  assert.equal(host.data.public.scores.t2,-100-points/2);
+  const reveal={phase:'reveal',deadline:0,current:publicQuestion(q,true)};
+  await assert.rejects(host.judgeFirstAnswer(room,1,'t1','wrong',reveal),/nicht mehr offen/);
+  await host.judgeFirstAnswer(room,1,'t2','wrong',reveal);
+  assert.equal(host.data.public.scores.t2,-100);
   assert.equal(host.data.public.current.firstAnswerPending,false);
-  assert.equal(host.data.public.buzzerArmed,true);
-  assert.ok(host.data.public.buzzerBlockedTeams['1'].t2);
+  assert.equal(host.data.public.buzzerArmed,false);
+  assert.equal(host.data.public.phase,'reveal');
   await sleep(60);
-  assert.equal(await guest1.buzzer(room,1,'t1','Alice'),true);
-  assert.equal(host.data.buzzers['1'].team,'t1');
-  assert.equal(host.data.public.scores.t1,600,'other buzzer must still be graded by the host');
+  await assert.rejects(guest1.buzzer(room,1,'t1','Alice'));
+  assert.equal(host.data.public.scores.t1,600);
+  const roundScore=host.data.scoreEvents.at(-1);
+  await host.hostRegradeScore(room,roundScore.id);
+  assert.equal(host.data.public.scores.t2,-100+host.data.public.current.points);
+  await host.hostRegradeScore(room,host.data.scoreEvents.at(-1).id);
+  assert.equal(host.data.public.scores.t2,-100);
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
 });

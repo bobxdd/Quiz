@@ -7,8 +7,8 @@ const source=name=>readFileSync(new URL('../docs/'+name,import.meta.url),'utf8')
 test('only host can choose a question, guest board is read-only',()=>{
  const app=source('app.mjs');
  assert.match(app,/const hostCanSelect=canHost\(\)/);
- assert.match(app,/if\(!hostCanSelect\)return `<div class="tile bq-tile-view-only/);
- assert.match(app,/data-action="open" data-qid/);
+ assert.match(app,/if\(readOnly\|\|!hostCanSelect\)return `<div class="\$\{classes\} bq-tile-view-only/);
+ assert.match(app,/data-action="\$\{strike\?'balance-strike':'open'\}" data-qid/);
  assert.match(app,/case 'open':if\(!canHost\(\)\)return;/);
  assert.doesNotMatch(app,/data-action="request-pick"/);
  assert.doesNotMatch(app,/case 'request-pick'/);

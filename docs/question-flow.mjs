@@ -20,12 +20,14 @@ export function selectingTeam(state){
  const turn=state?.selectionTurn;
  if(state?.scoreMode==='individual'||!Array.isArray(turn?.order))return '';
  const order=turn.order.filter(id=>own(state.teams,id));
- return order.length?order[(Number.isSafeInteger(turn.index)&&turn.index>=0?turn.index:0)%order.length]:'';
+ const index=Number.isSafeInteger(turn.index)&&turn.index>=0?turn.index:0;
+ return order.length?(turn.balance?order[index]||'':order[index%order.length]):'';
 }
 export function resetBoardGameState(state,board,roster={}){
  return {...state,current:null,phase:'board',round:0,boardRound:1,started:false,deadline:0,pausedRemaining:0,
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
   jokers:initialJokers(state?.teams,state?.jokerConfig),jokerEvent:null,jokerNotice:null,
+  balanceStrike:null,lastBalanceStrike:null,
   jokerShields:{},jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,
   buzzerBlocked:{},buzzerBlockedTeams:{},buzzerReleased:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
@@ -63,7 +65,8 @@ export function nextBoardRound(state){
 }
 export function canAdvanceBoard(state,{force=false}={}){
  return state?.phase==='board'&&nextBoardRound(state)!==null&&
-  (force===true||remainingBoardQuestions(state).length===0);
+  !state.balanceStrike&&(force===true||remainingBoardQuestions(state).length===0||
+   (boardRound(state)===3&&!selectingTeam(state)));
 }
 export function advanceBoardState(state,{force=false}={}){
  if(!canAdvanceBoard(state,{force}))return null;
@@ -72,22 +75,66 @@ export function advanceBoardState(state,{force=false}={}){
  if(nextRound===3){
   next.preBalanceSelectionTurn=state.selectionTurn?structuredClone(state.selectionTurn):null;
   next.selectionTurn=balanceSelectionTurn(next);
+  next.balanceStrike=null;
+  next.lastBalanceStrike=null;
  }else if(previousRound===3){
   next.selectionTurn=state.preBalanceSelectionTurn??makeSelectionTurn(next);
   delete next.preBalanceSelectionTurn;
+  next.lastBalanceStrike=null;
  }
  return next;
 }
 export function returnToBoardState(state){
  if(!state?.current||!['ready','question','answered','paused','review','reveal'].includes(state.phase))return null;
  const next={...state,phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null,teamEmoji:null,presentation:null,questionPick:null};
- if(state.phase!=='ready'&&selectingTeam(state))next.selectionTurn={...state.selectionTurn,index:(Number(state.selectionTurn.index)||0)+1};
+ if(state.current.firstAnswerTeam&&state.phase==='reveal'&&remainingBoardQuestions(next).length){
+  next.balanceStrike={team:state.current.firstAnswerTeam,round:state.round};
+ }else if(state.phase!=='ready'&&selectingTeam(state))next.selectionTurn={...state.selectionTurn,index:(Number(state.selectionTurn.index)||0)+1};
  if(state.phase==='ready'){
   const id=state.current.id;
   next.used={...state.used};delete next.used[id];
   next.board={...state.board,[id]:{...state.board[id],used:false}};
  }
  return !remainingBoardQuestions(next).length&&canAdvanceBoard(next)?advanceBoardState(next):next;
+}
+export function strikeBalanceField(state,id){
+ if(state?.phase!=='board'||boardRound(state)!==3||state.balanceStrike?.round!==state.round||
+    !remainingBoardQuestions(state).some(cell=>cell.id===id))return null;
+ const strike=state.balanceStrike;
+ return {...state,balanceStrike:null,lastBalanceStrike:{...strike,id},
+  selectionTurn:{...state.selectionTurn,index:(Number(state.selectionTurn?.index)||0)+1},
+  used:{...state.used,[id]:true},board:{...state.board,[id]:{...state.board[id],used:true,struck:true}}};
+}
+export function undoBalanceStrike(state){
+ const strike=state?.lastBalanceStrike;
+ if(state?.phase!=='board'||boardRound(state)!==3||state.balanceStrike||!strike||
+    strike.round!==state.round||!state.board?.[strike.id]?.struck)return null;
+ const board={...state.board,[strike.id]:{...state.board[strike.id],used:false}};
+ delete board[strike.id].struck;
+ const used={...state.used};
+ delete used[strike.id];
+ return {...state,board,used,lastBalanceStrike:null,balanceStrike:{team:strike.team,round:strike.round},
+  selectionTurn:{...state.selectionTurn,index:Math.max(0,(Number(state.selectionTurn?.index)||0)-1)}};
+}
+export function judgeBalanceAnswer(state,{round,team,result,revealPatch,at=Date.now()}){
+ const q=state?.current;
+ if(Number(round)!==state?.round||!['question','paused'].includes(state.phase)||
+    boardRound(state)!==3||state.scoreMode!=='team'||!q?.firstAnswerPending||
+    q.firstAnswerTeam!==team||selectingTeam(state)!==team||!['correct','wrong'].includes(result)||
+    revealPatch?.phase!=='reveal'||revealPatch.deadline!==0||revealPatch.current?.id!==q.id||
+    !own(revealPatch.current,'answer'))return null;
+ const delta=result==='correct'?Number(q.points):0;
+ const total=(Number(state.scores?.[team])||0)+delta;
+ if(!Number.isFinite(total)||Math.abs(total)>999999)throw Error('Punktelimit überschritten.');
+ const next=applyQuestionChanges(state,round,q.id,revealPatch,['question','paused']);
+ if(!next)return null;
+ const verdict={team,uid:'',result,delta,at,firstAnswer:true};
+ next.current={...next.current,firstAnswerPending:false,firstAnswerTeam:team,firstAnswerResult:result};
+ next.scores={...state.scores,[team]:total};
+ next.buzzerArmed=false;
+ next.buzzerJudgements={...state.buzzerJudgements,[round]:verdict};
+ next.buzzerResolved={...state.buzzerResolved,[round]:verdict};
+ return {state:next,delta,team,result};
 }
 /** Explicitly cancel an unscored question. Never recycle round numbers:
  * delayed guest packets must not accidentally apply to the next question. */
@@ -114,6 +161,7 @@ export function validQuestionPair(state,question){
 }
 export function openQuestionState(state,{expectedRound,question,playerQuestion,participants,deadline=0,covered=false}){
   if(!state||!['board','reveal'].includes(state.phase)||Number(state.round)!==Number(expectedRound))return null;
+ if(state.balanceStrike)return null;
   if(state.boardSequence&&state.phase!=='board')return null;
   // Legacy guest reservations must not restrict the host's choice.
   if(!validQuestionPair(state,question)||playerQuestion?.id!==question.id||playerQuestion.category!==question.category||Number(playerQuestion.points)!==Number(question.points))return null;
@@ -132,7 +180,7 @@ export function openQuestionState(state,{expectedRound,question,playerQuestion,p
    current.firstAnswerTeam=team;
    current.firstAnswerPending=true;
   }
-  return {...state,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:boardRound(state)===3?false:!state.settings?.manualBuzzer,
+  return {...state,lastBalanceStrike:null,phase:covered?'ready':'question',round,current,deadline:covered?0:Number(deadline)||0,pausedRemaining:0,buzzerArmed:covered?false:boardRound(state)===3?false:!state.settings?.manualBuzzer,
     answerReview:null,answerParticipants:covered?null:participants||null,audioPlayback:null,questionPick:null,buzzerAnnouncement:null,
     used:{...state.used,[question.id]:true},board:{...state.board,[question.id]:{...state.board[question.id],used:true}}};
 }
@@ -158,6 +206,11 @@ export function applyQuestionChanges(state,expectedRound,expectedId,changes,allo
    next.current.points=state.current.points;
    next.current.basePoints=state.current.basePoints??state.board[expectedId].points;
    next.current.doublePoints=state.current.doublePoints===true;
+   if(state.current.firstAnswerTeam){
+    next.current.firstAnswerTeam=state.current.firstAnswerTeam;
+    next.current.firstAnswerPending=state.current.firstAnswerPending===true;
+    if(state.current.firstAnswerResult)next.current.firstAnswerResult=state.current.firstAnswerResult;
+   }
   }
   return next;
 }
