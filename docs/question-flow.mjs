@@ -28,7 +28,7 @@ export function resetBoardGameState(state,board,roster={}){
   used:{},board,scores:Object.fromEntries(Object.keys(state?.teams||{}).map(id=>[id,0])),playerScores:{},
   jokers:initialJokers(state?.teams,state?.jokerConfig),jokerEvent:null,jokerNotice:null,
   balanceStrike:null,lastBalanceStrike:null,
-  jokerShields:{},jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,
+  oracleCalls:{},jokerRerollRequest:null,jokerRerollExclude:null,chronoBreak:null,
   buzzerBlocked:{},buzzerBlockedTeams:{},buzzerReleased:{},buzzerJudgements:{},buzzerResolved:{},writtenTeamRepresentatives:{},
   answerReview:null,answerParticipants:null,teamEmoji:null,audioPlayback:null,questionPick:null,
   participatingTeams:participatingTeamIds({teams:state.teams},roster),

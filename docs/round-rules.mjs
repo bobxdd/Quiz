@@ -1,6 +1,6 @@
 /** Round rules kept separate from rendering and transport. */
 import {judgementDelta,updatePlayerScore,questionRoundMode as roundMode} from './core.mjs';
-import {shieldApplies,activeChronobreak,changeJokerCharge} from './joker-system.mjs';
+import {canUseShield,activeChronobreak,changeJokerCharge} from './joker-system.mjs';
 export {roundMode};
 export const scoreMode=state=>state?.scoreMode==='individual'?'individual':'team';
 export function buzzerCoverActive(state,buzzers){
@@ -20,16 +20,16 @@ export function canBuzz(state,buzzers,uid,team,time=Date.now()){
   state.settings?.buzzerEnabled!==false&&!state.current?.firstAnswerPending&&(!state.deadline||state.deadline>time)&&
   !buzzers?.[round]&&!activeChronobreak(state,time)&&!state?.buzzerResolved?.[round]&&!buzzerLocked(state,uid,team);
 }
-export function applyBuzzerJudgement(state,buzzers,{round,uid,result,at=Date.now()}){
+export function applyBuzzerJudgement(state,buzzers,{round,uid,result,useShield=false,at=Date.now()}){
  const key=String(round),winner=buzzers?.[key];
  if(!['question','paused'].includes(state?.phase)||roundMode(state.current)!=='buzzer'||key!==String(state.round)||!winner||winner.uid!==uid||!['correct','wrong'].includes(result))throw Error('Buzzer nicht mehr aktuell. Bitte Spielstand aktualisieren.');
  if(Number(state.boardRound)===3||state?.buzzerResolved?.[key]||state.current?.firstAnswerPending||activeChronobreak(state,at))throw Error('Der Buzzer ist noch reserviert, im Chronobreak oder wurde bereits bewertet.');
- const points=Number(state.current.points),delta=result==='wrong'&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)?0:judgementDelta(points,result),next=structuredClone(state),nextBuzzers={...buzzers};
- if(result==='wrong'&&points>0&&scoreMode(state)==='team'&&shieldApplies(state,winner.team)){
-  const charged=changeJokerCharge(next,winner.team,'shield',-1);
-  if(charged){next.jokers=charged.jokers;delete next.jokerShields?.[winner.team];}
- }
- next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid,result,delta,team:winner.team,at}};
+ const points=Number(state.current.points);
+ const normalDelta=judgementDelta(points,result);
+ if(useShield&&(result!=='wrong'||!canUseShield(state,winner.team,points)))throw Error('Banshees kann für diese Wertung nicht eingelöst werden.');
+ const delta=useShield?0:normalDelta,next=structuredClone(state),nextBuzzers={...buzzers};
+ if(useShield)next.jokers=changeJokerCharge(next,winner.team,'shield',-1).jokers;
+ next.buzzerJudgements={...(next.buzzerJudgements||{}),[key]:{uid,result,delta,team:winner.team,at,...(useShield?{shieldUsed:true}:{})}};
  if(scoreMode(state)==='team'){
   if(!Object.hasOwn(state.teams||{},winner.team))throw Error('Das Team ist nicht mehr aktiv.');
   next.scores={...(next.scores||{}),[winner.team]:(Number(next.scores?.[winner.team])||0)+delta};

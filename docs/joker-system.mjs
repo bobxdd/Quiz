@@ -9,10 +9,10 @@ const fundFieldIds=quiz=>[...new Set((quiz?.questions||[]).filter(q=>q?.id&&isFu
 
 export const JOKER_TYPES=Object.freeze(['shield','oracle','reroll','chrono']);
 export const JOKER_META=Object.freeze({
- shield:{name:'Banshees Schleier',symbol:'🛡',description:'Einmal einen regulären Punktabzug für eine falsche Antwort verhindern.'},
- oracle:{name:'Oracle Lens',symbol:'🔍',description:'Einen privaten, vorbereiteten Hinweis für dein Team anzeigen.'},
+ shield:{name:'Banshees Schleier',symbol:'🛡',description:'Der Host löst den Schild bei einer falschen Antwort anstelle des Punktabzugs ein.'},
+ oracle:{name:'Oracle Lens',symbol:'🔍',description:'Kündigt an, dass dein Team vom Host einen mündlichen Tipp bekommt.'},
  reroll:{name:'Reroll',symbol:'↻',description:'Vor dem Aufdecken einen anderen Fragenplatz wählen lassen.'},
- chrono:{name:'Chronobreak',symbol:'⏪',description:'Nach eigenem Buzz 8 Sekunden Zeit für eine Antwortkorrektur.'}
+ chrono:{name:'Chronobreak',symbol:'⏪',description:'Wenn dein Team am Buzzer ist: acht Sekunden für eine mündliche Korrektur.'}
 });
 // Original red scanner-lens symbol. No external asset or network request.
 export function jokerIconMarkup(type){
@@ -95,8 +95,15 @@ export function awardJokerForCorrectAnswer(state,team){
 export function activeChronobreak(state,at=Date.now()){
  return !!state?.chronoBreak&&state.chronoBreak.round===state.round&&Number(state.chronoBreak.until)>at;
 }
-export function shieldApplies(state,team,round=state?.round){
- return !!team&&state?.jokerConfig?.enabled===true&&state?.jokerShields?.[team]===round&&jokerCount(state,team,'shield')>0;
+export function canTeamChronobreak(state,buzz,team){
+ return state?.phase==='question'&&state.scoreMode==='team'&&state.jokerConfig?.enabled===true&&
+  boardRoundOf(state)!==3&&questionRoundMode(state.current)==='buzzer'&&!!buzz?.uid&&!buzz.oral&&
+  buzz.team===team&&!state.buzzerResolved?.[state.round]&&state.chronoBreak?.round!==state.round&&
+  jokerCount(state,team,'chrono')>0;
+}
+export function canUseShield(state,team,points=state?.current?.points){
+ return state?.scoreMode==='team'&&state.jokerConfig?.enabled===true&&boardRoundOf(state)!==3&&
+  Number(points)>0&&jokerCount(state,team,'shield')>0;
 }
 export function useJokerCharge(state,team,type){
  return changeJokerCharge(state,team,type,-1);

@@ -117,6 +117,7 @@ async def exercise(origin):
   await host.locator('.top-nav [data-view="teams"]').click()
   alice=await join(ctx,host,room,'Alice','t1',origin)
   bob=await join(ctx,host,room,'Bob','t2',origin)
+  ally=await join(ctx,host,room,'Ally','t1',origin)
   await host.locator('[data-action="start-game"]').click()
   await expect(host.locator('.bq-board-scene')).to_be_visible()
   await host.wait_for_function('()=>window.__probe.info().publicState.started===true')
@@ -148,16 +149,22 @@ async def exercise(origin):
   await expect(bob.locator('.bq-joker-event')).to_be_visible(timeout=15000)
   assert 'VERTRAULICHER ORAKELTIPP' not in str(await bob.evaluate("window.__probe.info().publicState"))
   await alice.locator('[data-action="joker-use"][data-type="oracle"]').click()
-  await expect(alice.locator('.bq-oracle-private')).to_contain_text('VERTRAULICHER ORAKELTIPP',timeout=15000)
-  assert await bob.locator('.bq-oracle-private').count()==0
+  for page in (host,alice,bob,ally):
+   await expect(page.locator('.bq-oracle-call')).to_contain_text('Rot hat Oracle Lens aktiviert.')
+  await expect(host.locator('.bq-oracle-host')).to_contain_text('VERTRAULICHER ORAKELTIPP')
+  for guest in (alice,bob,ally):
+   await expect(guest.locator('.bq-oracle-call')).not_to_contain_text('VERTRAULICHER ORAKELTIPP')
   assert 'VERTRAULICHER ORAKELTIPP' not in str(await bob.evaluate("window.__probe.info().publicState"))
-  print('PASS: Oracle Lens hint is private to the receiving team and hidden during preparation',flush=True)
+  await host.locator('[data-action="oracle-confirm"]').click()
+  await expect(bob.locator('.bq-oracle-call')).to_have_count(0)
+  print('PASS: public Oracle announcement, private host note and oral acknowledgement',flush=True)
 
-  # The protective Joker is armed first, charged only when the wrong answer is judged.
-  await alice.locator('[data-action="joker-use"][data-type="shield"]').click()
+  # The team asks verbally; the host chooses penalty or shield during judging.
+  await expect(alice.locator('[data-action="joker-use"][data-type="shield"]')).to_have_count(0)
   await alice.locator('[data-action="buzz"]').click()
   await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Alice')
-  await host.locator('[data-action="buzz-wrong"]').click()
+  await expect(host.locator('[data-action="buzz-wrong"]')).to_be_enabled()
+  await host.locator('[data-action="buzz-shield"]').click()
   await alice.wait_for_function("()=>window.__probe.info().publicState?.jokers?.t1?.shield===0",timeout=15000)
   assert await host.evaluate("window.__probe.info().publicState.scores.t1")==0
   await expect(bob.locator('[data-action="buzz"]')).to_be_enabled(timeout=15000)
@@ -169,27 +176,29 @@ async def exercise(origin):
   await host.locator('[data-action="back"]').click()
   print('PASS: shield prevents a negative score and correct answer awards one dropped joker',flush=True)
 
-  # Chronobreak freezes host controls and allows only the current buzzer to correct.
+  # A teammate can take over the oral correction. Opponents never get the action.
   await host.locator('[data-action="open"][data-qid="c"]').click()
   await host.locator('[data-action="uncover-question"]').click()
   await alice.locator('[data-action="buzz"]').click()
   await expect(alice.locator('.bq-chrono-quick-wrap [data-type="chrono"]')).to_be_visible(timeout=15000)
-  await alice.locator('.bq-chrono-quick-wrap [data-type="chrono"]').click()
+  await expect(bob.locator('.bq-chrono-quick-wrap')).to_have_count(0)
+  await ally.locator('.bq-chrono-quick-wrap [data-type="chrono"]').click()
   await expect(host.locator('.bq-chrono-overlay.is-host-lock')).to_be_visible(timeout=15000)
   await expect(bob.locator('.bq-chrono-overlay')).to_contain_text('CHRONOBREAK',timeout=15000)
-  await alice.locator('#chrono-correction').fill('Korrigierte Antwort')
-  await alice.locator('[data-action="joker-chrono-answer"]').click()
-  await host.wait_for_function("()=>window.__probe.getGame().hostChronoAnswer(window.__probe.room(),3)==='Korrigierte Antwort'",timeout=15000)
+  await expect(ally.locator('.bq-chrono-overlay')).to_contain_text('mündlich korrigieren')
+  await expect(bob.locator('.bq-chrono-overlay')).to_contain_text('Ally')
+  await expect(ally.locator('.bq-chrono-overlay input')).to_have_count(0)
   await expect(host.locator('.bq-chrono-overlay')).to_have_count(0,timeout=15000)
-  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Korrigierte Antwort',timeout=15000)
+  await expect(host.locator('.bq-buzzer-winner')).to_contain_text('Ally darf die mündliche Antwort korrigieren.',timeout=15000)
   assert await alice.evaluate("window.__probe.info().publicState.jokers.t1.chrono")==0
   await host.locator('[data-action="buzz-correct"]').click()
   await host.locator('[data-action="back"]').click()
   await host.locator('[data-action="open"][data-qid="schriftlich"]').click()
   await host.locator('[data-action="uncover-question"]').click()
-  for player in (alice,bob):
+  for player in (alice,bob,ally):
    await expect(player.locator('.bq-joker-event')).to_have_count(0)
    await expect(player.locator('#answer-text')).to_be_visible()
+   await expect(player.locator('.bq-chrono-quick-wrap')).to_have_count(0)
   panel=alice.locator('.bq-joker-panel')
   save=alice.locator('[data-action="submit-answer"]')
   for width,height in [(320,568),(390,844),(768,1024),(1366,850),(1920,1080)]:
@@ -203,7 +212,9 @@ async def exercise(origin):
    await expect(alice.locator('.bq-answer-saved')).to_contain_text(f'Test {width}')
   await bob.locator('#answer-text').fill('Blau meldet ab')
   await bob.locator('[data-action="submit-answer"]').click()
-  await expect(host.locator('.review-card')).to_have_count(2)
+  await ally.locator('#answer-text').fill('Teammate meldet ab')
+  await ally.locator('[data-action="submit-answer"]').click()
+  await expect(host.locator('.review-card')).to_have_count(3)
   print('PASS: writing stays clickable with open and closed Joker inventory at five viewport sizes',flush=True)
   await balance_board(ctx,origin)
   assert not errors,errors
