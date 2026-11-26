@@ -7,7 +7,7 @@ const css=readFileSync(new URL('pixel-theme.css',docs),'utf8');
 const html=readFileSync(new URL('index.html',docs),'utf8');
 const sw=readFileSync(new URL('sw.js',docs),'utf8');
 const base=readFileSync(new URL('style.css',docs),'utf8');
-test('2.4 design-only migration retains the full application version and game logic',()=>{assert.equal(VERSION,'3.6.6');assert.match(base,/review-card\.is-hidden/);});
+test('2.4 design-only migration retains the full application version and game logic',()=>{assert.equal(VERSION,'3.6.7');assert.match(base,/review-card\.is-hidden/);});
 test('2.4 theme is loaded after the existing design rather than rewriting gameplay rendering',()=>{assert.match(html,/<link rel="stylesheet" href="\.\/pixel-theme\.css">/);assert.match(css,/\.review-card\.is-hidden/);assert.match(css,/\.se-studio \.se-element\.is-selected/);});
 test('2.4 mascot palette works across board, answer cards, editor and host history',()=>{for(const token of ['--pixel-cloak','--pixel-leaf','--pixel-spark','--pixel-steel'])assert.ok(css.includes(token));for(const selector of ['.tile{','.review-card{','.history-entry{','.se-studio .se-toolbar{','.guest-choice b'])assert.ok(css.includes(selector),selector);});
 test('2.4 decor never pixelates quiz text nor hides real unrevealed answers using CSS blur',()=>{assert.doesNotMatch(css,/font-family\s*:[^;]*pixel/i);assert.doesNotMatch(css,/\.review-answer[^}]*filter\s*:/i);assert.match(css,/background-image:url\('\.\/pixel-constellation\.png'\)/);});

@@ -254,6 +254,14 @@ async def play_drawing(host, players, viewer):
     await expect(viewer.locator('.bq-drawing-art')).to_have_count(0)
     await alice.get_by_label('Eure Antwort').fill('Jinx')
     await alice.get_by_role('button', name='Antwort fürs Team abgeben').click()
+    for page in [host, *players, viewer]:
+        await expect(page.get_by_role('heading', name='Bereit zur Auflösung')).to_be_visible(timeout=12000)
+        await expect(page.locator('.bq-emoji-results')).to_have_count(0)
+        await expect(page.locator('.bq-emoji-native-help')).to_have_count(0)
+    await expect(viewer.locator('.bq-drawing-art')).to_have_count(0)
+    await expect(viewer.locator('.bq-team-emoji')).not_to_contain_text('Jinx')
+    await expect(alice.locator('#team-emoji-guess')).to_have_count(0)
+    await host.get_by_role('button', name='Lösung & alle Teamantworten aufdecken').click()
     await expect(host.get_by_role('heading', name='Alle Team-Ergebnisse')).to_be_visible(timeout=12000)
     await expect(host.locator('.bq-emoji-results li').nth(0)).to_contain_text('Richtig')
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Keine Antwort')
@@ -261,6 +269,7 @@ async def play_drawing(host, players, viewer):
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Richtig')
     for participant in players:
         await expect(participant.locator('.bq-emoji-results .bq-drawing-art')).to_have_count(2)
+        await expect(participant.locator('.bq-emoji-results li').nth(0)).to_contain_text('Jinx')
     await expect(viewer.locator('img.bq-drawing-art')).to_have_count(2)
     await viewer.wait_for_function("""() => {
         const drawings = [...document.querySelectorAll('img.bq-drawing-art')];

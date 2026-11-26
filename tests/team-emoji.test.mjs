@@ -174,6 +174,13 @@ test('drawing rounds keep the reference and artwork private until the appropriat
  assert.equal(publicTeamEmoji(round).results,undefined);
  act('t1','b','guess','Powder',12101);
  advanceTeamEmoji(round,19100);
+ assert.equal(round.phase,'awaiting-reveal');
+ assert.equal(publicTeamEmoji(round).solution,undefined);
+ assert.equal(publicTeamEmoji(round).results,undefined);
+ assert.equal(view('t1','b').drawing,undefined);
+ assert.equal(advanceTeamEmoji(round,20000),false);
+ assert.equal(finishTeamEmoji(round),true);
+ assert.equal(finishTeamEmoji(round),false);
  const result=publicTeamEmoji(round);
  assert.equal(result.solution,'Jinx');
  assert.deepEqual(result.results.map(team=>team.status),['correct','no-guess','no-roles']);
@@ -217,4 +224,32 @@ test('teams without clues do not prevent waiting; invalid fourth emoji cannot re
  assert.equal(r.phase,'awaiting-reveal');
  finishTeamEmoji(r);
  assert.equal(r.results[1].status,'no-clues');
+});
+
+test('drawing: all eligible teams answering ends the timer but cannot expose artwork or solution until host reveal',()=>{
+ const q={type:'team-draw',answerText:'Jinx',points:125,teamDraw:{drawSeconds:5,guessSeconds:5}};
+ const r=newTeamEmojiRound(q,state,roster,'draw-all');
+ const stroke=[0,1,10,10,100,50],other=[2,0,0,80,44,10];
+ for(const [t,c,g] of [['t1','a','b'],['t2','c','d']]){
+  playTeamEmoji(r,t,c,'role','clue',1);playTeamEmoji(r,t,g,'role','guess',1);
+ }
+ advanceTeamEmoji(r,2);
+ assert.equal(finishTeamEmoji(r),false);
+ playTeamEmoji(r,'t1','a','clue',[stroke],3);
+ playTeamEmoji(r,'t2','c','clue',[other],3);
+ advanceTeamEmoji(r,r.deadline);
+ assert.deepEqual(teamEmojiForPlayer(r,'t1','b').drawing,[stroke]);
+ assert.equal(finishTeamEmoji(r),false);
+ playTeamEmoji(r,'t1','b','guess','Jinx',r.deadline-2);
+ playTeamEmoji(r,'t2','d','guess','Ahri',r.deadline-1);
+ assert.equal(r.phase,'awaiting-reveal');assert.equal(r.deadline,0);
+ const waiting=publicTeamEmoji(r);
+ assert.equal(waiting.solution,undefined);assert.equal(waiting.results,undefined);
+ assert.equal(JSON.stringify(waiting).includes('drawing'),false);
+ assert.throws(()=>playTeamEmoji(r,'t1','b','guess','Ahri',10001),/Rolle/);
+ assert.equal(finishTeamEmoji(r),true);
+ assert.deepEqual(r.results.map(x=>[x.status,x.points]),[['correct',125],['wrong',0],['no-roles',0]]);
+ assert.deepEqual(r.results[0].drawing,[stroke]);
+ assert.deepEqual(r.results[1].drawing,[other]);
+ assert.equal(finishTeamEmoji(r),false);
 });

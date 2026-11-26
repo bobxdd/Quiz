@@ -128,7 +128,7 @@ export function createStudioEditor(api){
     <p class="se-muted">${drawing?'Den Champion sieht während der Zeichenphase die zeichnende Person im Team. Im Antwort-Tab kannst du ein Vorlagenbild ergänzen.':'Der Champion gehört zu dieser Frage. Während der Emoji-Phase sieht ihn im Team die erklärende Person.'}</p>
     <div class="se-two">${drawing?input('drawSeconds','Zeit fürs Zeichnen (Sekunden)',settings.drawSeconds,timing):input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
-    ${drawing?'':'<p class="se-muted">Maximal 3 Emojis je Team. Freie Eingabe über die Geräte-Tastatur (Windows + .). Nach allen Antworten oder Zeitablauf deckt der Host gemeinsam auf.</p>'}
+    ${drawing?'<p class="se-muted">Nach allen Antworten oder Zeitablauf deckt der Host Lösung, Zeichnungen und Teamantworten gemeinsam auf.</p>':'<p class="se-muted">Maximal 3 Emojis je Team. Freie Eingabe über die Geräte-Tastatur (Windows + .). Nach allen Antworten oder Zeitablauf deckt der Host gemeinsam auf.</p>'}
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
     ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],...(quiz().balanceBoard?[[3,'Ausgleichs-Board']]:[]),[2,'Runde 2']]})}${mainTemplate(item.scene)}
    </div></section>`;

@@ -1280,7 +1280,8 @@ const emojiPhases={
 const drawingPhases={
  roles:['Rollen wählen','Pro Team zeichnet eine Person. Alle anderen können raten.'],
  clues:['Champion zeichnen','Die Zeichnung erscheint beim Start der Ratephase.'],
- guess:['Jetzt raten','Erratet den Champion anhand der Zeichnung eures Teams.'],
+ guess:['Jetzt raten','Erratet den Champion anhand der Zeichnung eures Teams. Sobald alle Teams abgegeben haben oder die Zeit endet, wartet ihr auf die Auflösung.'],
+ 'awaiting-reveal':['Bereit zur Auflösung','Die Antworten sind gesperrt. Der Host deckt Lösung, Zeichnungen und alle Teamantworten gemeinsam auf.'],
  reveal:emojiPhases.reveal
 };
 const teamPhases=round=>round.type===TEAM_DRAW?drawingPhases:emojiPhases;
@@ -1599,7 +1600,7 @@ function renderPlayerEmoji(round,own=playerEmoji?.id===round.id?playerEmoji:null
   <form id="team-emoji-guess-form" class="bq-answer-entry">
    <label class="field">Eure Antwort<input id="team-emoji-guess" required maxlength="100" autocomplete="off" spellcheck="false" value="${e(own.guess||'')}" ${disabled}></label>
    <button type="submit" class="btn primary" ${disabled}>${own.answered?'Teamantwort aktualisieren':'Antwort fürs Team abgeben'}</button>
-   ${own.answered?'<p class="small good bq-answer-saved" role="status">Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.</p>':''}
+   ${own.answered?'<p class="small good bq-answer-saved" role="status">Eure letzte gespeicherte Antwort zählt, bis alle Teams abgegeben haben oder die Zeit abläuft.</p>':''}
   </form>`;
 }
 
@@ -1625,7 +1626,7 @@ function renderTeamEmoji(readOnly=false){
    !team.clued?(drawing?'Keine Zeichnung':'Kein Hinweis'):team.guessed?'Antwort abgegeben':'Antwort ausstehend'}</span></li>`).join('')}
  </ul><div class="row">
   ${round.phase==='roles'?btn(drawing?'Zeichenphase starten':'Emoji-Phase starten','emoji-start','primary',round.teams.some(team=>team.ready)?'':'disabled'):''}
-   ${!isOffline()?(drawing?btn('Zur manuellen Wertung','emoji-review','small'):round.phase==='awaiting-reveal'?btn('Lösung & alle Teamantworten aufdecken','emoji-review','primary bq-big-control'):''):''}
+   ${!isOffline()&&round.phase==='awaiting-reveal'?btn('Lösung & alle Teamantworten aufdecken','emoji-review','primary bq-big-control'):''}
    ${round.phase==='awaiting-reveal'?'':btn(round.phase==='roles'?'Zurück zum Quizbrett':'Runde abbrechen','emoji-close','small')}
  </div>`:'';
  return `<section class="glass panel bq-team-emoji"><div class="panelhead">
@@ -2159,7 +2160,7 @@ async function doAction(action,button){if(canHost()&&activeChronobreak(publicSta
  }
  case 'emoji-review':{
   const q=publicState?.teamEmoji;
-  if(canHost()&&!isOffline()&&q&&(q.type===TEAM_DRAW?confirm('Teamrunde beenden und die Ergebnisse zur Wertung zeigen?'):q.phase==='awaiting-reveal'))await game.reviewTeamEmoji(room,q.id,q.phase);
+  if(canHost()&&!isOffline()&&q?.phase==='awaiting-reveal')await game.reviewTeamEmoji(room,q.id,q.phase);
   return;
  }
  case 'emoji-score-correct':case 'emoji-score-wrong':{
@@ -2747,7 +2748,7 @@ function tickLiveState(){
  const play=soundEvent();
  if(soundPlayer?.blocked&&play&&soundExpired(soundPlayer,play)){soundPlayer.ended=true;soundPlayer.blocked=false;schedule();}
 }
-const CRITICAL_HOST_ACTIONS=new Set(['open','balance-strike','balance-unstrike','first-correct','first-wrong','oracle-confirm','clear-pick','skip-turn','cancel-question','uncover-question','next-board','skip-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','judge-shield','judge-review-shield','mark-review-correct','mark-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','buzz-shield','oral-correct','oral-wrong','oral-shield','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
+const CRITICAL_HOST_ACTIONS=new Set(['emoji-review','open','balance-strike','balance-unstrike','first-correct','first-wrong','oracle-confirm','clear-pick','skip-turn','cancel-question','uncover-question','next-board','skip-board','reveal','start-review','reveal-all-answers','reveal-answer','audio-play','back','score','judge-correct','judge-wrong','judge-review-correct','judge-review-wrong','judge-shield','judge-review-shield','mark-review-correct','mark-review-wrong','publish','start-timer','stop-timer','undo-last-score','regrade-score','arm-buzzer','buzz-correct','buzz-wrong','buzz-shield','oral-correct','oral-wrong','oral-shield','reveal-prev','solution-forward','restart-host-transport','finish-game','finale-next','finale-all','resume-final']);
 const HOST_ACTION_FEEDBACK={open:'Frage geöffnet.',reveal:'Lösung freigegeben.','start-review':'Antwortübersicht geöffnet.','reveal-all-answers':'Antworten aufgedeckt.',score:'Punkte aktualisiert.'};
 const BOARD_TRANSITIONS=new Set(['create-offline','create-new-quiz','back-to-quizzes','host-current-board',
  'host-saved-board','open-landing-board','new-board','open-board','rescue-board','reload-board','promote-online',

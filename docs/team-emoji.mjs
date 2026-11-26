@@ -157,17 +157,17 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
   const guess = typeof value === 'string' ? value.trim() : '';
   if(guess.length > 100 || !normalizeGuess(guess)) throw Error('Gib einen Champion oder Begriff mit maximal 100 Zeichen ein.');
   team.guess = guess;
-  if(round.type!==TEAM_DRAW&&allEmojiTeamsGuessed(round))waitForEmojiReveal(round);
+  if(allTeamsGuessed(round))waitForTeamReveal(round);
  }else {
   throw Error('Diese Aktion ist in deiner Rolle oder Phase nicht verfügbar.');
  }
  return true;
 }
 
-function allEmojiTeamsGuessed(round){
+function allTeamsGuessed(round){
  return Object.values(round.teams).filter(team=>team.active&&hasClue(round,team)).every(team=>!!team.guess);
 }
-function waitForEmojiReveal(round){round.phase='awaiting-reveal';round.deadline=0;}
+function waitForTeamReveal(round){round.phase='awaiting-reveal';round.deadline=0;}
 export function advanceTeamEmoji(round, now) {
  if(round.phase === 'roles') {
   if(!Object.values(round.teams).some(ready)) throw Error('Mindestens ein Team braucht einen Hinweisgeber und eine ratende Person.');
@@ -177,16 +177,14 @@ export function advanceTeamEmoji(round, now) {
  }else if(round.phase === 'clues' && now >= round.deadline) {
   round.phase = 'guess';
   round.deadline = now + round.guessSeconds * 1000;
-  if(round.type!==TEAM_DRAW&&allEmojiTeamsGuessed(round))waitForEmojiReveal(round);
+  if(allTeamsGuessed(round))waitForTeamReveal(round);
  }else if(round.phase === 'guess' && now >= round.deadline) {
-  if(round.type===TEAM_DRAW)finishTeamEmoji(round);
-  else waitForEmojiReveal(round);
+  waitForTeamReveal(round);
  }else return false;
  return true;
 }
 export function finishTeamEmoji(round){
- if(round.type!==TEAM_DRAW&&round.phase!=='awaiting-reveal')return false;
- if(round.phase==='reveal')return false;
+ if(round.phase!=='awaiting-reveal')return false;
  round.phase='reveal';
  round.deadline=0;
  round.results=Object.entries(round.teams).map(([id,team])=>{
