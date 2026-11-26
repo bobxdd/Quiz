@@ -205,8 +205,10 @@ function preserveForm(draw){
  for(const key of expanded){if(previousScene===nextScene||key.endsWith('-jokers')){const item=document.querySelector('#app details[data-bq-persist="'+CSS.escape(key)+'"]');if(item)item.open=true;}}
  const next=id?document.getElementById(id):null;
  if(next&&['INPUT','TEXTAREA','SELECT'].includes(next.tagName)&&next.type!=='file'&&previousRound===nextRound){
-  if(value!==undefined)next.value=value;
-  next.focus({preventScroll:true});try{if(selection&&selection[0]!==null)next.setSelectionRange(selection[0],selection[1])}catch{}
+  if(next!==focused){
+   if(value!==undefined)next.value=value;
+   next.focus({preventScroll:true});try{if(selection&&selection[0]!==null)next.setSelectionRange(selection[0],selection[1])}catch{}
+  }
  }else if(previousScene===nextScene&&actionSelector){
   document.querySelector('#app '+actionSelector+':enabled')?.focus({preventScroll:true});
  }else if(disclosure&&(previousScene===nextScene||disclosure.endsWith('-jokers'))){
@@ -760,11 +762,45 @@ function soundQuizMarkup(q){
   +' Du kannst jederzeit während des Sounds buzzern.</p></div>';
 }
 
+function paintLiveShell(app,markup){
+ const input=document.activeElement;
+ if(role==='guest'&&input?.matches('#answer-text,#answer-number,#team-emoji-guess,#team-emoji-text')){
+  const template=document.createElement('template');
+  template.innerHTML=markup;
+  const replacement=template.content.querySelector('#'+input.id);
+  if(replacement&&!replacement.disabled&&
+     input.closest('.bq-live-layout')?.dataset.round===replacement.closest('.bq-live-layout')?.dataset.round){
+   // Replace the neighbouring UI while keeping the input's ancestor chain mounted.
+   // Moving or recreating the focused node can dismiss a mobile keyboard.
+   const ancestors=[];
+   let current=input,next=replacement;
+   while(current&&current!==app&&next&&current.tagName===next.tagName){
+    ancestors.push([current,next]);
+    current=current.parentElement;
+    next=next.parentNode;
+   }
+   if(current===app&&next===template.content){
+    for(const [oldNode,newNode] of ancestors){
+     const siblings=[...newNode.parentNode.childNodes],index=siblings.indexOf(newNode);
+     while(oldNode.previousSibling)oldNode.previousSibling.remove();
+     while(oldNode.nextSibling)oldNode.nextSibling.remove();
+     oldNode.before(...siblings.slice(0,index));
+     oldNode.after(...siblings.slice(index+1));
+     for(const attribute of oldNode.getAttributeNames())if(!newNode.hasAttribute(attribute))oldNode.removeAttribute(attribute);
+     for(const {name,value} of newNode.attributes)if(name!=='value')oldNode.setAttribute(name,value);
+    }
+    return;
+   }
+  }
+ }
+ app.innerHTML=markup;
+}
+
 function render(){if(role==='host'&&view==='editor'&&isPublished())view='live';const app=$('app');const liveView=isGameView(),chronoLocked=canHost()&&activeChronobreak(publicState,now());document.body.classList.toggle('bq-game-mode',liveView&&role!=='landing');if(role==='landing'){if(activeMapThrow){activeMapThrow.handle.cancel();activeMapThrow=null;}if(activeQuestionCover){activeQuestionCover.cancel();activeQuestionCover=null;}app.innerHTML=landing();return;}
  const waiting=Object.values(members||{}).filter(p=>p?.status==='pending').length;
  const nav=role==='host'?(isOffline()?[['editor','✎','Fragen bearbeiten'],['live','▦','Vorschau']]:!isPublished()?[['editor','✎','Fragen bearbeiten'],['teams','♙','Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:waitingInLobby()?[['teams','♙',waiting?'Lobby · '+waiting+' Anfrage'+(waiting===1?'':'n'):'Lobby'],['live','◈','Quizbrett'],['setup','⚙','Optionen']]:[['live','◈','Quiz'],['teams','♙',waiting?'Teilnehmer · '+waiting+' offen':'Teilnehmer'],['present','▣','Präsentation'],['history','▤','Verlauf'],['setup','⚙','Optionen']]):[['play','◈','Quiz']];
  const title=({live:'Live-Raum',editor:'Fragen bearbeiten',history:'Fragenverlauf',present:rehearsal?'Generalprobe':'Präsentation',teams:'Team-Lobby',setup:'Einstellungen',play:'Teilnehmen'})[view]||'Quiz';
- app.innerHTML=`<div class="shell"><section class="workspace"><header class="topbar glass" ${chronoLocked?'inert':''}><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${role==='guest'&&member?.status==='approved'?btn('Wiedereinstieg','copy-guest-rejoin','small'):''}${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header>${liveView?oracleCallsMarkup(false,chronoLocked)+`<div class="bq-live-layout" data-round="${e(roundKey())}">`:''}<main class="page ${liveView?'page-live bq-session-page':''}" ${chronoLocked?'inert':''}>${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}</main>${liveView?jokerPanel(chronoLocked)+'</div>':''}${liveView?jokerEventNotice()+chronoQuickButton()+watcherMarkup():''}${liveView||chronoLocked?chronoOverlay():''}</section></div>`;
+ paintLiveShell(app,`<div class="shell"><section class="workspace"><header class="topbar glass" ${chronoLocked?'inert':''}><div class="header-primary"><div class="brand"><div class="logo">B</div><div><strong>BRAINQUIZ</strong><small>Version ${VERSION}</small></div></div><nav class="top-nav" aria-label="Hauptnavigation">${nav.map(([name,glyph,label])=>`<button type="button" class="nav ${view===name?'active':''}" data-action="view" data-view="${name}" ${view===name?'aria-current="page"':''}><span class="glyph" aria-hidden="true">${glyph}</span>${label}</button>`).join('')}</nav>${canHost()&&!isOffline()?btn(roomCloseLabel(),'leave-host-room','small danger'):''}<div class="header-state">${role==='guest'&&member?.status==='approved'?btn('Wiedereinstieg','copy-guest-rejoin','small'):''}${soundMenu()}<div class="status" aria-label="Verbindungsstatus"><i class="dot ${connected?'live':''}"></i>${isOffline()?'Lokaler Editor':connected?'Live verbunden':'Verbindung wird geprüft'}</div><span class="role-caption">${role==='host'?'Host':member?.status==='approved'?e(teamName(member.team)):'Team-Lobby'}</span></div></div><div class="header-secondary"><h1>${e(title)}</h1><div class="topright"><div class="roomchip">${isOffline()?'LOKAL':'RAUM'} <strong>${e(room)}</strong></div>${isOffline()||view==='teams'?'':btn('Einladung kopieren','invite','small')}</div></div></header>${liveView?oracleCallsMarkup(false,chronoLocked)+`<div class="bq-live-layout" data-round="${e(roundKey())}">`:''}<main class="page ${liveView?'page-live bq-session-page':''}" ${chronoLocked?'inert':''}>${role==='host'?hostPage():guestReceiptMarkup()+guestPage()}</main>${liveView?jokerPanel(chronoLocked)+'</div>':''}${liveView?jokerEventNotice()+chronoQuickButton()+watcherMarkup():''}${liveView||chronoLocked?chronoOverlay():''}</section></div>`);
  updateClock();
  updateBuzzerAnnouncement();
  maybeAnimateQuestion();

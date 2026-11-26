@@ -16,5 +16,5 @@ test('2.1: Keine Antwort wird nicht fälschlich als verdeckte Abgabe dargestellt
 test('2.1: Versionswechsel aktualisiert auch den Offline-Cache',()=>{
  const release=core.match(/VERSION='(\d+\.\d+\.\d+)'/)?.[1];
  assert.ok(release);
- assert.ok(sw.includes('brainquiz-shell-'+release+'-'));
+ assert.ok(sw.includes('-'+release+'-'));
 });

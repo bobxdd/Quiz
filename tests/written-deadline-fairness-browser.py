@@ -96,7 +96,10 @@ async def main():
     visualViewport.dispatchEvent(new Event('resize'));
    }""")
    await field.fill('J')
+   await field.evaluate('el=>{window.__activeAnswer=el}')
    await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{})[0]?.text==='J'",timeout=8000)
+   await expect(save).to_have_text('Antwort gespeichert.')
+   assert await anna.evaluate("document.activeElement===window.__activeAnswer")
    await field.fill('')
    await host.wait_for_function("() => Object.keys(window.__probe.getGame().data.responses?.['1']||{}).length===0")
    await field.fill('Ji')
