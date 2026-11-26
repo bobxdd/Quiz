@@ -7,7 +7,7 @@ import {applyBuzzerJudgement} from '../docs/round-rules.mjs';
 import {
  JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,
  jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,
- shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup,oracleHintFor
+ canUseShield,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup,oracleHintFor
 } from '../docs/joker-system.mjs';
 
 const room='ABCDEFGHJKLM2345';
@@ -68,10 +68,11 @@ test('per-type starting stock preserves legacy imports and permits mixed setups'
 });
 test('a manually removed final shield charge cannot prevent a loss',async()=>{
  const g=fixture(),p=opened(g,'b');
- g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1}),/Wertung vom Host/);
  await g.hostAdjustJoker(room,'t1','shield',-1);
- assert.equal(shieldApplies(g.data.public,'t1'),false);
+ assert.equal(canUseShield(g.data.public,'t1'),false);
  g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
+ assert.throws(()=>applyBuzzerJudgement(g.data.public,g.data.buzzers,{round:1,uid:'alice',result:'wrong',useShield:true}),/nicht eingelöst/);
  const result=applyBuzzerJudgement(g.data.public,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
  assert.equal(result.delta,-200);
 });
@@ -93,24 +94,29 @@ test('starter stock, cap and one-time drop awards',()=>{
 });
 test('shield consumes a charge and prevents a wrong buzzer penalty without opening another chance',()=>{
  const g=fixture(),p=opened(g,'b');
- g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
- assert.equal(shieldApplies(p,'t1'),true);
- assert.equal(jokerCount(p,'t1','shield'),1,'arming protection does not spend it until a wrong verdict');
+ assert.equal(canUseShield(p,'t1'),true);
  g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
- const result=applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
+ const regular=applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong'});
+ assert.equal(regular.delta,-p.current.points/2);
+ assert.equal(jokerCount(regular.state,'t1','shield'),1);
+ const result=applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong',useShield:true});
  assert.equal(result.delta,0);
  assert.equal(result.state.scores.t1,0);
  assert.equal(jokerCount(result.state,'t1','shield'),0,'shield is spent once when the negative score is prevented');
  assert.equal(result.buzzers['1'],undefined);
  assert.ok(result.state.buzzerBlockedTeams['1'].t1);
 });
-test('Oracle Lens team hint is private, cannot be reused and is never copied to shared public data',()=>{
- const g=fixture(),p=opened(g);
+test('Oracle announces an oral hint without sending text and works without a prepared note',async()=>{
+ const g=fixture(),p=opened(g,'b');
+ await g.hostAdjustJoker(room,'t2','oracle',1);
+ const active=g.data.public;
  g._handleGuestAction(ctx('bob'),'joker',{type:'oracle',round:1});
- assert.equal(g.data.jokerPrivateHints['1'].t2,'Nur für Teemo');
+ assert.deepEqual(active.oracleCalls.t2,{round:1,given:false});
  assert.equal(JSON.stringify(p).includes('Nur für Teemo'),false);
- assert.equal(jokerCount(p,'t2','oracle'),0);
- assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'oracle',round:1}),/Aufladung|schon erhalten/);
+ assert.equal(jokerCount(active,'t2','oracle'),1);
+ await g.hostConfirmOracle(room,1,'t2');
+ assert.equal(active.oracleCalls.t2.given,true);
+ assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'oracle',round:1}),/bereits eingesetzt/);
 });
 test('reroll requested by selecting team returns the covered question without consuming other team turns',async()=>{
  const g=fixture();
@@ -125,18 +131,30 @@ test('reroll requested by selecting team returns the covered question without co
  assert.equal(jokerCount(g.data.public,'t1','reroll'),0);
  assert.equal(g.data.public.selectionTurn.index,0);
 });
-test('Chronobreak is only for the current winning buzzer and blocks grading for eight seconds',()=>{
+test('Chronobreak allows the buzzer or a teammate, rejects other teams and locks grading for eight seconds',()=>{
  const g=fixture(),p=opened(g);
  g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice'};
- assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'chrono',round:1}),/gebuzzert/);
- g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1});
+ g.data.roster.ally={team:'t1',name:'Ally'};
+ g.data.members.ally={team:'t1',status:'approved',name:'Ally'};
+ assert.throws(()=>g._handleGuestAction(ctx('bob'),'joker',{type:'chrono',round:1}),/Team am Buzzer/);
+ g._handleGuestAction(ctx('ally'),'joker',{type:'chrono',round:1});
+ assert.equal(p.chronoBreak.uid,'ally');
+ assert.equal(p.chronoBreak.buzzerUid,'alice');
  assert.equal(activeChronobreak(p),true);
  assert.equal(jokerCount(p,'t1','chrono'),0);
  assert.ok(p.chronoBreak.until>Date.now()+CHRONOBREAK_MS-1500);
  assert.throws(()=>applyBuzzerJudgement(p,g.data.buzzers,{round:1,uid:'alice',result:'wrong'}),/Chronobreak/);
- g._handleGuestAction(ctx('alice'),'joker',{type:'chrono-answer',text:'Neue Antwort',round:1});
- assert.equal(g.hostChronoAnswer(room,1),'Neue Antwort');
  assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/Aufladung/);
+});
+test('Chronobreak cannot run without a real team buzz or on a written round',()=>{
+ const g=fixture(),p=opened(g);
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/Team am Buzzer/);
+ g.data.buzzers['1']={uid:'alice',team:'t1',name:'Alice',oral:true};
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/Team am Buzzer/);
+ delete g.data.buzzers['1'].oral;
+ p.current.roundMode='written';
+ assert.throws(()=>g._handleGuestAction(ctx('alice'),'joker',{type:'chrono',round:1}),/Team am Buzzer/);
+ assert.equal(jokerCount(p,'t1','chrono'),1);
 });
 
 test('game reset removes previous private hints and corrections before round numbers are reused',async()=>{
@@ -145,8 +163,8 @@ test('game reset removes previous private hints and corrections before round num
  g.data.chronoCorrections={'1':'old answer'};
  g._scheduleTeamEmojiDeadline=()=>{};
  await g.clearRoomEvents(room);
- assert.deepEqual(g.data.jokerPrivateHints,{});
- assert.deepEqual(g.data.chronoCorrections,{});
+ assert.equal(g.data.jokerPrivateHints,undefined);
+ assert.equal(g.data.chronoCorrections,undefined);
  assert.ok(Object.keys(g.data.jokerDrops).length>0);
 });
 test('active Chronobreak prevents bypass through the buzzer reset endpoint',async()=>{
@@ -208,25 +226,23 @@ test('bonus drops use the actual question mode across both ordinary boards',()=>
 test('repeated wrong written verdict preserves shield, and undo restores protection',async()=>{
  const g=fixture(),p=opened(g);
  p.current.roundMode='written';
- g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
  p.phase='review';
  p.answerReview={entries:{alice:{submitted:true,revealed:true}}};
- await g.judgeWritten(room,1,'alice','wrong');
+ await g.judgeWritten(room,1,'alice','wrong',{useShield:true});
  await g.judgeWritten(room,1,'alice','wrong');
  assert.equal(g.data.public.scores.t1,0);
  assert.equal(jokerCount(g.data.public,'t1','shield'),0);
  assert.equal(g.data.scoreEvents.length,1);
  await g.hostUndoScore(room,g.data.scoreEvents[0].id);
  assert.equal(jokerCount(g.data.public,'t1','shield'),1);
- assert.equal(shieldApplies(g.data.public,'t1'),true);
- await g.judgeWritten(room,1,'alice','wrong');
+ assert.equal(canUseShield(g.data.public,'t1'),true);
+ await g.judgeWritten(room,1,'alice','wrong',{useShield:true});
  assert.equal(g.data.public.scores.t1,0);
 });
 
 test('a zero-point buzzer penalty does not spend a shield',()=>{
  const g=fixture(),p=opened(g);
  p.current.points=0;
- g._handleGuestAction(ctx('alice'),'joker',{type:'shield',round:1});
  const buzzers={'1':{uid:'alice',team:'t1',name:'Alice'}};
  const result=applyBuzzerJudgement(p,buzzers,{round:1,uid:'alice',result:'wrong'});
  assert.ok(result.delta===0);

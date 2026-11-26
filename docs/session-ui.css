@@ -810,14 +810,19 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-list{display:flex;flex:1;flex-wrap:wrap;gap:4px;min-width:0}
 .bq-joker-token{display:inline-flex;align-items:center;gap:4px;padding:3px 5px;background:rgba(113,147,182,.16);border:1px solid rgba(161,186,209,.18);border-radius:7px;min-height:32px}
 .bq-joker-token.is-empty{opacity:.57}
-.bq-joker-token.is-armed{border-color:rgba(127,228,156,.8)}
 .bq-joker-symbol{font-size:17px;line-height:1}
 .bq-joker-name{font-size:11px;max-width:65px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bq-joker-token b{font-variant-numeric:tabular-nums}
 .bq-joker-token .btn{min-width:25px;padding:4px 7px;font-size:11px}
 .bq-joker-host-tools{display:inline-flex;gap:2px}
-.bq-oracle-private{max-height:12dvh;overflow:auto;padding:4px 9px;background:rgba(25,53,67,.95);border-left:3px solid #75cce3;border-radius:7px}
-.bq-oracle-private p{margin:4px 0 0}
+.bq-oracle-calls{display:grid;gap:4px;max-height:18dvh;overflow:auto}
+.bq-oracle-call{padding:5px 9px;background:#193543;border-left:3px solid #75cce3;border-radius:7px;overflow-wrap:anywhere}
+.bq-oracle-call p{margin:0;font-size:13px}
+.bq-oracle-call strong{color:#edf7fa}
+.bq-oracle-host{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.bq-oracle-host small{color:#d2e8ef}
+.bq-oracle-calls.is-projector{position:fixed;left:12px;bottom:80px;max-width:min(440px,85vw);z-index:88;pointer-events:none}
+.bq-shield-verdict{border-color:#91aef3!important;white-space:normal}
 .bq-joker-event{position:fixed;top:92px;left:50%;transform:translateX(-50%);z-index:89;max-width:min(92vw,450px);text-align:center;pointer-events:none;padding:11px 20px;border:1px solid #b3bb8c;border-radius:12px;background:#19262d;color:#f6f7e1;box-shadow:0 8px 28px rgba(0,0,0,.45)}
 .bq-joker-event span{display:block;font-size:11px;letter-spacing:.1em;opacity:.8}
 .bq-joker-event strong{display:block;margin:4px 0}
@@ -835,9 +840,6 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-chrono-card p{margin:8px 0}
 .bq-chrono-card>[data-chrono-seconds]{display:block;font-size:42px;font-variant-numeric:tabular-nums}
 .bq-chrono-card>small{font-size:12px;color:#b6c8e0}
-.bq-chrono-correction{border-radius:8px;padding:8px;background:rgba(125,151,184,.13)}
-.bq-chrono-card form{margin-top:10px;display:grid;gap:8px;text-align:left}
-.bq-chrono-card form input{width:100%;max-width:100%;box-sizing:border-box}
 @media(max-width:640px){
  .bq-joker-panel{padding:3px 8px}
  .bq-joker-team>strong{width:70px;flex-basis:70px;font-size:11px}

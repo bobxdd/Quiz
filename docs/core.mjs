@@ -7,7 +7,7 @@ import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,normalizeTeamEmoji,normalizeTeamDra
 import {questionRoundMode} from './question-mode.mjs';
 export {questionRoundMode};
 // Pure, dependency-free, testable game domain functions.
-export const VERSION='3.6.3';
+export const VERSION='3.6.4';
 export const MAX_QUESTION_SECONDS=900;
 export const questionSeconds=value=>Math.max(0,Math.min(MAX_QUESTION_SECONDS,Math.trunc(Number(value))||0));
 export function normalizeAnswerTolerance(value,type){
