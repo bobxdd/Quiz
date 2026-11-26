@@ -884,6 +884,7 @@ export class PeerGame{
     if(!emoji||emoji.id!==payload.id||pub.phase!=='question')throw Error('Diese Teamrunde ist nicht mehr offen.');
     playTeamEmoji(emoji,member.team,ctx.uid,payload.kind,payload.value,now);
     this._syncTeamEmoji();
+    if(emoji.phase==='awaiting-reveal')this._scheduleTeamEmojiDeadline();
     return true;
    }
    case 'joker':return this._handleGuestJoker(ctx,member,payload,now);
@@ -1186,7 +1187,7 @@ export class PeerGame{
  _advanceTeamEmoji(id,phase,forceFinish=false){
   const d=this.data,round=d?.teamEmoji;
   if(this.mode!=='host'||!round||round.id!==id||round.phase!==phase||d.public.phase!=='question')return false;
-  if(forceFinish)finishTeamEmoji(round);
+  if(forceFinish){if(!finishTeamEmoji(round))return false;}
   else if(!advanceTeamEmoji(round,Date.now()))return false;
   if(round.phase==='reveal'){
    const p=d.public;
