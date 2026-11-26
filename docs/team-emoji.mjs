@@ -59,11 +59,15 @@ export function normalizeTeamDraw(settings) {
  return {drawSeconds:phaseSeconds(settings?.drawSeconds, 60), guessSeconds:phaseSeconds(settings?.guessSeconds, 30)};
 }
 
+// Fallback for browsers without Intl.Segmenter. Keep emoji sequences together
+// but never treat adjacent independent pictographs as one clue.
+const fallbackEmojiBase=String.raw`(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})\uFE0F?\p{Emoji_Modifier}?(?:[\u{E0020}-\u{E007E}]+\u{E007F})?`;
+const fallbackEmojiSegments=new RegExp(String.raw`[0-9#*]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|${fallbackEmojiBase}(?:\u200D${fallbackEmojiBase})*|[\s\S]`,'gu');
 function emojiSegments(text) {
  const value = String(text ?? '').trim();
  return typeof Intl.Segmenter === 'function'
   ? [...new Intl.Segmenter('de', {granularity:'grapheme'}).segment(value)].map(part => part.segment)
-  : value.split(/\s+/u);
+  : (value.match(fallbackEmojiSegments)||[]);
 }
 
 const isEmojiSymbol = symbol => typeof symbol === 'string' && symbol.length <= 40 &&

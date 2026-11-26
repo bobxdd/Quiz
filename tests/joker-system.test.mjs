@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion} from '../docs/core.mjs';
 import {PeerGame} from '../docs/peer-client.mjs';
+import {newTeamEmojiRound,playTeamEmoji,advanceTeamEmoji,publicTeamEmoji} from '../docs/team-emoji.mjs';
 import {openQuestionState} from '../docs/question-flow.mjs';
 import {applyBuzzerJudgement} from '../docs/round-rules.mjs';
 import {
@@ -253,4 +254,38 @@ test('Oracle only falls back to hints that have yet to be revealed',()=>{
  assert.equal(oracleHintFor(q,1),'Neuer Hinweis');
  assert.equal(oracleHintFor(q,3),'');
  assert.equal(oracleHintFor({...q,oracleHint:'Privat'},3),'Privat');
+});
+
+test('host explicit reveal atomically publishes both team results and scores exactly once, including Joker award',async()=>{
+ for(const type of ['team-emoji','team-draw']){
+  const g=fixture();
+  const q={id:'challenge',type,answerText:'Jinx',category:'Team',points:200};
+  const roster={a:{team:'t1'},b:{team:'t1'},c:{team:'t2'},d:{team:'t2'}};
+  const r=newTeamEmojiRound(q,g.data.public,roster,'challenge-'+type);
+  for(const [t,c,u] of [['t1','a','b'],['t2','c','d']]){
+   playTeamEmoji(r,t,c,'role','clue',1);playTeamEmoji(r,t,u,'role','guess',1);
+  }
+  advanceTeamEmoji(r,2);
+  const clue=type==='team-draw'?[[0,1,10,10,100,50]]:['🔥','❄️'];
+  playTeamEmoji(r,'t1','a','clue',clue,3);playTeamEmoji(r,'t2','c','clue',clue,3);
+  advanceTeamEmoji(r,r.deadline);
+  playTeamEmoji(r,'t1','b','guess','Jinx',r.deadline-2);
+  playTeamEmoji(r,'t2','d','guess','Jinx',r.deadline-1);
+  g.data.teamEmoji=r;
+  g.data.public={...g.data.public,phase:'question',round:1,current:publicQuestion(q),teamEmoji:publicTeamEmoji(r),deadline:0,
+   jokerEvent:{type:'shield',round:1,id:q.id,awarded:false}};
+  g.data.questionHistory['1']={};
+  assert.equal(g.data.public.teamEmoji.results,undefined);
+  assert.deepEqual(g.data.public.scores,{t1:0,t2:0});
+  await g.reviewTeamEmoji(room,r.id,'awaiting-reveal');
+  assert.equal(g.data.public.phase,'reveal');
+  assert.equal(g.data.public.teamEmoji.solution,'Jinx');
+  assert.equal(g.data.public.teamEmoji.results.length,2);
+  assert.deepEqual(g.data.public.scores,{t1:200,t2:200});
+  assert.equal(jokerCount(g.data.public,'t1','shield'),2);
+  assert.equal(jokerCount(g.data.public,'t2','shield'),1);
+  await assert.rejects(g.reviewTeamEmoji(room,r.id,'awaiting-reveal'),/nicht mehr offen/);
+  assert.deepEqual(g.data.public.scores,{t1:200,t2:200});
+  assert.equal(g.data.questionHistory['1'].emojiResults.length,2);
+ }
 });

@@ -253,3 +253,19 @@ test('drawing: all eligible teams answering ends the timer but cannot expose art
  assert.deepEqual(r.results[1].drawing,[other]);
  assert.equal(finishTeamEmoji(r),false);
 });
+
+test('older browser fallback cannot pack multiple adjacent emojis into a single clue',()=>{
+ const original=Intl.Segmenter;
+ try{
+  Intl.Segmenter=undefined;
+  assert.deepEqual(emojisFromText('🔥❄️🇩🇪🧑🏾‍🚀'),['🔥','❄️','🇩🇪']);
+  assert.deepEqual(emojisFromText('🧑🏾‍🚀#️⃣🏴‍☠️🔥'),['🧑🏾‍🚀','#️⃣','🏴‍☠️']);
+  const r=newTeamEmojiRound(question,state,roster,'fallback');
+  playTeamEmoji(r,'t1','a','role','clue',1);
+  playTeamEmoji(r,'t1','b','role','guess',1);
+  advanceTeamEmoji(r,2);
+  assert.throws(()=>playTeamEmoji(r,'t1','a','clue',['🔥🔥🔥🔥'],3),/Emojis/);
+  playTeamEmoji(r,'t1','a','clue',['🧑🏾‍🚀','🇩🇪','#️⃣'],3);
+  assert.equal(r.teams.t1.clues.length,3);
+ }finally{Intl.Segmenter=original;}
+});
