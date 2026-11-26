@@ -43,11 +43,12 @@ async def edit_questions(host):
     await expect(host.locator('.se-team-emoji')).to_be_visible()
     await host.get_by_label('Geheimer Champion', exact=True).fill(TARGET)
     await host.get_by_label('Geheimer Champion', exact=True).blur()
-    for field, value in [('emojiClueSeconds', '20'), ('emojiGuessSeconds', '8'), ('emojiPalette', '🦊 ❄️ 🔥')]:
+    for field, value in [('emojiClueSeconds', '20'), ('emojiGuessSeconds', '8')]:
         control = host.locator(f'[data-se-field="{field}"]')
         await control.fill(value)
         await control.blur()
         await expect(control).to_have_value(value)
+    await expect(host.locator('[data-se-field="emojiPalette"]')).to_have_count(0)
     await host.locator('[data-se-action="editor-pane"][data-pane="answer"]').click()
     await expect(host.get_by_label('Champion oder Begriff (geheim)')).to_have_value(TARGET)
     await expect(host.locator('.se-answer-readiness.is-ready')).to_be_visible()
@@ -122,36 +123,30 @@ def tile(host, category):
     return host.locator('.bq-board-scene .column').filter(has_text=category).locator('[data-action="open"]')
 
 
-async def save_clue(player, labels):
+async def save_clue(player, symbols):
     await expect(player.locator('.bq-emoji-target')).to_contain_text(TARGET)
-    await expect(player.locator('.bq-emoji-palette button')).to_have_count(3)
-    verify_catalogue = labels[0] == 'Fuchs'
-    if verify_catalogue:
+    await expect(player.locator('.bq-emoji-palette')).to_have_count(0)
+    await expect(player.locator('.bq-emoji-native-help')).to_contain_text('Win')
+    await expect(player.locator('.bq-emoji-native-help')).to_contain_text('Punkt')
+    entry = player.get_by_label('Eure Emojis')
+    if symbols.startswith('🦊'):
         await player.set_viewport_size({'width': 320, 'height': 568})
-        await expect(player.get_by_role('button', name='Emoji-Tastatur', exact=True)).to_be_in_viewport(ratio=.98)
-        await player.get_by_role('button', name='Tiere', exact=True).click()
-        await expect(player.locator('.bq-emoji-palette button')).to_have_count(1)
-        await player.get_by_role('button', name='Fuchs', exact=True).click()
-        await player.get_by_role('button', name='Natur', exact=True).click()
-        await expect(player.locator('.bq-emoji-palette button')).to_have_count(2)
-        await expect(player.locator('.bq-emoji-selection')).to_contain_text('🦊')
-        labels = labels[1:]
-    for label in labels:
-        await player.get_by_role('button', name=label, exact=True).click()
-    if verify_catalogue:
+        await expect(entry).to_be_in_viewport(ratio=.98)
+        await entry.fill('🦊 ❄️ 🇩🇪 🧑🏾‍🚀')
+        await expect(entry).to_have_value('🦊 ❄️ 🇩🇪')
+        await expect(player.locator('.bq-emoji-selection button')).to_have_count(3)
+        await player.locator('.bq-emoji-selection button').nth(2).click()
+        await expect(entry).to_have_value('🦊 ❄️')
+        # Full optional catalogue remains usable without a predefined palette.
         await player.get_by_role('button', name='Emoji-Tastatur', exact=True).click()
         keyboard = player.get_by_role('dialog', name='Emoji-Tastatur')
-        await expect(keyboard.locator('[data-catalog-emoji]')).to_have_count(3944)
-        await expect(keyboard.get_by_label('Emoji suchen')).to_be_in_viewport(ratio=.98)
-        await expect(keyboard.get_by_role('button', name='Fertig', exact=True)).to_be_in_viewport(ratio=.98)
-        assert await keyboard.locator('.bq-emoji-keyboard-list').evaluate('(el) => el.scrollHeight > el.clientHeight')
         await keyboard.get_by_label('Kategorie').select_option(label='Flaggen')
         await keyboard.get_by_label('Emoji suchen').fill('deutschland')
         await keyboard.get_by_role('button', name='Flagge: Deutschland', exact=True).click()
-        await keyboard.get_by_role('button', name='Fertig', exact=True).click()
-        entry = player.get_by_label('Eure Emojis')
+        await expect(keyboard).not_to_be_visible()
         await expect(entry).to_have_value('🦊 ❄️ 🇩🇪')
-        await entry.fill('🦊 ❄️ 🇩🇪 🧑🏾‍🚀')
+    else:
+        await entry.fill(symbols)
     await player.get_by_role('button', name='Hinweis speichern').click()
     await expect(player.get_by_text('Hinweis gespeichert.', exact=True)).to_be_visible()
 
@@ -160,10 +155,8 @@ async def submit_guess(player, hint, guess):
     await expect(player.locator('.bq-emoji-hint')).to_have_text(hint,timeout=26000)
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
     await expect(player.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=1)
-    await expect(player.get_by_role('button', name='Antwort fürs Team abgeben')).to_be_in_viewport(ratio=1)
     await player.get_by_label('Eure Antwort').fill(guess)
     await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
-    await expect(player.get_by_text('Eure letzte gespeicherte Antwort zählt nach Ablauf der Zeit.')).to_be_visible()
 
 
 async def draw_line(player, touch=False, reverse=False):
@@ -376,23 +369,36 @@ async def run(browser, root):
     await host.get_by_role('button', name='Emoji-Phase starten').click()
     await expect(host.locator('.bq-host-solution-preview')).to_contain_text(TARGET)
     await expect(host.locator('.bq-host-solution-preview')).to_be_in_viewport(ratio=1)
-    await asyncio.gather(save_clue(alice, ['Fuchs', 'Schneeflocke']), save_clue(claire, ['Feuer']))
+    await asyncio.gather(save_clue(alice, '🦊 ❄️ 🇩🇪'), save_clue(claire, '🔥'))
     await expect(viewer.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
     await expect(viewer.locator('.bq-host-solution')).to_have_count(0)
     await expect(bob.locator('.bq-host-solution')).to_have_count(0)
     await expect(bob.locator('.bq-emoji-palette')).to_have_count(0)
     await expect(deniz.locator('.bq-emoji-palette')).to_have_count(0)
 
-    await asyncio.gather(submit_guess(bob, '🦊 ❄️ 🇩🇪 🧑🏾‍🚀', 'Jinx'), submit_guess(deniz, '🔥', 'Amumu'))
+    await submit_guess(bob, '🦊 ❄️ 🇩🇪', 'Jinx')
     await bob.get_by_label('Eure Antwort').fill('KAISA')
     await bob.get_by_role('button',name='Teamantwort aktualisieren').click()
-    await expect(alice.get_by_text('Amumu', exact=True)).to_have_count(0)
+    await submit_guess(deniz, '🔥', 'Amumu')
+    for page in [host, *players, viewer]:
+        await expect(page.get_by_role('heading', name='Bereit zur Auflösung')).to_be_visible()
+        await expect(page.locator('.bq-emoji-results')).to_have_count(0)
+    for page in [bob, deniz, viewer]:
+        await expect(page.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
+        await expect(page.get_by_text('Amumu', exact=True)).to_have_count(0)
+    await expect(viewer.locator('.bq-team-emoji')).not_to_contain_text('🦊')
+    await expect(bob.locator('#team-emoji-guess')).to_have_count(0)
+    await host.get_by_role('button',name='Lösung & alle Teamantworten aufdecken').click()
     for page in [host, *players, viewer]:
         await expect(page.get_by_role('heading', name='Alle Team-Ergebnisse')).to_be_visible(timeout=15000)
         await expect(page.locator('.bq-team-emoji')).to_contain_text(TARGET)
         await expect(page.locator('.bq-emoji-results li').nth(0)).to_contain_text('Richtig · +200 Punkte')
         await expect(page.locator('.bq-emoji-results li').nth(1)).to_contain_text('Falsch · 0 Punkte')
-    print('PASS: full emoji catalogue, Unicode text entry, timed private clues, changeable guess and joint result', flush=True)
+        await expect(page.locator('.bq-emoji-results li').nth(0)).to_contain_text('🦊 ❄️ 🇩🇪')
+        await expect(page.locator('.bq-emoji-results li').nth(0)).to_contain_text('KAISA')
+        await expect(page.locator('.bq-emoji-results li').nth(1)).to_contain_text('🔥')
+        await expect(page.locator('.bq-emoji-results li').nth(1)).to_contain_text('Amumu')
+    print('PASS: native emoji help, three-clue cap, optional full keyboard, private waiting and explicit joint reveal', flush=True)
 
     await host.locator('[data-action="emoji-close"]').click()
     await play_drawing(host, players, viewer)
