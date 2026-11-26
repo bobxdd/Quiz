@@ -816,8 +816,41 @@ test('intermediate balance board ends on a wrong answer, leaves scores intact an
   assert.equal(host.data.public.scores.t1,600);
   const roundScore=host.data.scoreEvents.at(-1);
   await host.hostRegradeScore(room,roundScore.id);
-  assert.equal(host.data.public.scores.t2,-100+host.data.public.current.points);
+  assert.equal(host.data.public.scores.t2,-100+q.points);
   await host.hostRegradeScore(room,host.data.scoreEvents.at(-1).id);
   assert.equal(host.data.public.scores.t2,-100);
  }finally{guest1.shutdown();guest2.shutdown();host.shutdown();}
+});
+
+test('a resumed legacy balance question uses its base points in preview, scoring and history',async()=>{
+ const {host,guest1,guest2}=await setup(),resumed=new PeerGame();
+ try{
+  const q=host.hostQuiz.questions[0];
+  q.boardRound=3;
+  q.roundMode='buzzer';
+  host.data.public.board[q.id].boardRound=3;
+  await host.saveHostQuiz(room,host.hostQuiz);
+  await host.advanceBoard(room,0,{force:true});
+  await host.openQuestion(room,0,q,publicQuestion(q),null,0,{covered:true});
+  const oldPoints={points:q.points*2,basePoints:q.points,doublePoints:true};
+  Object.assign(host.data.public.current,oldPoints);
+  Object.assign(host.data.pendingQuestion.current,oldPoints);
+  await host.recordQuestion(room,1,{questionId:q.id,points:oldPoints.points});
+  await host._persist();
+  guest1.shutdown();guest2.shutdown();host.shutdown();
+
+  await resumed.resumeHost(room);
+  const p=resumed.data.public;
+  const team=selectingTeam(p);
+  const initial=p.scores[team];
+  assert.equal(p.current.points,q.points);
+  assert.equal(p.current.doublePoints,false);
+  assert.equal(resumed.questionPreview(room,1,q.id).points,q.points);
+  assert.equal(resumed.data.questionHistory['1'].points,q.points);
+  await resumed.uncoverQuestion(room,1,q.id,0);
+  assert.equal(resumed.data.public.current.points,q.points);
+  await resumed.judgeFirstAnswer(room,1,team,'correct',{phase:'reveal',deadline:0,current:publicQuestion(q,true)});
+  assert.equal(resumed.data.public.scores[team],initial+q.points);
+  assert.equal(resumed.data.scoreEvents.at(-1).points,q.points);
+ }finally{guest1.shutdown();guest2.shutdown();host.shutdown();resumed.shutdown();}
 });

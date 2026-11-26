@@ -485,6 +485,19 @@ export class PeerGame{
   this.savedAt=Number(previous.savedAt)||0;
   this.hostQuiz=await loadBestHostQuiz(room);
   const active=this.data.public;
+  // Older checkpoints can contain an unjudged balance question with locked-in double points.
+  if(Number(active.boardRound)===3&&active.current?.firstAnswerPending&&active.current.doublePoints===true){
+   const {id}=active.current;
+   const basePoints=Number(active.board?.[id]?.points);
+   if(Number.isFinite(basePoints)&&basePoints>=0){
+    const points={points:basePoints,basePoints,doublePoints:false};
+    Object.assign(active.current,points);
+    const pending=this.data.pendingQuestion;
+    if(pending?.id===id&&pending.round===active.round&&pending.current?.id===id)Object.assign(pending.current,points);
+    const history=this.data.questionHistory?.[String(active.round)];
+    if(history?.questionId===id)history.points=basePoints;
+   }
+  }
   if(!Array.isArray(active.participatingTeams)&&active.started){
    const originalOrder=active.preBalanceSelectionTurn?.order??(active.boardRound!==3?active.selectionTurn?.order:[]);
    active.participatingTeams=participatingTeamIds({...active,participatingTeams:originalOrder},this.data.roster);

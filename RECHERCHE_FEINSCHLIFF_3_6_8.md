@@ -1,4 +1,4 @@
-# BrainQuiz 3.6.8 – Recherche und Umsetzung
+# BrainQuiz 3.6.9 – Recherche und Umsetzung
 
 ## 1. Antworten und Emoji-Hinweise automatisch übernehmen
 
@@ -30,7 +30,7 @@ Das native `details`-Element bindet die Zustandsanzeige und Tastaturbedienung an
 
 Die bisherige Galerie bekam in der Desktopansicht eine kleine untere Rasterzeile. Dadurch wuchs die Frage in den freien Platz, während Antwortkarten und Bewertung übereinander zusammengedrängt wurden. Eine höhere Mindesthöhe alleine hätte bei kurzen Fenstern die Frage und die Steuerung verdrängt. Auf ausreichend breiten Fenstern nutzt BrainQuiz zwei nebeneinanderliegende Spalten. In der rechten Spalte haben Antworten und Wertung ihre eigene Fläche. Die Wertungskorrektur ist dort im normalen Layout eingebunden und erhält dort ihren eigenen Platz. Bei kleinen Fenstern ordnen sich die Bereiche untereinander an. Lange Inhalte bleiben scrollbar.
 
-Frage, Auflösung, private Notizen und Antwortkarten folgen weiterhin ihren Freigaberegeln. Die Kartenansicht behält ihre Koordinatenlogik und ihr Seitenverhältnis. Bei umfangreichen Bild- oder Textfragen behalten die Steuerung und der Punktestand ihren eigenen Platz.
+Frage, Auflösung, private Notizen und Antwortkarten folgen weiterhin ihren Freigaberegeln. Die Kartenansicht behält ihre Koordinatenlogik und ihr Seitenverhältnis. Der Kartenbereich wächst mit seinem Inhalt und bleibt beim Scrollen über die ganze Fläche anklickbar. Bei umfangreichen Bild- oder Textfragen behalten die Steuerung und der Punktestand ihren eigenen Platz.
 
 [CSS Grid](https://www.w3.org/TR/css-grid-2/#min-size-auto), [W3C WCAG Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html), [W3C WCAG Focus Not Obscured](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)
 
@@ -43,3 +43,11 @@ Die Abmessungen der Vorschau richten sich nach der tatsächlich verfügbaren Fl�
 Die Punktekorrektur ist im Punktestand verankert. Damit liegt der Button neben den Punkteständen und bleibt auch bei geöffneter Jokerleiste erreichbar.
 
 [W3C Grid-Reflow-Technik](https://www.w3.org/WAI/WCAG21/Techniques/css/C32), [MDN minmax](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/minmax), [MDN object-fit](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/object-fit)
+
+## 6. Ausgleichsboard ab Version 3.6.9
+
+Die bisherige Bonusregel sah nur auf die Zahl offener Felder. Ein Ausgleichsboard mit vier Feldern startete dadurch direkt mit doppelten Werten. Eine Änderung an der Anzeige allein hätte dieselben erhöhten Werte beim Öffnen und Bewerten erzeugt. Eine Sonderbehandlung erst in der Wertung hätte Feld, Vorschau und Ergebnis auseinanderlaufen lassen. Jetzt prüft die gemeinsame Bonusregel zuerst, ob eines der beiden Hauptboards aktiv ist. Damit nutzen Feld, Bonusbanner und Fragewert dieselbe Entscheidung.
+
+Eine richtige Antwort auf dem Ausgleichsboard bringt den hinterlegten Feldwert. Eine falsche Antwort bringt null Punkte. Die Tests prüfen den gesamten Ablauf mit Streichwahl und den Wechsel zu Hauptboard 2. Beim Wiederaufnehmen eines älteren Spielstands übernimmt eine noch unbewertete Ausgleichsfrage den Feldwert auch in der Vorschau und im Fragenverlauf. Bereits gebuchte Punkte behalten ihren historischen Wert.
+
+[Punkte- und Boardregeln](docs/question-flow.mjs), [Regressionstests für das Ausgleichsboard](tests/balance-board.test.mjs), [Host-Wiederaufnahme](docs/peer-client.mjs)

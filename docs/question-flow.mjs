@@ -37,14 +37,11 @@ export function resetBoardGameState(state,board,roster={}){
 export function remainingBoardQuestions(state,round=boardRound(state)){
  return Object.values(state?.board||{}).filter(cell=>cell?.id&&boardRound(cell)===round&&!cell.used&&!state.used?.[cell.id]);
 }
-/** Round two starts only after the first board is exhausted. A deliberate
- * host override is a separate action requiring an explicit force flag; stale
- * guest RPCs and the regular Next action cannot skip unanswered questions. */
-/** The user-defined last-six bonus is per current board (not per quiz).
- * Compute it on the UNPLAYED state before opening the next question:
- * the seventh-to-last question must still have normal points. */
+/** Each main board has its own bonus. Count open fields before marking the
+ * selected question as played so the seventh-to-last still has base points. */
 export const FINAL_DOUBLE_QUESTIONS=6;
 export function finalSixActive(state,round=boardRound(state)){
+ if(round===3)return false;
  const left=remainingBoardQuestions(state,round).length;
  return left>0&&left<=FINAL_DOUBLE_QUESTIONS;
 }
@@ -63,6 +60,7 @@ export function nextBoardRound(state){
  if(current===3)return present.has(2)?2:null;
  return null;
 }
+/** The host needs an explicit override to advance while regular fields remain open. */
 export function canAdvanceBoard(state,{force=false}={}){
  return state?.phase==='board'&&nextBoardRound(state)!==null&&
   !state.balanceStrike&&(force===true||remainingBoardQuestions(state).length===0||

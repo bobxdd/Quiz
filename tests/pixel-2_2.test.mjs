@@ -7,7 +7,7 @@ const html=readFileSync(new URL('index.html',root),'utf8');
 const css=readFileSync(new URL('pixel-theme.css',root),'utf8');
 const sw=readFileSync(new URL('sw.js',root),'utf8');
 const mascot=readFileSync(new URL('mascot-pixel.png',root));
-test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'3.6.8')});
+test('2.2: Originalquiz-Logik und Versionsstand bleiben kompatibel',()=>{assert.equal(VERSION,'3.6.9')});
 test('2.2: Optimiertes transparentes Maskottchen wird als dekoratives PNG eingebunden',()=>{
  assert.doesNotMatch(html,/bq-pixel-scene/);
  assert.match(html,/href="\.\/characters\.css"/);

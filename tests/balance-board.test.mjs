@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizedQuiz,buildPublicBoard,publicQuestion} from '../docs/core.mjs';
 import {roundQuestions,boardLayoutIssues} from '../docs/category-model.mjs';
-import {advanceBoardState,nextBoardRound,canAdvanceBoard,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn,strikeBalanceField,undoBalanceStrike,judgeBalanceAnswer,applyQuestionChanges} from '../docs/question-flow.mjs';
+import {advanceBoardState,nextBoardRound,canAdvanceBoard,openQuestionState,returnToBoardState,selectingTeam,skipSelectionTurn,strikeBalanceField,undoBalanceStrike,judgeBalanceAnswer,applyQuestionChanges,finalSixActive,boardQuestionPoints,remainingBoardQuestions} from '../docs/question-flow.mjs';
 import {canBuzz,applyBuzzerJudgement} from '../docs/round-rules.mjs';
 
 const source=[
@@ -48,6 +48,8 @@ test('balance-round selection starts with lowest score and breaks ties by stable
  const open=openQuestionState(third,{expectedRound:0,question:q,playerQuestion:publicQuestion(q),covered:true});
  assert.equal(open.current.firstAnswerTeam,'t2');
  assert.equal(open.current.firstAnswerPending,true);
+ assert.equal(open.current.points,q.points);
+ assert.equal(open.current.doublePoints,false);
  assert.equal(open.buzzerArmed,false);
  const cancelled=returnToBoardState(open);
  assert.equal(selectingTeam(cancelled),'t2','uncovered cancellation must preserve the selection turn');
@@ -103,20 +105,30 @@ test('the first-answer reservation blocks all buzzers even when the buzzer is fo
 test('exclusive wrong and right answers reveal and end the field, then the same team gets a reversible strike',()=>{
  const quiz=normalizedQuiz({...create(),questions:[...source,...source.slice(2).map(item=>({...item,id:item.id+'-extra'}))]});
  const initial={...publicState(),board:buildPublicBoard(quiz),participatingTeams:['t1','t2']};
+ assert.equal(finalSixActive(initial),true);
+ assert.equal(finalSixActive(initial,3),false);
  let state=advanceBoardState(initial,{force:true});
  assert.deepEqual(state.selectionTurn.order,['t2','t1']);
  for(const [id,team,result,target] of [['a','t2','wrong','b'],['c','t1','correct','a-extra']]){
+  assert.equal(finalSixActive(state),false);
+  for(const cell of remainingBoardQuestions(state))assert.equal(boardQuestionPoints(state,cell),cell.points);
   const q=quiz.questions.find(item=>item.id===id);
   state=openQuestionState(state,{expectedRound:state.round,question:q,playerQuestion:publicQuestion(q)});
+  assert.equal(state.current.points,q.points);
+  assert.equal(state.current.basePoints,q.points);
+  assert.equal(state.current.doublePoints,false);
   const round=state.round;
   const refreshed=applyQuestionChanges(state,round,id,{current:publicQuestion(q)});
   assert.equal(refreshed.current.firstAnswerTeam,team);
+  assert.equal(refreshed.current.points,q.points);
   const revealPatch={current:publicQuestion(q,true),phase:'reveal',deadline:0};
   assert.equal(judgeBalanceAnswer(refreshed,{round,team:'t3',result,revealPatch}),null);
   const judgement=judgeBalanceAnswer(refreshed,{round,team,result,revealPatch});
-  assert.equal(judgement.delta,result==='wrong'?0:state.current.points);
+  assert.equal(judgement.delta,result==='wrong'?0:q.points);
+  assert.equal(judgement.state.scores[team],state.scores[team]+(result==='wrong'?0:q.points));
   assert.equal(judgement.state.phase,'reveal');
   assert.equal(judgement.state.current.firstAnswerResult,result);
+  assert.equal(judgement.state.current.points,q.points);
   assert.equal(judgement.state.current.answer,id);
   assert.equal(judgeBalanceAnswer(judgement.state,{round,team,result,revealPatch}),null);
   state=returnToBoardState(judgement.state);
@@ -133,5 +145,8 @@ test('exclusive wrong and right answers reveal and end the field, then the same 
   state=strikeBalanceField(state,target);
  }
  assert.equal(selectingTeam(state),'','no second turn on the balance board');
- assert.equal(advanceBoardState(state).boardRound,2);
+ const second=advanceBoardState(state);
+ assert.equal(second.boardRound,2);
+ assert.equal(finalSixActive(second),true);
+ assert.equal(boardQuestionPoints(second,second.board.two),200);
 });

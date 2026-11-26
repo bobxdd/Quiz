@@ -259,6 +259,9 @@ async def balance_board(ctx,origin):
  blue=await join(ctx,host,room,'Blau QA','t2',origin)
  await host.locator('[data-action="start-game"]').click()
 
+ await expect(host.locator('.bq-final-six-banner')).to_be_visible()
+ await expect(host.locator('[data-qid="start"] .tile-points')).to_have_text('200')
+
  async def uncover(id):
   await host.locator(f'[data-action="open"][data-qid="{id}"]').click()
   await host.locator('[data-action="uncover-question"]').click()
@@ -269,6 +272,10 @@ async def balance_board(ctx,origin):
  await host.locator('[data-action="buzz-correct"]').click()
  await host.locator('[data-action="back"]').click()
  await expect(blue.locator('.bq-selection-turn')).to_contain_text('Blau')
+ for page in (host,red,blue):
+  await expect(page.locator('.bq-balance-scene')).to_be_visible()
+  await expect(page.locator('.bq-final-six-banner,.bq-double-points')).to_have_count(0)
+  await expect(page.locator('.tile-points')).to_have_text(['100','200','300','400'])
  for id,team,verdict,strike in [('a','t2','wrong','b'),('c','t1','correct','d')]:
   await uncover(id)
   await expect(host.locator('.bq-first-answer')).to_contain_text('Blau' if team=='t2' else 'Rot')
@@ -276,7 +283,8 @@ async def balance_board(ctx,origin):
    await expect(guest.locator('.bq-quiz-verdict')).to_contain_text('antwortet')
    await expect(guest.locator('[data-action="buzz"]')).to_have_count(0)
   before=await host.evaluate('team=>window.__probe.info().publicState.scores[team]',team)
-  points=await host.evaluate('()=>window.__probe.info().publicState.current.points')
+  points={'a':100,'c':300}[id]
+  assert await host.evaluate('()=>window.__probe.info().publicState.current.points')==points
   await host.locator(f'[data-action="first-{verdict}"]').click()
   await expect(blue.locator('.bq-answer-view')).to_contain_text('Lösung '+id)
   assert await host.evaluate('team=>window.__probe.info().publicState.scores[team]',team)==before+(points if verdict=='correct' else 0)
@@ -293,7 +301,9 @@ async def balance_board(ctx,origin):
   await field.click()
  await host.locator('[data-action="next-board"]').click()
  await expect(blue.locator('.bq-board-scene .bq-eyebrow')).to_contain_text('RUNDE 2')
- print('PASS: Board 1, balance board exclusive answers, zero or full points, reversible strikes, then Board 2',flush=True)
+ await expect(blue.locator('.bq-final-six-banner')).to_be_visible()
+ await expect(blue.locator('.tile-points')).to_have_text(['200'])
+ print('PASS: only the two main boards double points; balance board awards zero or base points with reversible strikes',flush=True)
 
 async def main():
  server=fixture.http.ThreadingHTTPServer(('127.0.0.1',0),fixture.http.Handler)

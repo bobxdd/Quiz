@@ -58,7 +58,7 @@ for(const n of [24,25,36,48]){
  });
 }
 
-test('Every board has its OWN six-question bonus phase; no quiz-global counter',()=>{
+test('Each main board has its own six-question bonus phase',()=>{
  const state=makeBoards(36,25);use(state,1,30);
  assert.equal(finalSixActive(state),true);
  assert.equal(remainingBoardQuestions(state,1).length,6);
@@ -75,7 +75,7 @@ test('Every board has its OWN six-question bonus phase; no quiz-global counter',
  assert.equal(boardQuestionPoints(afterSecond,lastSixOnSecond),lastSixOnSecond.points*2);
 });
 
-test('Boards up to six fields start in their double-points phase',()=>{
+test('Main boards up to six fields start in their double-points phase',()=>{
  const six=makeBoards(6);
  assert.equal(finalSixActive(six),true);
  assert.equal(boardQuestionPoints(six,remainingBoardQuestions(six)[0]),200);
