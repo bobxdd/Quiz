@@ -1,7 +1,7 @@
 import {changeSelectedQuestions,reuseQuestion,quizAudit} from './editor-workflows.mjs';
 import {JOKER_TYPES,JOKER_META,normalizeJokerConfig,jokerSetupSummary,jokerIconMarkup} from './joker-system.mjs';
 import {renderAnswerView,hasRequiredAnswer,answerViewContent} from './answer-view.mjs';
-import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,MAX_EMOJI_PALETTE,normalizeTeamEmoji,normalizeTeamDraw} from './team-emoji.mjs';
+import {TEAM_EMOJI,TEAM_DRAW,isTeamChallenge,EMOJI_TIMER_MIN,EMOJI_TIMER_MAX,normalizeTeamEmoji,normalizeTeamDraw} from './team-emoji.mjs';
 import {normalizePoint,DEFAULT_MAP_VIEW} from './map-tools.mjs';
 import {hasDraggedFiles,imageFilesFromDrop,imageDropPoint} from './image-drop.mjs';
 import {mountMapViewport} from './map-viewport.mjs';
@@ -128,8 +128,7 @@ export function createStudioEditor(api){
     <p class="se-muted">${drawing?'Den Champion sieht während der Zeichenphase die zeichnende Person im Team. Im Antwort-Tab kannst du ein Vorlagenbild ergänzen.':'Der Champion gehört zu dieser Frage. Während der Emoji-Phase sieht ihn im Team die erklärende Person.'}</p>
     <div class="se-two">${drawing?input('drawSeconds','Zeit fürs Zeichnen (Sekunden)',settings.drawSeconds,timing):input('emojiClueSeconds','Zeit fürs Emojilegen (Sekunden)',settings.clueSeconds,timing)}
      ${input('emojiGuessSeconds','Zeit fürs Raten (Sekunden)',settings.guessSeconds,timing)}</div>
-    ${drawing?'':`${input('emojiPalette','Emoji-Schnellauswahl',settings.palette,{rows:3})}
-    <p class="se-muted">Bis zu ${MAX_EMOJI_PALETTE} Emojis für die Schnellauswahl hinterlegen. Im Spiel lässt sich zusätzlich die vollständige Emoji-Tastatur öffnen.</p>`}
+    ${drawing?'':'<p class="se-muted">Maximal 3 Emojis je Team. Freie Eingabe über die Geräte-Tastatur (Windows + .). Nach allen Antworten oder Zeitablauf deckt der Host gemeinsam auf.</p>'}
     <div class="se-two">${input('title','Interner Fragetitel',item.title)}${input('points','Punkte bei richtigem Rateversuch',item.points,{kind:'number',min:0,max:10000})}</div>
     ${input('category','Kategorie',item.category,{options:categories().map(name=>[name,name])})}${input('boardRound','Spielbrett',boardRoundOf(item),{options:[[1,'Runde 1'],...(quiz().balanceBoard?[[3,'Ausgleichs-Board']]:[]),[2,'Runde 2']]})}${mainTemplate(item.scene)}
    </div></section>`;
@@ -424,7 +423,7 @@ export function createStudioEditor(api){
    delete item.manualOrder;item.boardRound=destination;editorRound=destination;setCategories(collectCategories(cats,[item]));
    deferDraft();return;
   }
-  const key={emojiPalette:'palette',emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds',drawSeconds:'drawSeconds'}[field];
+  const key={emojiClueSeconds:'clueSeconds',emojiGuessSeconds:'guessSeconds',drawSeconds:'drawSeconds'}[field];
   if(key){
    if(item.type===TEAM_DRAW)item.teamDraw={...normalizeTeamDraw(item.teamDraw),[key]:value};
    else item.teamEmoji={...normalizeTeamEmoji(item.teamEmoji),[key]:value};
