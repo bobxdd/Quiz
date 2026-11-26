@@ -48,16 +48,17 @@ async def main():
   await expect(guest.locator('#clock')).to_be_visible()
   atlas=guest.locator('.bq-map-viewport[data-map-choice="true"]')
   await expect(atlas).to_be_visible(timeout=12000)
-  rect=await atlas.bounding_box()
-  assert rect
-  await guest.mouse.click(rect['x']+rect['width']*.5,rect['y']+rect['height']*.5)
+  rect=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+  assert rect['width']>0 and rect['height']>0,rect
+  await atlas.click(position={'x':rect['width']*.5,'y':rect['height']*.5},timeout=12000)
   await expect(guest.locator('.bq-map-pin.is-self')).to_have_count(1,timeout=12000)
   await expect(guest.locator('.bq-map-result')).to_contain_text('Pin gespeichert')
   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{}).some(v=>!!v.text)",timeout=12000)
   await expect(host.locator('.bq-map-pin-log')).to_contain_text('1 Pin eingegangen')
   first=await host.evaluate("Object.values(window.__probe.getGame().data.responses['1'])[0]")
   assert await host.evaluate("window.__probe.info().publicState.phase")=='question'
-  await guest.mouse.click(rect['x']+rect['width']*.65,rect['y']+rect['height']*.45)
+  rect=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+  await atlas.click(position={'x':rect['width']*.65,'y':rect['height']*.45},timeout=12000)
   await host.wait_for_function("first => Object.values(window.__probe.getGame().data.responses['1'])[0].text!==first",arg=first['text'])
   updated=await host.evaluate("Object.values(window.__probe.getGame().data.responses['1'])[0]")
   assert updated['at']==first['at'] and updated['updatedAt']>=first['updatedAt']

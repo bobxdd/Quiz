@@ -94,8 +94,10 @@ async def main():
    print('PASS host map layout',width,height,flush=True)
   await guest.set_viewport_size({'width':1366,'height':850})
   await host.set_viewport_size({'width':1366,'height':850})
-  rect=await guest.locator('.bq-map-viewport').bounding_box()
-  assert rect and rect['width']>=900 and rect['height']>=300,rect
+  atlas=guest.locator('.bq-map-viewport[data-map-bound="yes"]')
+  await guest.wait_for_function("()=>{const a=document.querySelector('.bq-map-viewport[data-map-bound=yes]');return a?.clientWidth>=900&&a?.clientHeight>=300}",timeout=12000)
+  rect=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+  assert rect['width']>=900 and rect['height']>=300,rect
   before=await guest.evaluate("""() => ({role:window.__probe.info().role,member:window.__probe.info().member,
     phase:window.__probe.info().publicState?.phase,round:window.__probe.info().publicState?.round,
     participants:window.__probe.info().publicState?.answerParticipants,
@@ -106,7 +108,7 @@ async def main():
        document.querySelector('.bq-map-viewport').getBoundingClientRect().top+rect.height*.42).slice(0,5).map(el=>el.className)
   })""".replace("rect.width",str(rect['width'])).replace("rect.height",str(rect['height'])))
   print('MAP DIAG before click',before,flush=True)
-  await guest.mouse.click(rect['x']+rect['width']*.71,rect['y']+rect['height']*.42)
+  await atlas.click(position={'x':rect['width']*.71,'y':rect['height']*.42},timeout=12000)
   await guest.wait_for_timeout(300)
   after=await guest.evaluate("""() => ({pinned:!!document.querySelector('.bq-map-pin.is-self'),message:document.querySelector('.bq-map-result')?.innerText,
     bound:document.querySelector('.bq-map-viewport')?.dataset.mapBound,clickable:document.querySelector('.bq-map-viewport')?.dataset.mapChoice})""")
@@ -117,8 +119,8 @@ async def main():
   assert (await guest.evaluate('window.__probe.info().publicState.phase'))=='question'
   await expect(guest.locator('.bq-map-pin.is-solution')).to_have_count(0)
   # Repositioning is allowed even after first submission while the round stays open.
-  rect=await guest.locator('.bq-map-viewport').bounding_box()
-  await guest.mouse.click(rect['x']+rect['width']*.39,rect['y']+rect['height']*.55)
+  rect=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+  await atlas.click(position={'x':rect['width']*.39,'y':rect['height']*.55},timeout=12000)
   await host.wait_for_function("""() => Object.values(window.__probe.getGame().data.responses['1']||{}).some(rec=>{
    const x=Number(rec.text.split(':')[1]?.split(',')[0]); return Math.abs(x-39)<1;
   })""",timeout=10000)

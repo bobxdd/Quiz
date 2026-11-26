@@ -22,9 +22,11 @@ async def join_guest(ctx,host,code,name,team='t1'):
  return guest
 
 async def place_pin(page,x,y):
- await page.locator('.bq-map-viewport').wait_for(timeout=12000)
- rect=await page.locator('.bq-map-viewport').bounding_box()
- await page.mouse.click(rect['x']+rect['width']*x,rect['y']+rect['height']*y)
+ atlas=page.locator('.bq-map-viewport[data-map-bound="yes"]')
+ await expect(atlas).to_be_visible(timeout=12000)
+ rect=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+ assert rect['width']>0 and rect['height']>0,rect
+ await atlas.click(position={'x':rect['width']*x,'y':rect['height']*y},timeout=12000)
  await expect(page.locator('.bq-map-pin.is-self')).to_have_count(1,timeout=12000)
  await expect(page.locator('.bq-map-result')).to_contain_text('Pin gespeichert',timeout=12000)
 

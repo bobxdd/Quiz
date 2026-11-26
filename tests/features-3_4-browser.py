@@ -70,10 +70,11 @@ async def main():
      const image=element?.querySelector('.bq-map-layer img');
      return element?.dataset.mapBound==='yes'&&bounds?.width>180&&bounds?.height>100&&image?.complete&&image.naturalWidth>0;
    }""",timeout=12000)
-   box=await p.locator('.bq-map-viewport').bounding_box()
-   # Fixed 190px/135px clicks could miss the active map on smaller
-   # dynamically reflowed viewports. Click near the middle of the map.
-   await p.locator('.bq-map-viewport').click(position={'x':box['width']*.42,'y':box['height']*.47})
+   atlas=p.locator('.bq-map-viewport[data-map-bound="yes"]')
+   box=await atlas.evaluate('(el)=>({width:el.clientWidth,height:el.clientHeight})',timeout=12000)
+   assert box['width']>180 and box['height']>100,box
+   # Locator actionability follows the current DOM node after a peer snapshot.
+   await atlas.click(position={'x':box['width']*.42,'y':box['height']*.47},timeout=12000)
    await p.locator('.bq-map-pin.is-self').wait_for(timeout=10000)
    await p.locator('.bq-map-result').filter(has_text='Pin gespeichert').wait_for(timeout=12000)
   await host.locator('[data-action="start-review"]').first.click()
