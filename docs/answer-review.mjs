@@ -10,8 +10,8 @@ export function answerProgress(expected,responses){
  const count=ids.filter(id=>typeof responses?.[id]?.text==='string'&&responses[id].text.trim().length>0).length;
  return {total:ids.length,submitted:count,complete:ids.length>0&&count===ids.length};
 }
-/** Timed submissions stay editable until the deadline. Without a timer,
- * written answers open review when complete and map pins close by host action. */
+/** Timed answers stay editable until the deadline. In untimed rounds,
+ * only explicit submissions can trigger automatic review. */
 export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
  if(state?.phase!=='question'||state.current?.roundMode!=='written')return false;
  const expected=state.answerParticipants||{};
@@ -19,7 +19,8 @@ export function shouldAutoBeginAnswerReview(state,responses,time=Date.now()){
  if(!progress.total)return false;
  const deadline=Number(state.deadline)||0;
  const expired=deadline>0&&time>=deadline;
- return deadline>0?expired:state.current?.type!=='map'&&progress.complete;
+ return deadline>0?expired:state.current?.type!=='map'&&progress.complete&&
+  Object.keys(expected).filter(allowedId).every(id=>responses?.[id]?.draft!==true);
 }
 export function makeAnswerReview(expected,responses,round){
  const entries={};

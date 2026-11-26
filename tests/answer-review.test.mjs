@@ -103,6 +103,10 @@ test('Timed written questions always open review at deadline with absent or disc
  assert.equal(shouldAutoBeginAnswerReview(state,{},2001),true,'zero answers still concludes a timed round');
  assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},first,999999),false,'untimed still awaits players or host');
  assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},responses(3),100),true,'complete untimed written set opens immediately');
+ const drafts=responses(3);
+ drafts.user_1.draft=true;
+ assert.equal(shouldAutoBeginAnswerReview({...state,deadline:0},drafts,100),false,'a typed draft cannot end an untimed round');
+ assert.equal(shouldAutoBeginAnswerReview(state,drafts,2000),true,'drafts count at the deadline');
  assert.equal(shouldAutoBeginAnswerReview({...state,phase:'paused'},first,4000),false,'a paused clock does not auto-end');
  assert.equal(shouldAutoBeginAnswerReview({...state,phase:'review'},first,4000),false,'no duplicate review');
  assert.equal(shouldAutoBeginAnswerReview({...state,answerParticipants:{}},first,4000),false,'no fake review for no players');

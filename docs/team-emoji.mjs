@@ -138,7 +138,7 @@ export function newTeamEmojiRound(question, state, roster, id) {
  };
 }
 
-export function playTeamEmoji(round, teamId, uid, action, value, now) {
+export function playTeamEmoji(round, teamId, uid, action, value, now, {draft=false}={}) {
  const team = Object.hasOwn(round.teams, teamId) ? round.teams[teamId] : null;
  if(!team?.players.includes(uid) || team.players.length < 2) throw Error('Dein Team braucht mindestens zwei Spieler.');
  if(round.deadline && now >= round.deadline) throw Error('Die Zeit für diese Phase ist abgelaufen.');
@@ -151,7 +151,7 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
    if(!validateDrawing(value)) throw Error('Die Zeichnung enthält ungültige Striche oder ist zu groß.');
    team.drawing = value.map(stroke => stroke.slice());
   }else{
-   if(!Array.isArray(value) || value.length < 1 || value.length > MAX_EMOJI_CLUES ||
+   if(!Array.isArray(value) || (!draft && !value.length) || value.length > MAX_EMOJI_CLUES ||
       Array.from(value).some(symbol => !isEmojiSymbol(symbol) || emojiSegments(symbol).length !== 1)) {
     throw Error('Wähle maximal drei einzelne Emojis.');
    }
@@ -159,9 +159,9 @@ export function playTeamEmoji(round, teamId, uid, action, value, now) {
   }
  }else if(action === 'guess' && round.phase === 'guess' && team.active && team.roles[uid] === 'guess' && hasClue(round, team)) {
   const guess = typeof value === 'string' ? value.trim() : '';
-  if(guess.length > 100 || !normalizeGuess(guess)) throw Error('Gib einen Champion oder Begriff mit maximal 100 Zeichen ein.');
+  if(guess.length > 100 || (!draft && !normalizeGuess(guess))) throw Error('Gib einen Champion oder Begriff mit maximal 100 Zeichen ein.');
   team.guess = guess;
-  if(allTeamsGuessed(round))waitForTeamReveal(round);
+  if(!draft && allTeamsGuessed(round))waitForTeamReveal(round);
  }else {
   throw Error('Diese Aktion ist in deiner Rolle oder Phase nicht verfügbar.');
  }
@@ -172,6 +172,9 @@ function allTeamsGuessed(round){
  return Object.values(round.teams).filter(team=>team.active&&hasClue(round,team)).every(team=>!!team.guess);
 }
 function waitForTeamReveal(round){round.phase='awaiting-reveal';round.deadline=0;}
+export function canRevealTeamEmoji(round){
+ return round.phase==='awaiting-reveal'||round.phase==='guess'&&allTeamsGuessed(round);
+}
 export function advanceTeamEmoji(round, now) {
  if(round.phase === 'roles') {
   if(!Object.values(round.teams).some(ready)) throw Error('Mindestens ein Team braucht einen Hinweisgeber und eine ratende Person.');
@@ -188,7 +191,7 @@ export function advanceTeamEmoji(round, now) {
  return true;
 }
 export function finishTeamEmoji(round){
- if(round.phase!=='awaiting-reveal')return false;
+ if(!canRevealTeamEmoji(round))return false;
  round.phase='reveal';
  round.deadline=0;
  round.results=Object.entries(round.teams).map(([id,team])=>{
@@ -204,7 +207,8 @@ export function publicTeamEmoji(round) {
  const teams = Object.entries(round.teams).map(([id, team]) => ({
   id, players:team.players.length, ready:ready(team), clued:hasClue(round,team), guessed:!!team.guess
  }));
- return {id:round.id, type:round.type||TEAM_EMOJI, phase:round.phase, teams, ...(round.phase === 'reveal' ? {solution:round.target, results:round.results} : {})};
+ return {id:round.id, type:round.type||TEAM_EMOJI, phase:round.phase, teams, canReveal:canRevealTeamEmoji(round),
+  ...(round.phase === 'reveal' ? {solution:round.target, results:round.results} : {})};
 }
 
 export function teamEmojiForPlayer(round, teamId, uid) {

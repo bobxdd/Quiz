@@ -147,8 +147,7 @@ async def save_clue(player, symbols):
         await expect(entry).to_have_value('🦊 ❄️ 🇩🇪')
     else:
         await entry.fill(symbols)
-    await player.get_by_role('button', name='Hinweis speichern').click()
-    await expect(player.get_by_text('Hinweis gespeichert.', exact=True)).to_be_visible()
+    await expect(player.locator('[data-emoji-status]')).to_contain_text('Hinweis gespeichert.')
 
 
 async def submit_guess(player, hint, guess):
@@ -156,7 +155,7 @@ async def submit_guess(player, hint, guess):
     await expect(player.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
     await expect(player.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=1)
     await player.get_by_label('Eure Antwort').fill(guess)
-    await player.get_by_role('button', name='Antwort fürs Team abgeben').click()
+    await expect(player.locator('.bq-answer-saved')).to_have_text('Teamantwort gespeichert.')
 
 
 async def draw_line(player, touch=False, reverse=False):
@@ -248,12 +247,12 @@ async def play_drawing(host, players, viewer):
         await expect(drawing).to_be_in_viewport(ratio=.98)
         assert (await drawing.bounding_box())['height'] >= 95
         await expect(guest.get_by_label('Eure Antwort')).to_be_in_viewport(ratio=.98)
-        await expect(guest.get_by_role('button', name='Antwort fürs Team abgeben')).to_be_in_viewport(ratio=.98)
+        await expect(guest.locator('.bq-answer-saved')).to_be_in_viewport(ratio=.98)
         await expect(guest.locator('.bq-team-emoji')).not_to_contain_text('Jinx')
     await expect(alice.locator('.bq-drawing-guess path')).to_have_attribute('stroke-width', '15')
     await expect(viewer.locator('.bq-drawing-art')).to_have_count(0)
     await alice.get_by_label('Eure Antwort').fill('Jinx')
-    await alice.get_by_role('button', name='Antwort fürs Team abgeben').click()
+    await expect(alice.locator('.bq-answer-saved')).to_have_text('Teamantwort gespeichert.')
     for page in [host, *players, viewer]:
         await expect(page.get_by_role('heading', name='Bereit zur Auflösung')).to_be_visible(timeout=12000)
         await expect(page.locator('.bq-emoji-results')).to_have_count(0)
@@ -266,7 +265,9 @@ async def play_drawing(host, players, viewer):
     await expect(host.locator('.bq-emoji-results li').nth(0)).to_contain_text('Richtig')
     await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Keine Antwort')
     await host.locator('[data-action="emoji-score-correct"][data-team="t2"]').click()
-    await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Richtig')
+    await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Richtig · +')
+    await expect(host.locator('.bq-emoji-results li').nth(1)).to_contain_text('Bestätigt')
+    await expect(host.locator('[data-action="emoji-score-correct"][data-team="t2"]')).to_have_attribute('aria-pressed','true')
     for participant in players:
         await expect(participant.locator('.bq-emoji-results .bq-drawing-art')).to_have_count(2)
         await expect(participant.locator('.bq-emoji-results li').nth(0)).to_contain_text('Jinx')
@@ -387,16 +388,15 @@ async def run(browser, root):
 
     await submit_guess(bob, '🦊 ❄️ 🇩🇪', 'Jinx')
     await bob.get_by_label('Eure Antwort').fill('KAISA')
-    await bob.get_by_role('button',name='Teamantwort aktualisieren').click()
+    await expect(bob.locator('.bq-answer-saved')).to_have_text('Teamantwort gespeichert.')
     await submit_guess(deniz, '🔥', 'Amumu')
     for page in [host, *players, viewer]:
-        await expect(page.get_by_role('heading', name='Bereit zur Auflösung')).to_be_visible()
         await expect(page.locator('.bq-emoji-results')).to_have_count(0)
     for page in [bob, deniz, viewer]:
         await expect(page.locator('.bq-team-emoji')).not_to_contain_text(TARGET)
         await expect(page.get_by_text('Amumu', exact=True)).to_have_count(0)
     await expect(viewer.locator('.bq-team-emoji')).not_to_contain_text('🦊')
-    await expect(bob.locator('#team-emoji-guess')).to_have_count(0)
+    await expect(bob.locator('#team-emoji-guess')).to_have_value('KAISA')
     await host.get_by_role('button',name='Lösung & alle Teamantworten aufdecken').click()
     for page in [host, *players, viewer]:
         await expect(page.get_by_role('heading', name='Alle Team-Ergebnisse')).to_be_visible(timeout=15000)

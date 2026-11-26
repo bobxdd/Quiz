@@ -121,7 +121,8 @@ async def main():
   assert await guest.locator('.bq-score-footer').count()==1, 'Footer stays visible in question scene'
 
   await guest.locator('#answer-text').fill('Sivir')
-  await guest.locator('[data-action="submit-answer"]').click()
+  await guest.get_by_text('Antwort gespeichert.',exact=True).wait_for()
+  await host.locator('[data-action="start-review"]').click()
   await guest.locator('.review-card.is-hidden').first.wait_for(timeout=12000)
   assert 'Sivir' not in await guest.locator('.review-grid').inner_text(), 'Hidden answer leaked'
   await host.locator('.review-card.is-hidden').first.wait_for(timeout=12000)

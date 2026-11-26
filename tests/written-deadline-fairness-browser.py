@@ -52,7 +52,7 @@ async def main():
    await expect(anna.locator('#answer-text')).to_be_visible(timeout=12000)
    await expect(ben.locator('#answer-text')).to_be_visible(timeout=12000)
    field=anna.locator('#answer-text')
-   save=anna.locator('#answer-form [data-action="submit-answer"]')
+   save=anna.locator('#answer-form [role="status"]')
    prompt=anna.locator('.bq-answer-question h2')
    for width,height in [(320,568),(390,844),(812,375),(1280,850)]:
     await anna.set_viewport_size({'width':width,'height':height})
@@ -84,7 +84,7 @@ async def main():
    await anna.wait_for_function("""() => {
     if (!document.body.classList.contains('bq-answer-keyboard')) return false;
     const {offsetTop, height, width}=visualViewport;
-    return ['#answer-text','#answer-form [data-action="submit-answer"]','.bq-answer-question'].every(selector => {
+    return ['#answer-text','#answer-form [role="status"]','.bq-answer-question'].every(selector => {
      const rect=document.querySelector(selector)?.getBoundingClientRect();
      return rect && rect.width>0 && rect.height>0 &&
        rect.top>=offsetTop && rect.bottom<=offsetTop+height && rect.left>=0 && rect.right<=width;
@@ -95,9 +95,13 @@ async def main():
     delete visualViewport.offsetTop;
     visualViewport.dispatchEvent(new Event('resize'));
    }""")
-   await anna.locator('#answer-text').fill('Jinx')
-   await anna.locator('#answer-form [data-action="submit-answer"]').click()
-   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{}).length===1",timeout=8000)
+   await field.fill('J')
+   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{})[0]?.text==='J'",timeout=8000)
+   await field.fill('')
+   await host.wait_for_function("() => Object.keys(window.__probe.getGame().data.responses?.['1']||{}).length===0")
+   await field.fill('Ji')
+   await field.fill('Jinx')
+   await host.wait_for_function("() => Object.values(window.__probe.getGame().data.responses?.['1']||{})[0]?.text==='Jinx'",timeout=8000)
    await expect(host.locator('.review-card')).to_have_count(0)
    # Start a short authoritative deadline AFTER Anna's submission. Ben
    # remains connected but never submits, reproducing dropout/idle players.

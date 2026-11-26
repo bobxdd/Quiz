@@ -124,14 +124,21 @@ async def exercise(origin):
   for page in (host,alice,bob):
    await expect(page.locator('.bq-joker-panel')).to_have_count(1,timeout=15000)
    await expect(page.locator('.bq-joker-token')).to_have_count(8)
-   if not await page.locator('.bq-joker-panel').evaluate('(el)=>el.open'):
-    await page.locator('.bq-joker-panel summary').click()
+   assert not await page.locator('.bq-joker-panel').evaluate('(el)=>el.open')
+   if page!=host:
+    await expect(page.locator('.bq-own-jokers .bq-joker-token:visible')).to_have_count(4)
+    await expect(page.locator('.bq-joker-panel .bq-joker-token:visible')).to_have_count(0)
   assert await host.evaluate("Object.keys(window.__probe.getGame().data.jokerDrops).length")==4
   assert not await host.evaluate("'schriftlich' in window.__probe.getGame().data.jokerDrops")
 
   # Hidden drop stays secret while the host has selected but not revealed a question.
   await host.locator('[data-action="open"][data-qid="a"]').click()
   await expect(host.locator('.bq-question-covered')).to_be_visible()
+  for width,height in [(1920,1080),(1366,768),(1024,600)]:
+   await host.set_viewport_size({'width':width,'height':height})
+   for selector in ('#ready-time','[data-action="back"]','[data-action="uncover-question"]','.bq-private-preview','.bq-joker-panel summary'):
+    await expect(host.locator(selector)).to_be_in_viewport(ratio=.97)
+  await host.set_viewport_size({'width':1366,'height':850})
   assert await alice.locator('.bq-joker-event').count()==0
   await alice.locator('[data-action="joker-use"][data-type="reroll"]').click()
   await expect(host.locator('.bq-reroll-request')).to_be_visible(timeout=15000)
@@ -202,21 +209,28 @@ async def exercise(origin):
    await expect(player.locator('#answer-text')).to_be_visible()
    await expect(player.locator('.bq-chrono-quick-wrap')).to_have_count(0)
   panel=alice.locator('.bq-joker-panel')
-  save=alice.locator('[data-action="submit-answer"]')
+  field=alice.locator('#answer-text')
   for width,height in [(320,568),(390,844),(768,1024),(1366,850),(1920,1080)]:
    await alice.set_viewport_size({'width':width,'height':height})
    for opened in (False,True):
     if await panel.evaluate('(el)=>el.open')!=opened:
      await panel.locator('summary').click()
-    await save.click(trial=True,timeout=5000)
-   await alice.locator('#answer-text').fill(f'Test {width}')
-   await save.click()
-   await expect(alice.locator('.bq-answer-saved')).to_contain_text(f'Test {width}')
+    await field.click(trial=True,timeout=5000)
+   await field.fill(f'Test {width}')
+   await expect(alice.locator('.bq-answer-saved')).to_have_text('Antwort gespeichert.')
   await bob.locator('#answer-text').fill('Blau meldet ab')
-  await bob.locator('[data-action="submit-answer"]').click()
+  await expect(bob.locator('.bq-answer-saved')).to_have_text('Antwort gespeichert.')
   await ally.locator('#answer-text').fill('Teammate meldet ab')
-  await ally.locator('[data-action="submit-answer"]').click()
+  await expect(ally.locator('.bq-answer-saved')).to_have_text('Antwort gespeichert.')
+  await expect(host.locator('.review-card')).to_have_count(0)
+  await host.locator('[data-action="start-review"]').click()
   await expect(host.locator('.review-card')).to_have_count(3)
+  layout=await host.locator('.bq-answer-review-body').evaluate("""el=>{
+   const [question,answers]=el.children;
+   const q=question.getBoundingClientRect(),a=answers.getBoundingClientRect();
+   return {side:a.left>=q.right,aligned:Math.abs(a.top-q.top)<2,answerHeight:a.height};
+  }""")
+  assert layout['side'] and layout['aligned'] and layout['answerHeight']>240,layout
   print('PASS: writing stays clickable with open and closed Joker inventory at five viewport sizes',flush=True)
   await balance_board(ctx,origin)
   assert not errors,errors

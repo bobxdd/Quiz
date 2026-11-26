@@ -882,7 +882,12 @@ export class PeerGame{
    case TEAM_EMOJI:{
     const emoji=this.data.teamEmoji;
     if(!emoji||emoji.id!==payload.id||pub.phase!=='question')throw Error('Diese Teamrunde ist nicht mehr offen.');
-    playTeamEmoji(emoji,member.team,ctx.uid,payload.kind,payload.value,now);
+    const edit=Number.isSafeInteger(payload.edit)&&payload.edit>0?payload.edit:0;
+    const versions=emoji.draftVersions??={};
+    const key=ctx.uid+':'+payload.kind;
+    if(edit&&versions[key]>=edit)return false;
+    playTeamEmoji(emoji,member.team,ctx.uid,payload.kind,payload.value,now,{draft:!!edit});
+    if(edit)versions[key]=edit;
     this._syncTeamEmoji();
     if(emoji.phase==='awaiting-reveal')this._scheduleTeamEmojiDeadline();
     return true;
@@ -901,15 +906,26 @@ export class PeerGame{
    case 'answer':{
     if(pub?.phase!=='question'||String(payload.round)!==round||(pub.deadline&&now>=pub.deadline))throw Error('Frage ist nicht offen.');
     const map=pub.current?.type==='map';
+    const order=pub.current?.type==='order';
     if(roundMode(pub.current)!=='written')throw Error('Diese Frage wird mündlich beantwortet.');
     if(!pub.answerParticipants?.[ctx.uid])throw Error('Du bist für diese Runde noch nicht freigegeben.');
     const text=safeText(payload.text,800);
-    if(!text)throw Error('Antwort darf nicht leer sein.');
+    const edit=!map&&!order&&Number.isSafeInteger(payload.edit)&&payload.edit>0?payload.edit:0;
+    if(!text&&!edit)throw Error('Antwort darf nicht leer sein.');
+    if(edit&&text&&pub.current.type==='estimate'&&!Number.isFinite(Number(text)))throw Error('Ungültiger Zahlenwert.');
     if(map&&!decodePoint(text))throw Error('Kartenpunkt liegt außerhalb der Weltkarte.');
-    if(pub.current.type==='order'&&(!orderReady(pub.current)||!orderResponseIndices(text,pub.current.displayItems.length)))throw Error('Ordne alle Einträge genau einmal an.');
+    if(order&&(!orderReady(pub.current)||!orderResponseIndices(text,pub.current.displayItems.length)))throw Error('Ordne alle Einträge genau einmal an.');
     this.data.responses[round]??={};
     const original=this.data.responses[round][ctx.uid];
-    this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now};
+    if(edit){
+     if(this.data.answerDraftVersions?.round!==round)this.data.answerDraftVersions={round,edits:{}};
+     const versions=this.data.answerDraftVersions.edits;
+     if(versions[ctx.uid]>=edit)return false;
+     versions[ctx.uid]=edit;
+    }
+    if(!text)delete this.data.responses[round][ctx.uid];
+    else this.data.responses[round][ctx.uid]={uid:ctx.uid,team:member.team,text,at:original?.at||now,updatedAt:now,
+     ...(edit?{draft:true}:{})};
     return true;
    }
    case 'message':{if(isTeamChallenge(pub?.current?.type)&&pub.phase==='question')throw Error('Während der Teamrunde ist der Teamchat geschlossen.');if(!pub?.settings?.chatOpen||(pub.settings.lockOnBuzz&&pub.phase==='question'&&this.data.buzzers[round]))throw Error('Teamchat geschlossen.');const text=safeText(payload.text,500);if(!text||now-ctx.lastChat<1000)throw Error('Nachrichtenrate begrenzt.');ctx.lastChat=now;this.data.messages[member.team]??={};const messages=this.data.messages[member.team];messages['m_'+randomHex(9)]={uid:ctx.uid,name:member.name,text,at:now};const keys=Object.keys(messages);for(const key of keys.slice(0,-80))delete messages[key];return true}
@@ -1045,7 +1061,7 @@ export class PeerGame{
  }
  async enterPresence(room){if(this.mode==='host'){this._assertHost(room);this.data.presence[this.uid]={connectedAt:Date.now()};this._changed();}else this._ensureGuest(room)}
  async buzzer(room,round,team,name){if(this.mode==='guest')return this._rpc('buzz',{round});throw Error('Buzzer nur für Teilnehmer.')}
- async answer(room,round,team,text){if(this.mode==='guest')return this._rpc('answer',{round,text});throw Error('Antworten nur für Teilnehmer.')}
+ async answer(room,round,team,text,edit){if(this.mode==='guest')return this._rpc('answer',{round,text,edit});throw Error('Antworten nur für Teilnehmer.')}
  async message(room,team,name,text){if(this.mode==='guest')return this._rpc('message',{text});const d=this._getHostData(room);if(!d.public?.teams?.[team])throw Error('Unbekanntes Team.');const id='m_'+randomHex(9);d.messages[team]??={};d.messages[team][id]={uid:this.uid,name:'HOST',text:safeText(text,500),at:Date.now()};const keys=Object.keys(d.messages[team]);for(const key of keys.slice(0,-80))delete d.messages[team][key];this._changed()}
  async setState(room,changes){const d=this._getHostData(room);if(changes.started===true&&!d.public.started){d.public.participatingTeams=participatingTeamIds({teams:d.public.teams},d.roster);d.public.selectionTurn=makeSelectionTurn(d.public,d.roster);d.public.boardSequence=true;}for(const [path,value]of Object.entries(changes))setPath(d.public,path,value);this._changed()}
  async openQuestion(room,expectedRound,question,playerQuestion,participants,deadline,{covered=false}={}){
@@ -1215,21 +1231,23 @@ export class PeerGame{
   return this._advanceTeamEmoji(id,'roles');
  }
  async reviewTeamEmoji(room,id,phase){
-  this._assertHost(room);
-  if(phase==='reveal'||!this._advanceTeamEmoji(id,phase,true))throw Error('Diese Teamrunde ist nicht mehr offen.');
+  const {teamEmoji:round}=this._getHostData(room);
+  const currentPhase=phase==='guess'&&round?.phase==='awaiting-reveal'?round.phase:phase;
+  if(currentPhase==='reveal'||!this._advanceTeamEmoji(id,currentPhase,true))throw Error('Diese Teamrunde ist nicht mehr offen.');
  }
  async judgeTeamEmoji(room,id,team,verdict){
   const d=this._getHostData(room),round=d.teamEmoji,p=d.public;
   const row=round?.results?.find(result=>result.id===team);
   if(round?.id!==id||round.phase!=='reveal'||!row||!['correct','wrong'].includes(verdict))throw Error('Dieses Teamergebnis fehlt.');
+  if(row.confirmed&&row.status===verdict)return false;
   const before=clone(p),points=verdict==='correct'?round.points:0;
   p.scores[team]=(Number(p.scores[team])||0)+points-row.points;
-  row.status=verdict;row.points=points;
+  row.status=verdict;row.points=points;row.confirmed=true;
    if(verdict==='correct')d.public=awardJokerForCorrectAnswer(p,team);
    this._auditScore(d,before,{kind:TEAM_EMOJI,team,round:p.round,questionId:p.current.id});
   const entry=d.questionHistory?.[String(p.round)];
   if(entry)entry.emojiResults=round.results.map(result=>({...result,name:p.teams[result.id]}));
-  this._syncTeamEmoji();this._changed();
+  this._syncTeamEmoji();this._changed();return true;
  }
  async closeTeamEmoji(room,id,phase){
   const d=this._getHostData(room),emoji=d.teamEmoji,p=d.public;
@@ -1244,9 +1262,9 @@ export class PeerGame{
   this._scheduleTeamEmojiDeadline();
   this._changed();return true;
  }
- async submitTeamEmoji(room,id,kind,value){
+ async submitTeamEmoji(room,id,kind,value,edit){
   this._ensureGuest(room);
-  return this._rpc(TEAM_EMOJI,{id,kind,value});
+  return this._rpc(TEAM_EMOJI,{id,kind,value,edit});
  }
  async chooseLobbyTeam(room,team){if(this.mode==='guest')return this._rpc('lobby-join',{team});throw Error('Teamwahl nur für Teilnehmer.')}
  async createLobbyTeam(room,name){if(this.mode==='guest')return this._rpc('lobby-create',{name});throw Error('Teamerstellung nur für Teilnehmer.')}

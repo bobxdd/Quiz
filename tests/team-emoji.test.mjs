@@ -35,6 +35,33 @@ test('team question imports with private settings and never opens a buzzer',()=>
  assert.equal(canBuzz({phase:'question',current:publicCopy}, {},'b','t1'),false);
 });
 
+test('autosaved clues can be cleared and the first letters do not lock team guesses',()=>{
+ const round=newTeamEmojiRound(question,state,roster,'draft-test');
+ const act=(team,uid,kind,value,now)=>playTeamEmoji(round,team,uid,kind,value,now,{draft:true});
+ for(const [team,clue,guess] of [['t1','a','b'],['t2','c','d']]){
+  act(team,clue,'role','clue',1000);
+  act(team,guess,'role','guess',1000);
+ }
+ advanceTeamEmoji(round,1000);
+ act('t1','a','clue',['🦊'],1001);
+ act('t1','a','clue',[],1002);
+ assert.equal(publicTeamEmoji(round).teams[0].clued,false);
+ act('t1','a','clue',['🇩🇪','👩🏾‍🚀','🦊'],1003);
+ act('t2','c','clue',['🔥'],1004);
+ advanceTeamEmoji(round,9000);
+ act('t1','b','guess','K',9001);
+ act('t2','d','guess','Anderer Champion',9002);
+ assert.equal(round.phase,'guess');
+ assert.equal(publicTeamEmoji(round).canReveal,true);
+ assert.equal(publicTeamEmoji(round).results,undefined);
+ act('t1','b','guess','',9003);
+ assert.equal(publicTeamEmoji(round).canReveal,false);
+ act('t1','b','guess',"Kai'Sa",9004);
+ assert.throws(()=>act('t2','d','guess','Zu spät',14000),/abgelaufen/);
+ assert.equal(finishTeamEmoji(round),true);
+ assert.deepEqual(round.results.map(row=>row.points),[175,0,0]);
+});
+
 test('separate timer phases, private team clues and one final answer per team',()=>{
  const round=newTeamEmojiRound(question,state,roster,'1');
  const view=(team,person)=>teamEmojiForPlayer(round,team,person);
