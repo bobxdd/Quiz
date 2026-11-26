@@ -87,7 +87,8 @@ export function advanceBoardState(state,{force=false}={}){
 export function returnToBoardState(state){
  if(!state?.current||!['ready','question','answered','paused','review','reveal'].includes(state.phase))return null;
  const next={...state,phase:'board',current:null,deadline:0,pausedRemaining:0,answerReview:null,answerParticipants:null,teamEmoji:null,presentation:null,questionPick:null};
- if(state.current.firstAnswerTeam&&state.phase==='reveal'&&remainingBoardQuestions(next).length){
+ const turnsLeft=(state.selectionTurn?.order?.length||0)-(Number(state.selectionTurn?.index)||0);
+ if(state.current.firstAnswerTeam&&state.phase==='reveal'&&remainingBoardQuestions(next).length>=Math.max(1,turnsLeft)){
   next.balanceStrike={team:state.current.firstAnswerTeam,round:state.round};
  }else if(state.phase!=='ready'&&selectingTeam(state))next.selectionTurn={...state.selectionTurn,index:(Number(state.selectionTurn.index)||0)+1};
  if(state.phase==='ready'){

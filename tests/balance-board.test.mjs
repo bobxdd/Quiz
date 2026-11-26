@@ -52,9 +52,8 @@ test('balance-round selection starts with lowest score and breaks ties by stable
  const cancelled=returnToBoardState(open);
  assert.equal(selectingTeam(cancelled),'t2','uncovered cancellation must preserve the selection turn');
  const finished=returnToBoardState({...open,phase:'reveal'});
- assert.equal(finished.balanceStrike.team,'t2');
- const struck=strikeBalanceField(finished,'b');
- assert.equal(selectingTeam(struck),'t1','the next lowest team is next after the strike');
+ assert.equal(finished.balanceStrike,null,'legacy short boards keep one answer slot per team');
+ assert.equal(selectingTeam(finished),'t1','the next lowest team gets its reserved slot');
 });
 
 test('normal team choice rotation is restored after the temporary balance order',()=>{

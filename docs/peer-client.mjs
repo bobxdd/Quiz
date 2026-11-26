@@ -4,7 +4,7 @@
  * No Firebase, cloud database, or public hosting of private quiz solutions.
  */
 import {canBuzz,roundMode,applyBuzzerJudgement,buzzerCoverActive} from './round-rules.mjs';
-import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,CHRONOBREAK_MS} from './joker-system.mjs';
+import {JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,activeChronobreak,shieldApplies,oracleHintFor,CHRONOBREAK_MS} from './joker-system.mjs';
 import {decodePoint} from './map-tools.mjs';
 import {buildPublicBoard,buildTeams,buildScores,manualPlayerLabels,publicQuestion,updatePlayerScore,judgementDelta,questionSeconds,orderReady,orderResponseIndices} from './core.mjs';
 import {approval,MAX_PLAYERS,MAX_TEAMS,validTeamId,cleanTeamName,addLobbyTeam,renameLobbyTeam,canArrangeLobby,canAdmitPlayer,waitsForNextQuestion,lobbySnapshot,participantSnapshot,participatingTeamIds} from './lobby-model.mjs';
@@ -945,7 +945,7 @@ export class PeerGame{
    if(p.phase!=='question'||!p.current?.id)throw Error('Der Hinweis ist nur während einer offenen Frage verfügbar.');
    if(d.jokerPrivateHints?.[String(round)]?.[team])throw Error('Das Team hat den Orakel-Hinweis schon erhalten.');
    const source=this.hostQuiz?.questions.find(q=>q.id===p.current.id);
-   const hint=String(source?.oracleHint||source?.hints?.find(h=>String(h||'').trim())||'').trim().slice(0,220);
+   const hint=oracleHintFor(source,p.current.hintStep).slice(0,220);
    if(!hint)throw Error('Der Host hat für diese Frage noch keinen Orakel-Hinweis hinterlegt.');
    p.jokers=changeJokerCharge(p,team,type,-1).jokers;
    d.jokerPrivateHints??={};d.jokerPrivateHints[String(round)]??={};d.jokerPrivateHints[String(round)][team]=hint;

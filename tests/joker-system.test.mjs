@@ -7,7 +7,7 @@ import {applyBuzzerJudgement} from '../docs/round-rules.mjs';
 import {
  JOKER_TYPES,normalizeJokerConfig,initialJokers,placeJokerDrops,
  jokerCount,changeJokerCharge,drawJokerForQuestion,awardJokerForCorrectAnswer,
- shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup
+ shieldApplies,activeChronobreak,CHRONOBREAK_MS,jokerSetupSummary,jokerIconMarkup,oracleHintFor
 } from '../docs/joker-system.mjs';
 
 const room='ABCDEFGHJKLM2345';
@@ -231,4 +231,10 @@ test('a zero-point buzzer penalty does not spend a shield',()=>{
  const result=applyBuzzerJudgement(p,buzzers,{round:1,uid:'alice',result:'wrong'});
  assert.ok(result.delta===0);
  assert.equal(jokerCount(result.state,'t1','shield'),1);
+});
+test('Oracle only falls back to hints that have yet to be revealed',()=>{
+ const q={oracleHint:'  ',hints:['Schon gezeigt','','Neuer Hinweis']};
+ assert.equal(oracleHintFor(q,1),'Neuer Hinweis');
+ assert.equal(oracleHintFor(q,3),'');
+ assert.equal(oracleHintFor({...q,oracleHint:'Privat'},3),'Privat');
 });

@@ -20,6 +20,10 @@ export function jokerIconMarkup(type){
  return '<span class="bq-joker-icon" aria-hidden="true">'+(JOKER_META[type]?.symbol||'')+'</span>';
 }
 export const JOKER_MAX_CHARGES=3,CHRONOBREAK_MS=8000;
+export function oracleHintFor(question,hintStep=0){
+ const dedicated=String(question?.oracleHint||'').trim();
+ return dedicated||String(question?.hints?.slice(Math.max(0,Number(hintStep)||0)).find(h=>String(h||'').trim())||'').trim();
+}
 export function jokerSetupSummary(quiz){
  const config=normalizeJokerConfig(quiz?.jokerConfig);
  const normal=(quiz?.questions||[]).filter(isStandardBoard);
@@ -27,7 +31,7 @@ export function jokerSetupSummary(quiz){
  const fields=JOKER_TYPES.reduce((sum,type)=>sum+config.drops[type],0);
  return {config,fields,available,missing:Math.max(0,fields-available),
   starters:JOKER_TYPES.filter(type=>config.startingByType[type]).length,
-  missingHints:normal.filter(q=>!String(q.oracleHint||'').trim()&&!q.hints?.some(h=>String(h||'').trim())).length};
+  missingHints:normal.filter(q=>!oracleHintFor(q)).length};
 }
 export function jokerType(value){return JOKER_TYPES.includes(value)?value:'';}
 export function normalizeJokerConfig(value){
