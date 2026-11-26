@@ -815,7 +815,7 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-token b{font-variant-numeric:tabular-nums}
 .bq-joker-token .btn{min-width:25px;padding:4px 7px;font-size:11px}
 .bq-joker-host-tools{display:inline-flex;gap:2px}
-.bq-oracle-calls{display:grid;gap:4px;max-height:18dvh;overflow:auto}
+.bq-oracle-calls{flex:0 0 auto;display:grid;gap:4px;max-height:18dvh;overflow:auto;margin-bottom:6px;min-width:0}
 .bq-oracle-call{padding:5px 9px;background:#193543;border-left:3px solid #75cce3;border-radius:7px;overflow-wrap:anywhere}
 .bq-oracle-call p{margin:0;font-size:13px}
 .bq-oracle-call strong{color:#edf7fa}
