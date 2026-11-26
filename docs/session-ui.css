@@ -855,3 +855,5 @@ body.bq-game-mode:has(.bq-question-scene) .topbar .nav{min-height:32px;padding:4
 .bq-joker-event .bq-joker-icon{display:inline-flex;vertical-align:middle}
 .bq-joker-token.is-empty .bq-joker-name{text-decoration:line-through}
 .bq-joker-empty-label{font-size:10px;color:#ccd2dc}
+
+.bq-emoji-native-help{font-size:clamp(12px,1vw,14px);line-height:1.4;color:#c9d9d6;margin:6px 0 10px}.bq-emoji-native-help kbd{font:inherit;font-weight:700;border:1px solid #a5bac055;border-radius:4px;padding:1px 5px;background:#283336}
